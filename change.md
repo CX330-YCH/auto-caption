@@ -154,3 +154,119 @@
 - Node.js 内置 test runner 和 type stripping，避免为基线新增第三方测试依赖。
 - Python 标准库 `unittest`，避免新增测试依赖。
 - ESLint 9 bulk suppressions，用于冻结既有违规并防止新增债务。
+
+## 2026-08-11 - 第二阶段：修复进程协议并建立独立 Electron 协议组件
+
+### 授权与目标
+
+- 用户授权：要求执行“第二阶段：修进程协议，为后续修改做准备”，并进一步建议新增独立的 Electron 组件。
+- 目标：在不接入新识别 Provider、不修改引擎选择和字幕业务的前提下，修复 stdout/TCP 把任意数据块误当成完整 JSON 的协议缺陷，并把协议细节从 `CaptionEngine` 中分离。
+- 变更类型：修复、最小职责重构、测试、文档、构建配置。
+- 明确非目标：不接入 Fun-ASR、不增加热词、不修改 UI、持久化配置、Electron IPC、音频链路、翻译逻辑或现有 `command` 名称。
+
+### 修改文件
+
+- `src/main/engine/protocol/EngineEventDecoder.ts`
+  - 新增独立的 Electron stdout 增量 NDJSON 解码器。
+  - 使用 UTF-8 流式解码，支持 JSON/多字节字符跨数据块、多条消息合并、CRLF、空行和流关闭时的旧格式尾帧。
+  - 对单行设置 1 MiB 上限；非法行不阻断下一行，错误不回显原始消息。
+- `src/main/engine/protocol/EngineProtocol.ts`
+  - 新增 Electron 进程协议门面，统一管理 decoder 生命周期、基础 `command` envelope 校验和 TCP 命令编码。
+  - Electron 发出的命令统一编码为以 `\n` 结尾的 UTF-8 NDJSON 帧。
+- `src/main/engine/protocol/messages.ts`
+  - 新增引擎消息类型及 `caption`、`translation`、日志内容事件的运行时字段校验。
+- `src/main/utils/CaptionEngine.ts`
+  - 改为使用独立 `EngineProtocol`，不再自行对每个 stdout 数据块直接 `split`/`JSON.parse`。
+  - 在进程关闭时冲刷 decoder 尾帧，在每次启动前重置 decoder。
+  - 保持现有事件分发目标不变，但拒绝字段类型不合法的已知事件。
+  - TCP 命令增加换行帧边界；命令日志只记录命令名，不再记录完整 `content`。
+  - 为本次触及的方法和回调补充准确返回值/参数类型，减少历史 `any`。
+- `engine/protocol/__init__.py`
+  - 新增 Python 协议包的稳定导出边界。
+- `engine/protocol/ndjson.py`
+  - 新增基于字节缓冲的 Python NDJSON decoder，正确处理任意 `recv()` 分块和跨块 UTF-8。
+  - 支持多消息、CRLF、空行、非法 UTF-8/JSON 后恢复、1 MiB 上限及连接关闭时的旧格式尾帧。
+- `engine/utils/server.py`
+  - TCP 接收改为增量解码，不再假设一次 `recv()` 等于一条 JSON。
+  - 增加消息 envelope 校验和安全错误日志；继续只处理既有 `stop` 命令。
+  - 接受客户端后关闭只用于监听的 server socket，客户端 socket 在 `finally` 中关闭。
+- `tests/node/engineEventDecoder.test.mjs`
+  - 新增 Electron NDJSON 跨块、多消息、UTF-8 字节边界、非法行恢复、尾帧、上限和重置测试。
+- `tests/node/engineProtocol.test.mjs`
+  - 新增命令换行编码、基础 envelope 和已知事件字段校验测试。
+- `engine/tests/test_ndjson.py`
+  - 新增 Python decoder 对称边界测试，包括非法 UTF-8 不泄漏输入内容。
+- `docs/api-docs/caption-engine.md`
+  - 完整明确双向 UTF-8 NDJSON 分帧、读取方缓冲责任、安全上限、错误恢复和兼容规则。
+  - 修正文档中 `kill` 示例误写为 `connect` 的错误。
+  - 记录每个现有事件的必需字段及 TCP `stop` 的实际传输格式。
+- `docs/testing.md`
+  - 更新协议测试覆盖范围，并将 stdout 跨块解析从“未覆盖”移出。
+  - 保留真实子进程 Socket/stdio 集成为后续未覆盖事项。
+- `tsconfig.node.json`
+  - 启用仅用于无输出类型检查的 `allowImportingTsExtensions`，使 Node 内置测试可直接加载独立 TypeScript 协议组件，同时保持 Electron Vite 构建通过。
+- `eslint-suppressions.json`
+  - 仅清理本阶段触及 `CaptionEngine.ts` 后已经失效的 suppression。
+  - 历史登记总数由 84 降为 74；没有新增或扩大 suppression。
+- `change.md`
+  - 追加本阶段的授权、文件、协议行为、兼容性、验证、风险和回滚记录。
+
+### 修改前后行为
+
+- 修改前：Electron 对每次 stdout `data` 事件单独转字符串并按换行解析；一条 JSON 或一个 UTF-8 字符跨块时会解析失败，多条/残缺 TCP JSON 也依赖一次 `recv()` 的偶然边界。
+- 修改后：Electron 和 Python 都维护有界 NDJSON 缓冲，以换行确定帧边界，并可在单条非法消息后继续处理后续合法消息。
+- 修改前：Electron TCP 命令是没有显式结束标记的 JSON 字符串。
+- 修改后：Electron TCP 命令以 `\n` 结束；Python 可在一个 `recv()` 中处理零条、一条或多条完整消息。
+- 修改前：任意带 `command` 的解析结果直接进入现有业务方法，已知事件字段未做运行时检查。
+- 修改后：基础 envelope 和已知事件字段先验证；不合法事件只记录分类错误，不进入字幕、翻译或窗口错误分发。
+- 现有合法 `connect`、`kill`、`caption`、`translation`、`print`、`info`、`warn`、`error`、`usage` 和 `stop` 语义没有变化。
+
+### 配置、接口与协议
+
+- 用户持久化配置及 `schemaVersion`：无变化，不需要迁移。
+- Electron IPC：无变化。
+- Python 引擎命令行：无变化。
+- 字幕/翻译数据结构：合法消息字段无变化。
+- 子进程协议 envelope：仍为现有 JSON 对象和字符串 `command`，没有删除、重命名或新增业务命令。
+- 子进程协议 framing：双向明确为 UTF-8 NDJSON；Electron 到 Python 的命令新增末尾 `\n`。
+- 协议版本字段：未新增。本阶段是既有 `command` 协议的分帧明确化和解析修复，不引入新的业务协议版本；未来新增 partial/final 等业务事件时仍需独立版本设计。
+- 依赖与锁文件：没有新增、删除或升级依赖，`package.json` 和 `package-lock.json` 无变化。
+
+### 兼容性、迁移与回滚
+
+- 现有自定义引擎 stdout：合法的一行一条 JSON 完全兼容；流关闭前最后一条完整但无换行的 JSON 仍会被兼容解析。
+- 现有自定义引擎 TCP：新版 Electron 增加的换行是合法 JSON 尾随空白，原先对单次数据调用常规 JSON parser 的实现通常仍可接受；依赖任意 TCP 分包边界的实现本身不可靠，应迁移为 NDJSON 增量读取。
+- 旧版 Electron 到新版 Python：没有换行的最后一条命令可在连接关闭时解析；长连接中连续的无分隔 JSON 无法可靠兼容，也没有可靠的自动识别方式。
+- Windows、macOS、Linux：使用 Node/Python 标准流和 socket 能力，没有新增平台专属分支；本阶段仅在 macOS 完成构建验证。
+- 数据迁移：不需要。
+- 回滚方式：恢复 `CaptionEngine.ts`、`engine/utils/server.py`、`tsconfig.node.json`、协议/测试文档和 suppression 的本阶段改动，并删除本阶段新增的 `src/main/engine/protocol/`、`engine/protocol/` 及三个协议测试文件；无需修改用户配置或远端资源。
+
+### 验证
+
+- 首次 `npm run test:node && npm run test:python && npm run typecheck`：失败；Node 15/17 通过。一个上限测试把合法 `connect` 帧也设置为超限，另一个失败来自 Node 直接加载 TypeScript 时无法解析组件内部无扩展名 import；因 `&&`，本次未继续运行 Python 和类型检查。
+- 调整测试阈值和 TypeScript import 后执行 `npm run test:node; npm run test:python; npm run typecheck`：Node 20/20 通过，Python 12/12 通过；类型检查因尚未启用 `allowImportingTsExtensions` 报 TS5097，失败原因随后通过受限编译配置修复。
+- `npm run typecheck && npm run lint`：类型检查通过；lint 仅因本次代码减少历史违规后出现失效 suppression 而以状态 2 退出。
+- `./node_modules/.bin/eslint . --prune-suppressions && npm run lint`：通过；只删除 `CaptionEngine.ts` 的 10 个失效历史登记，suppression 总数从 84 降为 74。
+- 最终 `npm run verify`：通过；类型检查、lint、Node 20/20 和 Python 12/12 全部通过。
+- 最终 `npm run build`：通过；Electron main、preload 和 renderer 均完成 Vite 构建。
+- 最终 `git diff --check`：通过。
+- 未执行安装程序打包、Windows/Linux 构建、真实音频设备、真实识别模型、翻译服务和付费 API：不属于本阶段协议准备范围，且需要平台环境或外部凭据。
+- 未执行真实自定义引擎兼容测试或 Electron/Python 完整子进程 Socket/stdio 集成测试：仓库当前没有隔离 Electron 全局对象和 Python 运行时重依赖的集成夹具；本阶段使用两端 decoder/encoder 的确定性单元测试覆盖协议边界。
+
+### 风险、限制与后续事项
+
+- 1 MiB 单帧上限是防止无换行输出无限占用内存的保护；未来若合法事件可能超过上限，应通过协议评审调整，而不是关闭限制。
+- 无换行尾帧只在 stdout/连接关闭时兼容；长连接必须逐条发送换行分隔消息。
+- Python TCP 服务仍保持现有单客户端、单 `stop` 命令范围；重连、认证和更多控制命令不在本阶段内。
+- stderr 仍是普通日志流，不属于 NDJSON 业务协议，本阶段没有把 stderr 日志块另行抽象。
+- 已知事件字段校验会拒绝过去偶然可传入但类型错误的消息；这是有意的协议收紧，合法自定义引擎不受影响。
+- Node 测试仍会显示既有 `MODULE_TYPELESS_PACKAGE_JSON` 性能提示；没有为消除提示而改变整个项目的模块类型。
+- npm 仍会显示既有 Electron mirror 配置弃用提示；本阶段未修改镜像配置。
+- 下一阶段可以在该协议边界之上继续拆分命令参数构建、进程生命周期和事件分发，再接入统一 Recognition Provider；不得把 Fun-ASR WebSocket 逻辑写回 `CaptionEngine`。
+
+### 参考与决策依据
+
+- 根目录 `AGENTS.md` 的进程协议、兼容性、安全和禁止堆叠式实现约束。
+- 项目现有 `utils.sysout` 一行一条 JSON 并立即 flush 的输出行为。
+- TCP 是无消息边界的字节流，因此使用显式换行分帧，并在读取方维护跨块缓冲。
+- Node.js 标准库 `StringDecoder`、`Buffer` 和 Python 标准库 `json`、`socket`；未引入第三方协议依赖。

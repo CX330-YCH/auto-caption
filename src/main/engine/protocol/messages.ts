@@ -1,0 +1,59 @@
+export interface EngineMessage {
+  command: string
+  [key: string]: unknown
+}
+
+export interface CaptionEngineMessage extends EngineMessage {
+  command: 'caption'
+  index: number
+  time_s: string
+  time_t: string
+  text: string
+  translation: string
+}
+
+export interface TranslationEngineMessage extends EngineMessage {
+  command: 'translation'
+  time_s: string
+  text: string
+  translation: string
+}
+
+export interface ContentEngineMessage extends EngineMessage {
+  content: string
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+export function isEngineMessage(value: unknown): value is EngineMessage {
+  return isRecord(value) && typeof value.command === 'string'
+}
+
+export function isCaptionEngineMessage(
+  value: EngineMessage
+): value is CaptionEngineMessage {
+  return value.command === 'caption' &&
+    typeof value.index === 'number' &&
+    Number.isFinite(value.index) &&
+    typeof value.time_s === 'string' &&
+    typeof value.time_t === 'string' &&
+    typeof value.text === 'string' &&
+    typeof value.translation === 'string'
+}
+
+export function isTranslationEngineMessage(
+  value: EngineMessage
+): value is TranslationEngineMessage {
+  return value.command === 'translation' &&
+    typeof value.time_s === 'string' &&
+    typeof value.text === 'string' &&
+    typeof value.translation === 'string'
+}
+
+export function isContentEngineMessage(
+  value: EngineMessage
+): value is ContentEngineMessage {
+  return typeof value.content === 'string'
+}

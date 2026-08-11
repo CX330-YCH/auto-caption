@@ -8,6 +8,16 @@ import { allConfig } from './AllConfig'
 import { i18n } from '../i18n'
 import { Log } from './Log'
 import { passwordMaskingForList } from './UtilsFunc'
+import {
+  EngineProtocol,
+  type EngineProtocolBatch
+} from '../engine/protocol/EngineProtocol'
+import {
+  type EngineMessage,
+  isCaptionEngineMessage,
+  isContentEngineMessage,
+  isTranslationEngineMessage
+} from '../engine/protocol/messages'
 
 export class CaptionEngine {
   appPath: string = ''
@@ -18,6 +28,7 @@ export class CaptionEngine {
   status: 'running' | 'starting' | 'stopping' | 'stopped' | 'starting-timeout' = 'stopped'
   timerID: NodeJS.Timeout | undefined
   startTimeoutID: NodeJS.Timeout | undefined
+  private readonly protocol = new EngineProtocol()
 
   private getApp(): boolean {
     if (allConfig.controls.customized) {
@@ -119,7 +130,7 @@ export class CaptionEngine {
     return true
   }
 
-  public connect() {
+  public connect(): void {
     if(this.client) { Log.warn('Client already exists, ignoring...') }
     if (this.startTimeoutID) {
       clearTimeout(this.startTimeoutID)
@@ -139,23 +150,24 @@ export class CaptionEngine {
     }
   }
 
-  public sendCommand(command: string, content: string = "") {
+  public sendCommand(command: string, content: string = ""): void {
     if(this.client === undefined) {
       Log.error('Client not initialized yet')
       return
     }
-    const data = JSON.stringify({command, content})
+    const data = this.protocol.encodeCommand(command, content)
     this.client.write(data);
-    Log.info(`Send data to python server: ${data}`);
+    Log.info('Send command to Python server:', command)
   }
 
-  public start() {
+  public start(): void {
     if (this.status !== 'stopped') {
       Log.warn('Caption engine is not stopped, current status:', this.status)
       return
     }
     if(!this.getApp()){ return }
 
+    this.protocol.reset()
     this.process = spawn(this.appPath, this.command)
     this.status = 'starting'
     Log.info('Caption Engine Starting, PID:', this.process.pid)
@@ -170,22 +182,11 @@ export class CaptionEngine {
       }
     }, timeoutMs)
     
-    this.process.stdout.on('data', (data: any) => {
-      const lines = data.toString().split('\n')
-      lines.forEach((line: string) => {
-        if (line.trim()) {
-          try {
-            const data_obj = JSON.parse(line)
-            handleEngineData(data_obj)
-          } catch (e) {
-            // controlWindow.sendErrorMessage(i18n('engine.output.parse.error') + e)
-            Log.error('Error parsing JSON:', e)
-          }
-        }
-      });
+    this.process.stdout.on('data', (data: Buffer) => {
+      this.handleProtocolBatch(this.protocol.push(data))
     });
 
-    this.process.stderr.on('data', (data: any) => {
+    this.process.stderr.on('data', (data: Buffer) => {
       const lines = data.toString().split('\n')
       lines.forEach((line: string) => {
         if(line.trim()){
@@ -194,7 +195,8 @@ export class CaptionEngine {
       })
     });
 
-    this.process.on('close', (code: any) => {
+    this.process.on('close', (code: number | null) => {
+      this.handleProtocolBatch(this.protocol.finish())
       this.process = undefined;
       this.client = undefined
       allConfig.controls.engineEnabled = false
@@ -212,7 +214,7 @@ export class CaptionEngine {
     });
   }
 
-  public stop() {
+  public stop(): void {
     if(this.status !== 'running'){
       Log.warn('Trying to stop engine which is not running, current status:', this.status)
     }
@@ -229,7 +231,7 @@ export class CaptionEngine {
     }, 4000);
   }
 
-  public kill(){
+  public kill(): void {
     if(!this.process || !this.process.pid) return
     if(this.status !== 'running'){
       Log.warn('Trying to kill engine which is not running, current status:', this.status)
@@ -258,42 +260,63 @@ export class CaptionEngine {
       })
     }
   }
+
+  private handleProtocolBatch(batch: EngineProtocolBatch): void {
+    for (const error of batch.errors) {
+      Log.error(
+        `Engine protocol ${error.kind} at line ${error.lineNumber}:`,
+        error.message
+      )
+    }
+
+    for (const message of batch.messages) handleEngineData(message)
+  }
 }
 
-function handleEngineData(data: any) {
-  if(data.command === 'connect'){
-    captionEngine.connect()
-  }
-  else if(data.command === 'kill') {
-    if(captionEngine.status !== 'stopped') {
-      Log.warn('Error occurred, trying to kill caption engine...')
-      captionEngine.kill()
-    }
-  }
-  else if(data.command === 'caption') {
-    allConfig.updateCaptionLog(data);
-  }
-  else if(data.command === 'translation') {
-    allConfig.updateCaptionTranslation(data);
-  }
-  else if(data.command === 'print') {
-    console.log(data.content)
-  }
-  else if(data.command === 'info') {
-    Log.info('Engine Info:', data.content)
-  }
-  else if(data.command === 'warn') {
-    Log.warn('Engine Warn:', data.content)
-  }
-  else if(data.command === 'error') {
-    Log.error('Engine Error:', data.content)
-    controlWindow.sendErrorMessage(/*i18n('engine.error') +*/ data.content)
-  }
-  else if(data.command === 'usage') {
-    Log.info('Engine Token Usage: ', data.content)
-  }
-  else {
-    Log.warn('Unknown command:', data)
+function handleEngineData(data: EngineMessage): void {
+  switch (data.command) {
+    case 'connect':
+      captionEngine.connect()
+      return
+    case 'kill':
+      if(captionEngine.status !== 'stopped') {
+        Log.warn('Error occurred, trying to kill caption engine...')
+        captionEngine.kill()
+      }
+      return
+    case 'caption':
+      if (isCaptionEngineMessage(data)) allConfig.updateCaptionLog(data)
+      else Log.error('Invalid caption event received from caption engine')
+      return
+    case 'translation':
+      if (isTranslationEngineMessage(data)) allConfig.updateCaptionTranslation(data)
+      else Log.error('Invalid translation event received from caption engine')
+      return
+    case 'print':
+      if (isContentEngineMessage(data)) console.log(data.content)
+      else Log.error('Invalid print event received from caption engine')
+      return
+    case 'info':
+      if (isContentEngineMessage(data)) Log.info('Engine Info:', data.content)
+      else Log.error('Invalid info event received from caption engine')
+      return
+    case 'warn':
+      if (isContentEngineMessage(data)) Log.warn('Engine Warn:', data.content)
+      else Log.error('Invalid warn event received from caption engine')
+      return
+    case 'error':
+      if (isContentEngineMessage(data)) {
+        Log.error('Engine Error:', data.content)
+        controlWindow.sendErrorMessage(data.content)
+      }
+      else Log.error('Invalid error event received from caption engine')
+      return
+    case 'usage':
+      if (isContentEngineMessage(data)) Log.info('Engine Token Usage:', data.content)
+      else Log.error('Invalid usage event received from caption engine')
+      return
+    default:
+      Log.warn('Unknown engine command:', data.command)
   }
 }
 
