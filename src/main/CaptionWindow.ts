@@ -33,7 +33,7 @@ class CaptionWindow {
 
     this.window.on('close', () => {
       if(this.window) {
-        allConfig.captionWindowWidth = this.window?.getBounds().width;
+        allConfig.setCaptionWindowWidth(this.window.getBounds().width)
       }
     })
 

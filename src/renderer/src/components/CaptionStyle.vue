@@ -321,7 +321,7 @@ function applyStyle(){
   captionStyle.blur = currentBlur.value;
   captionStyle.textShadowColor = currentTextShadowColor.value;
 
-  captionStyle.sendStylesChange();
+  captionStyle.sendCaptionConfigChange();
 
   notification.open({
     placement: 'topLeft',
@@ -353,7 +353,7 @@ function backStyle(){
 }
 
 function resetStyle() {
-  captionStyle.sendStylesReset();
+  captionStyle.resetCaptionConfig();
 }
 
 watch(changeSignal, (val) => {

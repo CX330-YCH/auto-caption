@@ -59,6 +59,8 @@ npm run build
 
 Node.js 测试覆盖：
 
+- V2 分层配置默认值、严格版本拒绝、嵌套字段校验和未知扩展字段保留。
+- 从 V2 `EngineConfig` 为 Gummy、Vosk、SOSV、GLM 及自定义引擎生成启动参数。
 - 字幕时间字符串解析、毫秒换算和当前跨日行为。
 - 命令行与配置对象中的 API Key 日志脱敏。
 - 现有 Python/Electron NDJSON 协议夹具的基本结构。
@@ -95,6 +97,7 @@ Python 测试覆盖：
 
 - 真实音频设备和平台驱动。
 - Electron 窗口和 IPC 集成。
+- Electron `userData/config.json` 的真实磁盘读写和旧配置被 V2 默认值替换的桌面端流程。
 - Python 子进程启动、超时、停止和强杀。
 - Electron 与真实 Python 子进程之间的端到端 Socket/stdio 集成。
 - 真实 Vosk/SOSV 模型文件以及实际 Gummy、GLM 或其他在线 Provider。

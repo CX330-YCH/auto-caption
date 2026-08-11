@@ -8,8 +8,8 @@
 
 1. 命令一般由三个关键字组成，由点号隔开。
 2. 第一个关键字表示通信发送目标：
-   - `config` 表示控制窗口类实例（后端）或控制窗口（前端）
-   - `engine` 表示字幕窗口类实例（后端）或字幕窗口（前端）
+   - `control` 表示控制窗口类实例（后端）或控制窗口（前端）
+   - `caption` 表示字幕窗口类实例（后端）或字幕窗口（前端）
    - `both` 表示上述对象都有可能成为目标
 3. 第二个关键字表示需要修改的对象 / 发生改变的对象，采用小驼峰命名
 4. 第三个关键字一般是动词，表示通信发生时对应动作 / 需要进行的操作
@@ -30,6 +30,8 @@
 
 - 发送：无数据
 - 接收：`FullConfig`
+
+`FullConfig.config` 是完整 `ConfigDocumentV2`，`FullConfig.engineEnabled` 是不持久化的运行状态。配置结构见 [配置文件 V2](config-v2.md)。
 
 ### `control.nativeTheme.get`
 
@@ -72,45 +74,15 @@
 
 ## 前端 ==> 后端
 
-### `control.uiLanguage.change`
+### `control.application.change`
 
-**介绍：** 前端修改字界面语言，将修改同步给后端
-
-**发起方：** 前端控制窗口
-
-**接收方：** 后端控制窗口实例
-
-**数据类型：** `UILanguage`
-
-### `control.uiTheme.change`
-
-**介绍：** 前端修改界面主题，将修改同步给后端
+**介绍：** 前端修改应用外观或布局，将完整 application 层发送给后端校验和保存
 
 **发起方：** 前端控制窗口
 
 **接收方：** 后端控制窗口实例
 
-**数据类型：** `UITheme`
-
-### `control.uiColor.change`
-
-**介绍：** 前端修改界面主题颜色，将修改同步给后端
-
-**发起方：** 前端控制窗口
-
-**接收方：** 后端控制窗口实例
-
-**数据类型：** `string`
-
-### `control.leftBarWidth.change`
-
-**介绍：** 前端修改边栏宽度，将修改同步给后端
-
-**发起方：** 前端控制窗口
-
-**接收方：** 后端控制窗口实例
-
-**数据类型：** `number`
+**数据类型：** `ApplicationConfig`
 
 ### `control.captionLog.clear`
 
@@ -122,17 +94,17 @@
 
 **数据类型：** 无数据
 
-### `control.styles.change`
+### `control.captionConfig.change`
 
-**介绍：** 前端修改字幕样式，将修改同步给后端
+**介绍：** 前端修改字幕配置，将完整 caption 层发送给后端校验和保存
 
 **发起方：** 前端控制窗口
 
 **接收方：** 后端控制窗口实例
 
-**数据类型：** `Styles`
+**数据类型：** `CaptionConfig`
 
-### `control.styles.reset`
+### `control.captionConfig.reset`
 
 **介绍：** 将字幕样式恢复为默认
 
@@ -142,15 +114,15 @@
 
 **数据类型：** 无数据
 
-### `control.controls.change`
+### `control.engineConfig.change`
 
-**介绍：** 前端修改了字幕引擎配置，将最新配置发送给后端
+**介绍：** 前端修改字幕引擎配置，将完整 engine 层发送给后端校验和保存
 
 **发起方：** 前端控制窗口
 
 **接收方：** 后端控制窗口实例
 
-**数据类型：** `Controls`
+**数据类型：** `EngineConfig`
 
 ### `control.captionWindow.activate`
 
@@ -234,15 +206,15 @@
 
 ## 后端 ==> 前端
 
-### `control.uiLanguage.set`
+### `both.application.set`
 
-**介绍：** 后端将最新界面语言发送给前端，前端进行设置
+**介绍：** 后端将完整 application 配置同步给窗口
 
 **发起方：** 后端
 
-**接收方：** 字幕窗口
+**接收方：** 前端窗口
 
-**数据类型：** `UILanguage`
+**数据类型：** `ApplicationConfig`
 
 ### `control.nativeTheme.change`
 
@@ -284,15 +256,15 @@
 
 **数据类型：** `string`
 
-### `control.controls.set`
+### `control.engineState.set`
 
-**介绍：** 后端将最新字幕引擎配置发送给前端，前端进行设置
+**介绍：** 后端同步当前引擎是否运行；该状态不属于持久化配置
 
 **发起方：** 后端
 
 **接收方：** 前端控制窗口
 
-**数据类型：** `Controls`
+**数据类型：** `boolean`
 
 ### `control.softwareLog.add`
 
@@ -304,15 +276,15 @@
 
 **数据类型：** `SoftwareLog`
 
-### `both.styles.set`
+### `both.captionConfig.set`
 
-**介绍：** 后端将最新字幕样式发送给前端，前端进行设置
+**介绍：** 后端将完整 caption 配置发送给前端
 
 **发起方：** 后端
 
 **接收方：** 前端
 
-**数据类型：** `Styles`
+**数据类型：** `CaptionConfig`
 
 ### `both.captionLog.add`
 

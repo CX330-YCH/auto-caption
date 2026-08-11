@@ -102,39 +102,34 @@ class ControlWindow {
       return info
     })
 
-    ipcMain.on('control.uiLanguage.change', (_, args) => {
-      allConfig.uiLanguage = args
-      if(captionWindow.window){
-        captionWindow.window.webContents.send('control.uiLanguage.set', args)
+    ipcMain.on('control.application.change', (_, args) => {
+      if (!this.applyConfig('application', () => {
+        allConfig.setApplication(args)
+      })) return
+      if (captionWindow.window) {
+        captionWindow.window.webContents.send(
+          'both.application.set',
+          allConfig.application
+        )
       }
     })
 
-    ipcMain.on('control.uiTheme.change', (_, args) => {
-      allConfig.uiTheme = args
-    })
-
-    ipcMain.on('control.uiColor.change', (_, args) => {
-      allConfig.uiColor = args
-    })
-
-    ipcMain.on('control.leftBarWidth.change', (_, args) => {
-      allConfig.leftBarWidth = args
-    })
-
-    ipcMain.on('control.styles.change', (_, args) => {
-      allConfig.setStyles(args)
-      if(captionWindow.window){
-        allConfig.sendStyles(captionWindow.window)
+    ipcMain.on('control.captionConfig.change', (_, args) => {
+      if (!this.applyConfig('caption', () => {
+        allConfig.setCaption(args)
+      })) return
+      if(captionWindow.window) {
+        allConfig.sendCaption(captionWindow.window)
       }
     })
 
-    ipcMain.on('control.styles.reset', () => {
-      allConfig.resetStyles()
-      if(this.window){
-        allConfig.sendStyles(this.window)
+    ipcMain.on('control.captionConfig.reset', () => {
+      allConfig.resetCaptionStyles()
+      if(this.window) {
+        allConfig.sendCaption(this.window)
       }
-      if(captionWindow.window){
-        allConfig.sendStyles(captionWindow.window)
+      if(captionWindow.window) {
+        allConfig.sendCaption(captionWindow.window)
       }
     })
 
@@ -147,8 +142,10 @@ class ControlWindow {
       }
     })
 
-    ipcMain.on('control.controls.change', (_, args) => {
-      allConfig.setControls(args)
+    ipcMain.on('control.engineConfig.change', (_, args) => {
+      this.applyConfig('engine', () => {
+        allConfig.setEngine(args)
+      })
     })
 
     ipcMain.on('control.engine.start', () => {
@@ -170,6 +167,18 @@ class ControlWindow {
 
   public sendErrorMessage(message: string) {
     this.window?.webContents.send('control.error.occurred', message)
+  }
+
+  private applyConfig(label: string, action: () => void): boolean {
+    try {
+      action()
+      return true
+    }
+    catch (error) {
+      const name = error instanceof Error ? error.name : 'UnknownError'
+      Log.warn(`Rejected invalid ${label} config (${name})`)
+      return false
+    }
   }
 }
 

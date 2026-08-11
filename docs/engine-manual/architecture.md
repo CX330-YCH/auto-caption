@@ -166,6 +166,27 @@ Vosk、SOSV 和 GLM 的 final 通过统一翻译服务调用已有 Google/Ollama
 
 现有翻译函数的网络取消、有限结果冲刷和外部稳定 ID 关联仍是后续独立改造事项。
 
+## Electron 配置 V2
+
+Electron 持久化、主进程、IPC 和渲染进程现在共享 `src/shared/config/` 中的 V2 分层模型：
+
+```text
+ConfigDocumentV2
+├── application          # 语言、主题、颜色、窗口布局
+├── engine
+│   ├── provider         # 当前内置 Provider
+│   ├── common           # 语言、音频、翻译、录音、启动超时
+│   ├── providers        # Gummy/Vosk/SOSV/GLM 专属配置
+│   └── custom           # 自定义可执行文件和命令
+└── caption              # 字幕样式
+```
+
+`AllConfig` 是主进程中的配置所有者，只接受 `schemaVersion: 2`。Renderer 通过 application、engine、caption 三个完整层级交换配置，主进程重新校验后才更新内存；运行态 `engineEnabled` 与 PID、端口、日志不进入磁盘配置。
+
+引擎启动参数由纯函数 `EngineCommandBuilder` 从 `EngineConfig` 构建，`CaptionEngine` 不再读取扁平 controls 或拼装各 Provider 字段。Builder 内部使用 Provider 参数注册表，共用音频、录音、端口和目标语言参数只生成一次。
+
+本阶段按明确决策不提供旧无版本配置迁移：旧文件被拒绝，本次运行使用默认 V2，退出时写回 V2。完整字段、范围和凭据限制见 [`config-v2.md`](../api-docs/config-v2.md)。
+
 ## 兼容性
 
 - `main.py` 路径、全部 CLI 参数、默认值和 Provider 名称保持不变。
@@ -173,6 +194,7 @@ Vosk、SOSV 和 GLM 的 final 通过统一翻译服务调用已有 Google/Ollama
 - Vosk、SOSV 和 GLM 的 final 使用统一客户端翻译；Gummy 继续使用服务端翻译。
 - `-d 1` 现在按参数声明正确启用终端字幕显示；迁移前入口把整数错误地与字符串比较，导致该参数不生效。
 - 直接导入旧 `audio2text.*Recognizer` 的未文档化内部路径不再支持。应用公开扩展点仍是命令行和进程协议。
+- Electron 内部配置 IPC 已由扁平 `Controls` 切换为 V2 application/engine/caption 分层对象；该 IPC 不作为第三方公开扩展点。
 
 ## 新 Provider 接入顺序
 

@@ -574,3 +574,147 @@
 - 仓库旧 Gummy、GLM、SOSV 实现的可观察参数、ID/时间、VAD、翻译和错误行为。
 - 本地已安装 DashScope SDK 中 `TranslationRecognizerRealtime` 的 callback 与同步 stop/join 行为；没有通过网络修改 SDK 或依赖版本。
 - Python 标准库 `queue`、`threading`、`wave`、`urllib.parse` 和项目既有第三方依赖；未新增第三方包。
+
+## 2026-08-12 - 第四阶段：配置模型完整迁移到分层 V2
+
+### 授权与目标
+
+- 用户授权：要求第四阶段进行配置模型重构，采用带版本的分层配置；随后明确要求“直接完成 V2 的完整迁移，不考虑已安装的版本兼容性”。
+- 最终目标：磁盘配置、Electron 主进程、内部 IPC、Vue/Pinia 状态和引擎启动参数全部直接使用 `schemaVersion: 2` 的 application/engine/caption 分层模型，删除扁平 `Controls` 数据模型。
+- 初始曾按渐进兼容思路创建 V1→V2 migration 和 `Controls` adapter；用户补充要求后，在本批次完成前删除了这两个临时文件和路线，最终工作区没有遗留双实现或兼容层。
+- 明确非目标：不迁移旧用户配置、不增加 Fun-ASR/热词字段、不修改 Python CLI 或 Electron/Python stdout 协议、不升级依赖、不引入系统安全存储。
+- 变更类型：破坏性配置重构、内部 IPC、类型、测试和文档。
+
+### 修改文件
+
+- `src/shared/types.ts`
+  - 新增主进程和渲染进程共享的 UI、字幕、日志和 `FullConfig` 类型单一来源。
+  - `FullConfig` 改为携带完整 `ConfigDocumentV2` 与独立的运行态 `engineEnabled`。
+- `src/shared/config/schema.ts`
+  - 定义 `CONFIG_SCHEMA_VERSION = 2`、application/engine/common/providers/custom/caption 分层接口和完整默认值。
+  - Provider 专属字段从通用字段中分离；`engineEnabled` 不进入持久化模型。
+- `src/shared/config/document.ts`
+  - 新增严格 V2 文档、application、engine、Provider、caption 和 styles 解析校验。
+  - 拒绝无版本、非 V2、未知 Provider、非法 URL、越界数值和错误字段类型，同时保留合法 V2 对象中的未知扩展字段。
+- `src/shared/config/validation.ts`
+  - 新增不依赖第三方库的字符串、布尔、数值、枚举、颜色、HTTP/HTTPS URL 和对象边界校验。
+  - 错误只包含字段分类，不回显配置值或密钥。
+- `src/main/types/index.ts`、`src/renderer/src/types/index.ts`
+  - 删除两份重复类型定义，统一重新导出 `src/shared/types.ts`。
+- `src/main/utils/AllConfig.ts`
+  - 改为 V2 配置文档的唯一主进程所有者，读写 `schemaVersion: 2`。
+  - 旧版、损坏或非法文件整体拒绝并使用 V2 默认值；应用退出时写回 V2。
+  - application、engine 和 caption 更新均通过严格解析；配置日志不再输出含密钥的完整对象。
+  - `engineEnabled`、字幕和软件日志继续作为运行态，不写入配置文件。
+- `src/main/ControlWindow.ts`
+  - 配置 IPC 改为 application、engineConfig、captionConfig 三个完整层级。
+  - 主进程捕获并分类记录非法 renderer 配置，不保存未校验 IPC 数据。
+- `src/main/CaptionWindow.ts`
+  - 字幕窗口宽度通过 V2 application.layout 校验入口更新。
+- `src/main/engine/config/EngineCommandBuilder.ts`
+  - 新增纯函数命令构建组件；统一公共音频、录音、端口和目标语言参数，并通过 Provider 参数 builder 生成 Gummy/Vosk/SOSV/GLM 差异参数。
+  - 自定义引擎参数与内置 Provider 参数分别构建。
+- `src/main/utils/CaptionEngine.ts`
+  - 删除对扁平 `allConfig.controls` 的读取和四段 Provider 参数拼装，改为读取 `EngineConfig` 并调用命令构建组件。
+  - 引擎运行状态通过独立 `engineState` IPC 同步，不再混入配置对象。
+- `src/renderer/src/App.vue`
+  - 窗口挂载时从 `FullConfig.config` 分别初始化 application、engine 和 caption store，并单独初始化 `engineEnabled`。
+- `src/renderer/src/stores/generalSetting.ts`
+  - 使用共享 `ApplicationConfig`，保存未知 V2 扩展字段，并通过 `control.application.change` 发送完整 application 层。
+- `src/renderer/src/stores/engineControl.ts`
+  - 删除 20 余个扁平持久化 ref 的配置模型，改为单一 `EngineConfig`；引擎运行状态保留为独立 ref。
+  - 使用 `control.engineConfig.change` 与独立的 `control.engineState.set`；初始 EngineConfig 由 `FullConfig.config` 提供。
+- `src/renderer/src/stores/captionStyle.ts`
+  - 使用共享 `CaptionConfig`，现有样式 ref 直接绑定其 styles 层，并通过 captionConfig IPC 发送完整层级。
+- `src/renderer/src/components/EngineControl.vue`
+  - 表单应用/回退直接读写 `engine.common`、`engine.providers` 和 `engine.custom`；不再读写扁平 Controls 字段。
+- `src/renderer/src/components/EngineStatus.vue`
+  - 当前 Provider、自定义引擎和模型路径检查改为读取 `EngineConfig`。
+- `src/renderer/src/components/CaptionStyle.vue`
+  - 样式应用与重置改用 V2 captionConfig store 操作。
+- `tsconfig.node.json`、`tsconfig.web.json`
+  - 将 `src/shared/**/*` 纳入 Node/Web 类型检查；Web 开启 `allowImportingTsExtensions` 以共享与 Node 测试相同的显式 TypeScript 模块路径。
+- `eslint-suppressions.json`
+  - 删除重构文件不再命中的既有 suppression；没有新增 suppression 或放宽 ESLint 规则。
+- `tests/node/configDocument.test.mjs`
+  - 验证完整 V2 默认值、拒绝旧/未来版本、嵌套字段校验和未知 V2 扩展字段保留。
+- `tests/node/engineCommandBuilder.test.mjs`
+  - 验证四个内置 Provider 的公共/专属参数、关闭翻译时的 `none` 目标和自定义引擎参数。
+- `docs/api-docs/config-v2.md`
+  - 新增 V2 分层结构、默认值、校验范围、旧配置重置、运行态和明文凭据限制文档。
+- `docs/api-docs/electron-ipc.md`
+  - 将旧 ui/styles/controls 配置通道更新为 application/engineConfig/captionConfig/engineState V2 通道。
+- `docs/engine-manual/architecture.md`
+  - 增加 Electron 配置 V2 职责、数据流、命令构建组件和破坏性旧配置行为。
+- `docs/testing.md`
+  - 增加 V2 文档和命令构建测试覆盖，并明确未执行真实 userData/桌面 IPC 测试。
+- `docs/user-manual/zh.md`、`docs/user-manual/en.md`、`docs/user-manual/ja.md`
+  - 同步提示旧无版本配置不会迁移，首次启动使用默认值并在退出时写入 V2。
+- `change.md`
+  - 追加本阶段授权变化、破坏性行为、文件范围、验证、风险和回滚记录。
+
+### 修改前后行为
+
+- 修改前：`config.json` 无版本，application、Provider、翻译、录音、自定义引擎和运行态字段混在顶层及扁平 `controls`；主/渲染进程分别复制类型。
+- 修改后：配置根固定为 `schemaVersion: 2`，并分为 `application`、`engine.common`、`engine.providers`、`engine.custom` 和 `caption`；共享类型只有一份。
+- 修改前：旧配置读取通过零散 `if (config.xxx)` 合并，非法类型可进入主进程；Renderer controls 只按已有 key 盲目赋值。
+- 修改后：磁盘和每次配置 IPC 都在主进程执行完整嵌套校验；非法配置整体拒绝，不输出原始值。
+- 修改前：`engineEnabled` 虽然启动时被强制保留，但仍位于持久化 `controls` 结构并被写入 JSON。
+- 修改后：`engineEnabled` 是独立运行状态，只通过 `control.engineState.set` 同步，不持久化。
+- 修改前：`CaptionEngine` 直接读取扁平 Controls，并包含四套 Provider 参数条件分支。
+- 修改后：纯 `EngineCommandBuilder` 从 V2 `EngineConfig` 生成参数，公共参数只生成一次，Provider 差异集中注册。
+- 内置 Provider、翻译、录音、自定义引擎、启动超时、字幕样式和 UI 默认值保持原值；GLM 空 URL/模型在表单应用时回落到既有默认值。
+
+### 配置、接口与协议
+
+- 持久化配置：破坏性变化，从无版本扁平 JSON 切换为严格 `schemaVersion: 2` 分层 JSON。
+- 配置迁移：按用户明确要求不提供。旧、缺失版本、未来版本、损坏或非法配置均使用完整默认值，退出时写回 V2。
+- 未知字段：只要整个文档满足 V2 已知字段约束，同层未知扩展字段在磁盘解析、Renderer 状态和 IPC 往返中保留。
+- Electron 内部 IPC：删除旧 `control.uiLanguage/uiTheme/uiColor/leftBarWidth`、`control.styles`、`control.controls` 和对应 set 通道；新增 application、captionConfig、engineConfig、engineState 分层通道。
+- `FullConfig`：由多个扁平配置字段改为 `{ platform, config, engineEnabled, captionLog, softwareLog }`。
+- Python CLI、Provider 名称、参数、默认值：无变化；只是参数来源由 Controls 改为 V2 EngineConfig。
+- Electron/Python stdout/TCP 协议：无变化。
+- 依赖、package/lock 文件、Python requirements 和 PyInstaller spec：无变化。
+- 凭据：仍按既有行为以明文位于用户目录 JSON；配置对象不写日志，进程参数日志继续脱敏。本阶段未扩大为安全存储改造。
+
+### 兼容性、数据与回滚
+
+- 已安装版本配置：明确不兼容。旧用户的语言、主题、模型路径、API Key、录音路径和样式不会自动迁移；首次启动回到默认值。
+- 旧配置不会备份；应用退出后 `config.json` 会被 V2 默认值覆盖。用户如需保留旧值，必须在启动此版本前自行复制旧文件。
+- Electron 配置 IPC 和 `FullConfig` 属于应用内部接口，本阶段不保留扁平 Controls 兼容层。
+- 自定义字幕引擎 stdout/TCP 协议、Python CLI 和自定义命令字符串的既有空格拆分行为保持不变。
+- 数据库、字幕导出文件、模型文件、录音文件和远端资源：不迁移、不删除。
+- 回滚方式：恢复本阶段修改前的 AllConfig、ControlWindow、CaptionWindow、CaptionEngine、主/渲染 types、App、三个 Pinia store、三个组件和 tsconfig；删除 `src/shared/`、`src/main/engine/config/` 与两个新增 Node 测试；恢复 IPC/架构/测试/三语用户文档并删除 `config-v2.md`。已被 V2 覆盖的旧 `config.json` 无法通过代码回滚恢复，只能使用用户事先备份。
+
+### 验证
+
+- 第一次 `npm run typecheck`：Node 类型检查通过，Web 类型检查失败；共享配置模块的显式 `.ts` import 需要 Web tsconfig 开启 `allowImportingTsExtensions`。补齐该编译选项后继续验证，该失败没有被忽略。
+- 修正后 `npm run typecheck && npm run test:node`：通过；Node/Web 类型检查通过，Node 26/26。
+- 清理最终 V2 命名后 `npm run typecheck && npm run lint`：Node/Web 类型检查通过；ESLint 没有报告代码违规，但因失效 suppression 提示以退出码 2 结束。
+- 首次最终 `npm run verify`：类型检查通过，但 ESLint 因本次重写文件对应的旧 suppression 已不再命中而以退出码 2 停止，测试阶段未执行；单独复现 `npm run lint` 同样退出 2。执行 `npx eslint --cache . --prune-suppressions` 只删除失效记录后，继续最终验证。该失败没有被忽略。
+- `npx eslint --cache . --prune-suppressions && npm run lint`：通过，删除失效 suppression 后 lint 退出码 0；没有新增 suppression。
+- 最终 `npm run verify`：通过；Node/Web 类型检查、ESLint、Node 26/26 和 Python 36/36 全部通过。
+- 最终 `npm run build`：通过；Electron main、preload 和 renderer 完成 Vite 生产构建，共转换 main 19 个、preload 1 个、renderer 3239 个模块。
+- 最终 `git diff --check`：通过。
+- 最终旧配置引用检查：源码和配置/API/架构文档中没有旧 ui/styles/controls IPC、`allConfig.controls`、`setControls` 或 `sendControls` 活动引用。
+- 依赖检查：`package.json`、`package-lock.json`、`engine/requirements.txt` 和 `engine/main.spec` 无差异。
+- 验证仍输出仓库既有 npm Electron mirror 弃用警告和 Node `MODULE_TYPELESS_PACKAGE_JSON` 警告；没有为消除提示而修改依赖或模块类型。
+- 未运行真实 Electron 窗口、`userData/config.json` 磁盘替换、IPC 往返或手工表单回归；当前自动化使用纯配置解析器和命令构建器，不启动 GUI。
+- 未运行 Windows/Linux/macOS 安装包、PyInstaller、真实音频设备、模型或付费 API；本阶段没有修改相应运行链路或依赖，且这些需要目标平台和外部资源。
+
+### 风险、限制与后续事项
+
+- 最大风险是用户明确接受的配置丢失：旧文件退出后会被 V2 默认值覆盖，且没有自动备份。
+- Electron 配置 IPC 端到端尚无 GUI 自动化；类型检查和纯函数测试不能替代手工验证所有表单 Apply/Cancel、双窗口同步及退出写盘。
+- application 的常规字段变化会发送完整 application 对象；Vue watch 会批处理同一轮更新，但仍需在真实双窗口运行中确认没有多余往返。
+- 自定义命令仍按既有 `split(' ')` 拆分，带空格的单个自定义参数语义仍有限；本阶段为避免改变公开自定义引擎行为没有重写参数解析。
+- API Key 仍明文持久化并需要发送到 Renderer 配置 UI；后续应独立评估系统安全存储、只写凭据句柄和配置导入/导出策略。
+- V2 当前 Provider union 只包含四个现有引擎。Fun-ASR 和热词接入时必须新增 Provider 专属层和能力校验，不能重新向 common 或组件堆平字段。
+- 配置写入仍使用同步直接写文件，没有临时文件+原子替换；异常退出可能产生部分文件，下一次启动会拒绝并回到默认值。原子写入应作为独立可靠性改造。
+
+### 参考与决策依据
+
+- 用户提出的“带版本的分层配置”以及后续“完整 V2、不考虑已安装版本兼容性”的明确决策。
+- 根目录 `AGENTS.md` 的 schemaVersion、Provider 通用/专属分层、主进程 IPC 校验、未知字段保留和单一类型来源约束；用户最新要求覆盖其中旧配置迁移建议。
+- 当前 `AllConfig`、`CaptionEngine`、Pinia stores 和 Electron IPC 的实际调用关系。
+- TypeScript 类型系统、Vue reactive/ref/toRaw、Electron structured-clone IPC 和 Node 标准 JSON/URL 校验；未新增第三方依赖。

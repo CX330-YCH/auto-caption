@@ -9,20 +9,6 @@
       "count": 2
     }
   },
-  "src/main/utils/AllConfig.ts": {
-    "@typescript-eslint/explicit-function-return-type": {
-      "count": 11
-    },
-    "@typescript-eslint/no-empty-function": {
-      "count": 1
-    },
-    "@typescript-eslint/no-wrapper-object-types": {
-      "count": 2
-    },
-    "prefer-const": {
-      "count": 2
-    }
-  },
   "src/main/utils/CaptionEngine.ts": {
     "@typescript-eslint/no-explicit-any": {
       "count": 1
@@ -76,27 +62,6 @@
   },
   "src/renderer/src/stores/captionLog.ts": {
     "@typescript-eslint/explicit-function-return-type": {
-      "count": 1
-    }
-  },
-  "src/renderer/src/stores/captionStyle.ts": {
-    "@typescript-eslint/explicit-function-return-type": {
-      "count": 4
-    },
-    "@typescript-eslint/no-unused-expressions": {
-      "count": 1
-    }
-  },
-  "src/renderer/src/stores/engineControl.ts": {
-    "@typescript-eslint/explicit-function-return-type": {
-      "count": 3
-    }
-  },
-  "src/renderer/src/stores/generalSetting.ts": {
-    "@typescript-eslint/explicit-function-return-type": {
-      "count": 3
-    },
-    "@typescript-eslint/no-wrapper-object-types": {
       "count": 1
     }
   },

@@ -18,6 +18,10 @@ import {
   isContentEngineMessage,
   isTranslationEngineMessage
 } from '../engine/protocol/messages'
+import {
+  buildBundledEngineArguments,
+  buildCustomEngineArguments
+} from '../engine/config/EngineCommandBuilder'
 
 export class CaptionEngine {
   appPath: string = ''
@@ -31,16 +35,16 @@ export class CaptionEngine {
   private readonly protocol = new EngineProtocol()
 
   private getApp(): boolean {
-    if (allConfig.controls.customized) {
+    const engineConfig = allConfig.engine
+    this.port = Math.floor(Math.random() * (65535 - 1024 + 1)) + 1024
+    if (engineConfig.custom.enabled) {
       Log.info('Using customized caption engine')
-      this.appPath = allConfig.controls.customizedApp
-      this.command = allConfig.controls.customizedCommand.split(' ')
-      this.port = Math.floor(Math.random() * (65535 - 1024 + 1)) + 1024
-      this.command.push('-p', this.port.toString())
+      this.appPath = engineConfig.custom.executable
+      this.command = buildCustomEngineArguments(engineConfig, this.port)
     }
     else {
-      if(allConfig.controls.engine === 'gummy' && 
-        !allConfig.controls.API_KEY && !process.env.DASHSCOPE_API_KEY
+      if(engineConfig.provider === 'gummy' &&
+        !engineConfig.providers.gummy.apiKey && !process.env.DASHSCOPE_API_KEY
       ) {
         controlWindow.sendErrorMessage(i18n('gummy.key.missing'))
         return false
@@ -75,55 +79,10 @@ export class CaptionEngine {
           this.appPath = path.join(process.resourcesPath, 'engine', 'main', 'main')
         }
       }
-      this.command.push('-a', allConfig.controls.audio ? '1' : '0')
-      if(allConfig.controls.recording) {
-        this.command.push('-r', '1')
-        this.command.push('-rp', `"${allConfig.controls.recordingPath}"`)
-      }
-      this.port = Math.floor(Math.random() * (65535 - 1024 + 1)) + 1024
-      this.command.push('-p', this.port.toString())
-      this.command.push(
-        '-t', allConfig.controls.translation ?
-        allConfig.controls.targetLang : 'none'
-      )
-
-      if(allConfig.controls.engine === 'gummy') {
-        this.command.push('-e', 'gummy')
-        this.command.push('-s', allConfig.controls.sourceLang)
-        if(allConfig.controls.API_KEY) {
-          this.command.push('-k', allConfig.controls.API_KEY)
-        }
-      }
-      else if(allConfig.controls.engine === 'vosk'){
-        this.command.push('-e', 'vosk')
-        this.command.push('-vosk', `"${allConfig.controls.voskModelPath}"`)
-        this.command.push('-tm', allConfig.controls.transModel)
-        this.command.push('-omn', allConfig.controls.ollamaName)
-        if(allConfig.controls.ollamaUrl) this.command.push('-ourl', allConfig.controls.ollamaUrl)
-        if(allConfig.controls.ollamaApiKey) this.command.push('-okey', allConfig.controls.ollamaApiKey)
-      }
-      else if(allConfig.controls.engine === 'sosv'){
-        this.command.push('-e', 'sosv')
-        this.command.push('-s', allConfig.controls.sourceLang)
-        this.command.push('-sosv', `"${allConfig.controls.sosvModelPath}"`)
-        this.command.push('-tm', allConfig.controls.transModel)
-        this.command.push('-omn', allConfig.controls.ollamaName)
-        if(allConfig.controls.ollamaUrl) this.command.push('-ourl', allConfig.controls.ollamaUrl)
-        if(allConfig.controls.ollamaApiKey) this.command.push('-okey', allConfig.controls.ollamaApiKey)
-      }
-      else if(allConfig.controls.engine === 'glm'){
-        this.command.push('-e', 'glm')
-        this.command.push('-s', allConfig.controls.sourceLang)
-        this.command.push('-gurl', allConfig.controls.glmUrl)
-        this.command.push('-gmodel', allConfig.controls.glmModel)
-        if(allConfig.controls.glmApiKey) {
-          this.command.push('-gkey', allConfig.controls.glmApiKey)
-        }
-        this.command.push('-tm', allConfig.controls.transModel)
-        this.command.push('-omn', allConfig.controls.ollamaName)
-        if(allConfig.controls.ollamaUrl) this.command.push('-ourl', allConfig.controls.ollamaUrl)
-        if(allConfig.controls.ollamaApiKey) this.command.push('-okey', allConfig.controls.ollamaApiKey)
-      }
+      this.command.push(...buildBundledEngineArguments(
+        engineConfig,
+        this.port
+      ))
     }
     Log.info('Engine Path:', this.appPath)
     Log.info('Engine Command:', passwordMaskingForList(this.command))
@@ -140,9 +99,9 @@ export class CaptionEngine {
       Log.info('Connected to caption engine server');
     });
     this.status = 'running'
-    allConfig.controls.engineEnabled = true
+    allConfig.setEngineEnabled(true)
     if(controlWindow.window){
-      allConfig.sendControls(controlWindow.window, false)
+      allConfig.sendEngineState(controlWindow.window)
       controlWindow.window.webContents.send(
         'control.engine.started',
         this.process.pid
@@ -172,10 +131,11 @@ export class CaptionEngine {
     this.status = 'starting'
     Log.info('Caption Engine Starting, PID:', this.process.pid)
 
-    const timeoutMs = allConfig.controls.startTimeoutSeconds * 1000
+    const timeoutSeconds = allConfig.engine.common.startTimeoutSeconds
+    const timeoutMs = timeoutSeconds * 1000
     this.startTimeoutID = setTimeout(() => {
       if (this.status === 'starting') {
-        Log.warn(`Engine start timeout after ${allConfig.controls.startTimeoutSeconds} seconds, forcing kill...`)
+        Log.warn(`Engine start timeout after ${timeoutSeconds} seconds, forcing kill...`)
         this.status = 'starting-timeout'
         controlWindow.sendErrorMessage(i18n('engine.start.timeout'))
         this.kill()
@@ -199,9 +159,9 @@ export class CaptionEngine {
       this.handleProtocolBatch(this.protocol.finish())
       this.process = undefined;
       this.client = undefined
-      allConfig.controls.engineEnabled = false
+      allConfig.setEngineEnabled(false)
       if(controlWindow.window){
-        allConfig.sendControls(controlWindow.window, false)
+        allConfig.sendEngineState(controlWindow.window)
         controlWindow.window.webContents.send('control.engine.stopped')
       }
       this.status = 'stopped'

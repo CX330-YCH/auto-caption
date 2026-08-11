@@ -1,168 +1,163 @@
-import {
-  UILanguage, UITheme, Styles, Controls,
-  CaptionItem, FullConfig, SoftwareLogItem
+import type {
+  CaptionItem,
+  FullConfig,
+  SoftwareLogItem,
+  UILanguage,
+  UITheme
 } from '../types'
+import type {
+  ApplicationConfig,
+  ConfigDocumentV2,
+  EngineConfig
+} from '../../shared/config/schema'
+import {
+  CONFIG_SCHEMA_VERSION,
+  createDefaultConfig,
+  createDefaultStyles
+} from '../../shared/config/schema'
+import {
+  parseApplicationConfig,
+  parseCaptionConfig,
+  parseConfigDocumentV2,
+  parseEngineConfig
+} from '../../shared/config/document'
 import { Log } from './Log'
 import { app, BrowserWindow } from 'electron'
-import { passwordMaskingForObject } from './UtilsFunc'
 import * as path from 'path'
 import * as fs from 'fs'
 import * as os from 'os'
 
 interface CaptionTranslation {
-  time_s: string,
+  time_s: string
   translation: string
 }
 
-function getDesktopPath() {
-  const homeDir = os.homedir()
-  return path.join(homeDir, 'Desktop')
+function getDesktopPath(): string {
+  return path.join(os.homedir(), 'Desktop')
 }
 
-const defaultStyles: Styles = {
-  lineNumber: 1,
-  lineBreak: 1,
-  fontFamily: 'sans-serif',
-  fontSize: 24,
-  fontColor: '#000000',
-  fontWeight: 4,
-  background: '#dbe2ef',
-  opacity: 80,
-  showPreview: true,
-  transDisplay: true,
-  transFontFamily: 'sans-serif',
-  transFontSize: 24,
-  transFontColor: '#000000',
-  transFontWeight: 4,
-  textShadow: false,
-  offsetX: 2,
-  offsetY: 2,
-  blur: 0,
-  textShadowColor: '#ffffff'
-};
-
-const defaultControls: Controls = {
-  sourceLang: 'en',
-  targetLang: 'zh',
-  transModel: 'ollama',
-  ollamaName: 'qwen2.5:0.5b',
-  ollamaUrl: 'http://localhost:11434',
-  ollamaApiKey: '',
-  engine: 'gummy',
-  audio: 0,
-  engineEnabled: false,
-  API_KEY: '',
-  voskModelPath: '',
-  sosvModelPath: '',
-  glmUrl: 'https://open.bigmodel.cn/api/paas/v4/audio/transcriptions',
-  glmModel: 'glm-asr-2512',
-  glmApiKey: '',
-  recordingPath: getDesktopPath(),
-  translation: true,
-  recording: false,
-  customized: false,
-  customizedApp: '',
-  customizedCommand: '',
-  startTimeoutSeconds: 30
-};
-
-
 class AllConfig {
-  captionWindowWidth: number = 900;
+  private document: ConfigDocumentV2 = createDefaultConfig(getDesktopPath())
 
-  uiLanguage: UILanguage = 'zh';
-  leftBarWidth: number = 8;
-  uiTheme: UITheme = 'system';
-  uiColor: string = '#1677ff';
-  styles: Styles = {...defaultStyles};
-  controls: Controls = {...defaultControls};
-  
-  lastLogIndex: number = -1;
-  captionLog: CaptionItem[] = [];
+  public engineEnabled: boolean = false
+  public lastLogIndex: number = -1
+  public captionLog: CaptionItem[] = []
 
-  constructor() {}
+  public get config(): ConfigDocumentV2 {
+    return this.document
+  }
 
-  public readConfig() {
-    const configPath = path.join(app.getPath('userData'), 'config.json')
-    if(fs.existsSync(configPath)){
-      Log.info('Read Config from:', configPath)
-      const config = JSON.parse(fs.readFileSync(configPath, 'utf-8'))
-      if(config.captionWindowWidth) this.captionWindowWidth = config.captionWindowWidth
-      if(config.uiLanguage) this.uiLanguage = config.uiLanguage
-      if(config.uiTheme) this.uiTheme = config.uiTheme
-      if(config.uiColor) this.uiColor = config.uiColor
-      if(config.leftBarWidth) this.leftBarWidth = config.leftBarWidth
-      if(config.styles) this.setStyles(config.styles)
-      if(config.controls) this.setControls(config.controls)
+  public get application(): ApplicationConfig {
+    return this.document.application
+  }
+
+  public get engine(): EngineConfig {
+    return this.document.engine
+  }
+
+  public get captionWindowWidth(): number {
+    return this.document.application.layout.captionWindowWidth
+  }
+
+  public get uiLanguage(): UILanguage {
+    return this.document.application.language
+  }
+
+  public get uiTheme(): UITheme {
+    return this.document.application.theme
+  }
+
+  public readConfig(): void {
+    const configPath = this.getConfigPath()
+    if (!fs.existsSync(configPath)) return
+    try {
+      const raw: unknown = JSON.parse(fs.readFileSync(configPath, 'utf-8'))
+      this.document = parseConfigDocumentV2(raw)
+      Log.info(
+        `Read config schema v${CONFIG_SCHEMA_VERSION} from:`,
+        configPath
+      )
+    }
+    catch (error) {
+      this.document = createDefaultConfig(getDesktopPath())
+      Log.error(
+        `Config rejected; V2 defaults will be used (${errorName(error)})`
+      )
     }
   }
 
-  public writeConfig() {
-    const config = {
-      captionWindowWidth: this.captionWindowWidth,
-      uiLanguage: this.uiLanguage,
-      uiTheme: this.uiTheme,
-      uiColor: this.uiColor,
-      leftBarWidth: this.leftBarWidth,
-      controls: this.controls,
-      styles: this.styles
-    }
-    const configPath = path.join(app.getPath('userData'), 'config.json')
-    fs.writeFileSync(configPath, JSON.stringify(config, null, 2))
-    Log.info('Write Config to:', configPath)
+  public writeConfig(): void {
+    const configPath = this.getConfigPath()
+    fs.writeFileSync(configPath, JSON.stringify(this.document, null, 2))
+    Log.info(`Write config schema v${CONFIG_SCHEMA_VERSION} to:`, configPath)
   }
 
   public getFullConfig(softwareLog: SoftwareLogItem[]): FullConfig {
     return {
       platform: process.platform,
-      uiLanguage: this.uiLanguage,
-      uiTheme: this.uiTheme,
-      uiColor: this.uiColor,
-      leftBarWidth: this.leftBarWidth,
-      styles: this.styles,
-      controls: this.controls,
+      config: this.document,
+      engineEnabled: this.engineEnabled,
       captionLog: this.captionLog,
-      softwareLog: softwareLog
+      softwareLog
     }
   }
 
-  public setStyles(args: Object) {
-    for(let key in this.styles) {
-      if(key in args) {
-        this.styles[key] = args[key]
+  public setApplication(value: unknown): void {
+    const application = parseApplicationConfig(value)
+    this.document = { ...this.document, application }
+    Log.info('Set application config')
+  }
+
+  public setCaptionWindowWidth(width: unknown): void {
+    const application = parseApplicationConfig({
+      ...this.document.application,
+      layout: {
+        ...this.document.application.layout,
+        captionWindowWidth: width
+      }
+    })
+    this.document = { ...this.document, application }
+  }
+
+  public setCaption(value: unknown): void {
+    const caption = parseCaptionConfig(value)
+    this.document = { ...this.document, caption }
+    Log.info('Set caption config')
+  }
+
+  public resetCaptionStyles(): void {
+    this.document = {
+      ...this.document,
+      caption: {
+        ...this.document.caption,
+        styles: createDefaultStyles()
       }
     }
-    Log.info('Set Styles:', this.styles)
+    Log.info('Reset caption styles')
   }
 
-  public resetStyles() {
-    this.setStyles(defaultStyles)
+  public sendCaption(window: BrowserWindow): void {
+    window.webContents.send('both.captionConfig.set', this.document.caption)
+    Log.info(`Send caption config to #${window.id}`)
   }
 
-  public sendStyles(window: BrowserWindow) {
-    window.webContents.send('both.styles.set', this.styles)
-    Log.info(`Send Styles to #${window.id}:`, this.styles)
+  public setEngine(value: unknown): void {
+    const engine = parseEngineConfig(value)
+    this.document = { ...this.document, engine }
+    Log.info('Set engine config for Provider:', engine.provider)
   }
 
-  public setControls(args: Object) {
-    const engineEnabled = this.controls.engineEnabled
-    for(let key in this.controls){
-      if(key in args) {
-        this.controls[key] = args[key]
-      }
-    }
-    this.controls.engineEnabled = engineEnabled
-    Log.info('Set Controls:', passwordMaskingForObject(this.controls))
+  public setEngineEnabled(enabled: boolean): void {
+    this.engineEnabled = enabled
   }
 
-  public sendControls(window: BrowserWindow, info = true) {
-    window.webContents.send('control.controls.set', this.controls)
-    if(info) Log.info(`Send Controls to #${window.id}:`, this.controls)
+  public sendEngineState(window: BrowserWindow): void {
+    window.webContents.send('control.engineState.set', this.engineEnabled)
   }
 
-  public updateCaptionLog(log: CaptionItem) {
+  public updateCaptionLog(log: CaptionItem): void {
     let command: 'add' | 'upd' = 'add'
-    if(
+    if (
       this.captionLog.length &&
       this.lastLogIndex === log.index
     ) {
@@ -174,38 +169,49 @@ class AllConfig {
       this.lastLogIndex = log.index
     }
     this.captionLog[this.captionLog.length - 1].index = this.captionLog.length
-    for(const window of BrowserWindow.getAllWindows()){
+    for (const window of BrowserWindow.getAllWindows()) {
       this.sendCaptionLog(window, command)
     }
   }
 
-  public updateCaptionTranslation(trans: CaptionTranslation){
-    for(let i = this.captionLog.length - 1; i >= 0; i--){
-      if(this.captionLog[i].time_s === trans.time_s){
+  public updateCaptionTranslation(trans: CaptionTranslation): void {
+    for (let i = this.captionLog.length - 1; i >= 0; i--) {
+      if (this.captionLog[i].time_s === trans.time_s) {
         this.captionLog[i].translation = trans.translation
-        for(const window of BrowserWindow.getAllWindows()){
+        for (const window of BrowserWindow.getAllWindows()) {
           this.sendCaptionLog(window, 'upd', i)
         }
         break
       }
     }
   }
+
   public sendCaptionLog(
     window: BrowserWindow,
     command: 'add' | 'upd' | 'set',
     index: number | undefined = undefined
-  ) {
-    if(command === 'add'){
-      window.webContents.send(`both.captionLog.add`, this.captionLog.at(-1))
+  ): void {
+    if (command === 'add') {
+      window.webContents.send('both.captionLog.add', this.captionLog.at(-1))
     }
-    else if(command === 'upd'){
-      if(index !== undefined) window.webContents.send(`both.captionLog.upd`, this.captionLog[index])
-      else window.webContents.send(`both.captionLog.upd`, this.captionLog.at(-1))
+    else if (command === 'upd') {
+      const item = index === undefined
+        ? this.captionLog.at(-1)
+        : this.captionLog[index]
+      window.webContents.send('both.captionLog.upd', item)
     }
-    else if(command === 'set'){
-      window.webContents.send(`both.captionLog.set`, this.captionLog)
+    else {
+      window.webContents.send('both.captionLog.set', this.captionLog)
     }
   }
+
+  private getConfigPath(): string {
+    return path.join(app.getPath('userData'), 'config.json')
+  }
+}
+
+function errorName(error: unknown): string {
+  return error instanceof Error ? error.name : 'UnknownError'
 }
 
 export const allConfig = new AllConfig()

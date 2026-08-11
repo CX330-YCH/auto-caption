@@ -1,7 +1,8 @@
-import { ref, watch } from 'vue'
+import { reactive, ref, toRaw, toRefs, watch } from 'vue'
 import { defineStore } from 'pinia'
 import { i18n } from '../i18n'
-import type { UILanguage, UITheme } from '../types'
+import type { ApplicationConfig } from '../../../shared/config/schema'
+import { createDefaultConfig } from '../../../shared/config/schema'
 
 import { engines, audioTypes, breakOptions, setThemeColor, getTheme } from '../i18n'
 import { useEngineControlStore } from './engineControl'
@@ -10,15 +11,32 @@ import { useCaptionStyleStore } from './captionStyle'
 type RealTheme = 'light' | 'dark'
 
 export const useGeneralSettingStore = defineStore('generalSetting', () => {
-  const uiLanguage = ref<UILanguage>('zh')
+  const applicationConfig = reactive<ApplicationConfig>(
+    createDefaultConfig('').application
+  )
+  const {
+    language: uiLanguage,
+    theme: uiTheme,
+    accentColor: uiColor
+  } = toRefs(applicationConfig)
+  const { leftBarWidth } = toRefs(applicationConfig.layout)
   const realTheme = ref<RealTheme>('light')
-  const uiTheme = ref<UITheme>('system')
-  const uiColor = ref<string>('#1677ff')
-  const leftBarWidth = ref<number>(8)
+  const antdTheme = ref(getTheme())
 
-  const antdTheme = ref<Object>(getTheme())
+  function sendApplicationConfig(): void {
+    window.electron.ipcRenderer.send(
+      'control.application.change',
+      toRaw(applicationConfig)
+    )
+  }
 
-  function handleThemeChange(newTheme: RealTheme) {
+  function setApplicationConfig(value: ApplicationConfig): void {
+    const { layout, ...application } = value
+    Object.assign(applicationConfig, application)
+    Object.assign(applicationConfig.layout, layout)
+  }
+
+  function handleThemeChange(newTheme: RealTheme): void {
     realTheme.value = newTheme
     if(newTheme === 'dark' && uiColor.value === '#000000') {
       uiColor.value = '#b9d7ea'
@@ -39,11 +57,11 @@ export const useGeneralSettingStore = defineStore('generalSetting', () => {
     useEngineControlStore().captionEngine = engines[newValue]
     useEngineControlStore().audioType = audioTypes[newValue]
     useCaptionStyleStore().iBreakOptions = breakOptions[newValue]
-    window.electron.ipcRenderer.send('control.uiLanguage.change', newValue)
+    sendApplicationConfig()
   })
 
   watch(uiTheme, (newValue) => {
-    window.electron.ipcRenderer.send('control.uiTheme.change', newValue)
+    sendApplicationConfig()
     if(newValue === 'system'){
       window.electron.ipcRenderer.invoke('control.nativeTheme.get').then((theme: RealTheme) => {
         if(theme === 'light') setLightTheme()
@@ -64,20 +82,17 @@ export const useGeneralSettingStore = defineStore('generalSetting', () => {
   watch(uiColor, (newValue) => {
     setThemeColor(newValue)
     antdTheme.value = getTheme()
-    window.electron.ipcRenderer.send('control.uiColor.change', newValue)
+    sendApplicationConfig()
   })
 
-  watch(leftBarWidth, (newValue) => {
-    window.electron.ipcRenderer.send('control.leftBarWidth.change', newValue)
+  watch(leftBarWidth, () => {
+    sendApplicationConfig()
   })
 
-  watch(realTheme, (newValue) => { 
-    console.log('realTheme', newValue)
-  })
-
-  window.electron.ipcRenderer.on('control.uiLanguage.set', (_, args: UILanguage) => {
-    uiLanguage.value = args
-  })
+  window.electron.ipcRenderer.on(
+    'both.application.set',
+    (_, value: ApplicationConfig) => setApplicationConfig(value)
+  )
 
   window.electron.ipcRenderer.on('control.nativeTheme.change', (_, args: RealTheme) => {
     if(args === 'light') setLightTheme()
@@ -85,7 +100,7 @@ export const useGeneralSettingStore = defineStore('generalSetting', () => {
     handleThemeChange(args)
   })
 
-  function setLightTheme(){
+  function setLightTheme(): void {
     antdTheme.value = getTheme(true)
     const root = document.documentElement
     root.style.setProperty('--control-background', '#fff')
@@ -93,7 +108,7 @@ export const useGeneralSettingStore = defineStore('generalSetting', () => {
     root.style.setProperty('--icon-color', 'rgba(0, 0, 0, 0.88)')
   }
 
-  function setDarkTheme(){
+  function setDarkTheme(): void {
     antdTheme.value = getTheme(false)
     const root = document.documentElement
     root.style.setProperty('--control-background', '#000')
@@ -102,6 +117,8 @@ export const useGeneralSettingStore = defineStore('generalSetting', () => {
   }
 
   return {
+    applicationConfig,
+    setApplicationConfig,
     uiLanguage,
     realTheme,
     uiTheme,

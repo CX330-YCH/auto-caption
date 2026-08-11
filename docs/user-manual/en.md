@@ -110,6 +110,8 @@ sudo yum install pulseaudio pavucontrol
 
 Caption settings can be divided into three categories: general settings, caption engine settings, and caption style settings. Note that changes to general settings take effect immediately. For the other two categories, after making changes, you need to click the "Apply" option in the upper right corner of the corresponding settings module for the changes to take effect. If you click "Cancel Changes," the current modifications will not be saved and will revert to the previous state.
 
+The current version uses a layered configuration file with `schemaVersion: 2` and does not read the previous unversioned format. The first launch with an old configuration uses defaults and writes a new V2 file when the application exits; old settings are not migrated automatically.
+
 ### Starting and Stopping Captions
 
 After completing all configurations, click the "Start Caption Engine" button on the interface to start the captions. If you need a separate caption display window, click the "Open Caption Window" button to activate the independent caption display window. To pause caption recognition, click the "Stop Caption Engine" button.

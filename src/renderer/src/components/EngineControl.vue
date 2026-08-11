@@ -358,29 +358,30 @@ function applyChange(){
     return
   }
 
-  engineControl.sourceLang = currentSourceLang.value
-  engineControl.targetLang = currentTargetLang.value
-  engineControl.transModel = currentTransModel.value
-  engineControl.ollamaName = currentOllamaName.value
-  engineControl.engine = currentEngine.value
-  engineControl.ollamaUrl = currentOllamaUrl.value ?? "http://localhost:11434"
-  engineControl.ollamaApiKey = currentOllamaApiKey.value
-  engineControl.audio = currentAudio.value
-  engineControl.translation = currentTranslation.value
-  engineControl.recording = currentRecording.value
-  engineControl.API_KEY = currentAPI_KEY.value
-  engineControl.voskModelPath = currentVoskModelPath.value
-  engineControl.sosvModelPath = currentSosvModelPath.value
-  engineControl.glmUrl = currentGlmUrl.value ?? "https://open.bigmodel.cn/api/paas/v4/audio/transcriptions"
-  engineControl.glmModel = currentGlmModel.value ?? "glm-asr-2512"
-  engineControl.glmApiKey = currentGlmApiKey.value
-  engineControl.recordingPath = currentRecordingPath.value
-  engineControl.customized = currentCustomized.value
-  engineControl.customizedApp = currentCustomizedApp.value
-  engineControl.customizedCommand = currentCustomizedCommand.value
-  engineControl.startTimeoutSeconds = currentStartTimeoutSeconds.value
+  const config = engineControl.engineConfig
+  config.provider = currentEngine.value as typeof config.provider
+  config.common.sourceLanguage = currentSourceLang.value
+  config.common.targetLanguage = currentTargetLang.value
+  config.common.audioSource = currentAudio.value
+  config.common.translation.provider = currentTransModel.value
+  config.common.translation.model = currentOllamaName.value
+  config.common.translation.url = currentOllamaUrl.value ?? "http://localhost:11434"
+  config.common.translation.apiKey = currentOllamaApiKey.value
+  config.common.translation.enabled = currentTranslation.value
+  config.common.recording.enabled = currentRecording.value
+  config.common.recording.path = currentRecordingPath.value
+  config.common.startTimeoutSeconds = currentStartTimeoutSeconds.value
+  config.providers.gummy.apiKey = currentAPI_KEY.value
+  config.providers.vosk.modelPath = currentVoskModelPath.value
+  config.providers.sosv.modelPath = currentSosvModelPath.value
+  config.providers.glm.url = currentGlmUrl.value || "https://open.bigmodel.cn/api/paas/v4/audio/transcriptions"
+  config.providers.glm.model = currentGlmModel.value || "glm-asr-2512"
+  config.providers.glm.apiKey = currentGlmApiKey.value
+  config.custom.enabled = currentCustomized.value
+  config.custom.executable = currentCustomizedApp.value
+  config.custom.command = currentCustomizedCommand.value
 
-  engineControl.sendControlsChange()
+  engineControl.sendEngineConfigChange()
 
   notification.open({
     placement: 'topLeft',
@@ -390,27 +391,28 @@ function applyChange(){
 }
 
 function cancelChange(){
-  currentSourceLang.value = engineControl.sourceLang
-  currentTargetLang.value = engineControl.targetLang
-  currentTransModel.value = engineControl.transModel
-  currentOllamaName.value = engineControl.ollamaName
-  currentOllamaUrl.value = engineControl.ollamaUrl
-  currentOllamaApiKey.value = engineControl.ollamaApiKey
-  currentEngine.value = engineControl.engine
-  currentAudio.value = engineControl.audio
-  currentTranslation.value = engineControl.translation
-  currentRecording.value = engineControl.recording
-  currentAPI_KEY.value = engineControl.API_KEY
-  currentVoskModelPath.value = engineControl.voskModelPath
-  currentSosvModelPath.value = engineControl.sosvModelPath
-  currentGlmUrl.value = engineControl.glmUrl
-  currentGlmModel.value = engineControl.glmModel
-  currentGlmApiKey.value = engineControl.glmApiKey
-  currentRecordingPath.value = engineControl.recordingPath
-  currentCustomized.value = engineControl.customized
-  currentCustomizedApp.value = engineControl.customizedApp
-  currentCustomizedCommand.value = engineControl.customizedCommand
-  currentStartTimeoutSeconds.value = engineControl.startTimeoutSeconds
+  const config = engineControl.engineConfig
+  currentSourceLang.value = config.common.sourceLanguage
+  currentTargetLang.value = config.common.targetLanguage
+  currentTransModel.value = config.common.translation.provider
+  currentOllamaName.value = config.common.translation.model
+  currentOllamaUrl.value = config.common.translation.url
+  currentOllamaApiKey.value = config.common.translation.apiKey
+  currentEngine.value = config.provider
+  currentAudio.value = config.common.audioSource
+  currentTranslation.value = config.common.translation.enabled
+  currentRecording.value = config.common.recording.enabled
+  currentAPI_KEY.value = config.providers.gummy.apiKey
+  currentVoskModelPath.value = config.providers.vosk.modelPath
+  currentSosvModelPath.value = config.providers.sosv.modelPath
+  currentGlmUrl.value = config.providers.glm.url
+  currentGlmModel.value = config.providers.glm.model
+  currentGlmApiKey.value = config.providers.glm.apiKey
+  currentRecordingPath.value = config.common.recording.path
+  currentCustomized.value = config.custom.enabled
+  currentCustomizedApp.value = config.custom.executable
+  currentCustomizedCommand.value = config.custom.command
+  currentStartTimeoutSeconds.value = config.common.startTimeoutSeconds
 }
 
 function selectFolderPath(type: 'vosk' | 'sosv' | 'rec') {

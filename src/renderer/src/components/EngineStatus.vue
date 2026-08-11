@@ -143,7 +143,7 @@
 
 <script setup lang="ts">
 import { EngineInfo } from '@renderer/types'
-import { ref, watch, h } from 'vue'
+import { computed, ref, watch, h } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useCaptionLogStore } from '@renderer/stores/captionLog'
 import { useSoftwareLogStore } from '@renderer/stores/softwareLog'
@@ -159,7 +159,9 @@ const { captionData } = storeToRefs(captionLog)
 const softwareLog = useSoftwareLogStore()
 const { softwareLogs } = storeToRefs(softwareLog)
 const engineControl = useEngineControlStore()
-const { engineEnabled, engine, customized, errorSignal } = storeToRefs(engineControl)
+const { engineEnabled, engineConfig, errorSignal } = storeToRefs(engineControl)
+const engine = computed(() => engineConfig.value.provider)
+const customized = computed(() => engineConfig.value.custom.enabled)
 
 const pid = ref(0)
 const ppid = ref(0)
@@ -175,13 +177,19 @@ function openCaptionWindow() {
 function startEngine() {
   pending.value = true
   isStarting.value = true
-  if(engineControl.engine === 'vosk' && engineControl.voskModelPath.trim() === '') {
+  if(
+    engineControl.engineConfig.provider === 'vosk' &&
+    engineControl.engineConfig.providers.vosk.modelPath.trim() === ''
+  ) {
     engineControl.emptyModelPathErr()
     pending.value = false
     isStarting.value = false
     return
   }
-  if(engineControl.engine === 'sosv' && engineControl.sosvModelPath.trim() === '') {
+  if(
+    engineControl.engineConfig.provider === 'sosv' &&
+    engineControl.engineConfig.providers.sosv.modelPath.trim() === ''
+  ) {
     engineControl.emptyModelPathErr()
     pending.value = false
     isStarting.value = false
