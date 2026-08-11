@@ -6,7 +6,7 @@ import vueParser from 'vue-eslint-parser'
 export default tseslint.config(
   { ignores: ['**/node_modules', '**/dist', '**/out'] },
   tseslint.configs.recommended,
-  eslintPluginVue.configs['essential'],
+  ...eslintPluginVue.configs['flat/essential'],
   {
     files: ['**/*.vue'],
     languageOptions: {
@@ -33,6 +33,12 @@ export default tseslint.config(
           }
         }
       ]
+    }
+  },
+  {
+    files: ['tests/**/*.mjs'],
+    rules: {
+      '@typescript-eslint/explicit-function-return-type': 'off'
     }
   },
   // eslintConfigPrettier

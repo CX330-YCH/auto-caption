@@ -9,9 +9,13 @@
   "scripts": {
     "format": "prettier --write .",
     "lint": "eslint --cache .",
+    "test": "npm run test:node && npm run test:python",
+    "test:node": "node scripts/run-node-tests.mjs",
+    "test:python": "node scripts/run-python-tests.mjs",
     "typecheck:node": "tsc --noEmit -p tsconfig.node.json --composite false",
     "typecheck:web": "vue-tsc --noEmit -p tsconfig.web.json --composite false",
     "typecheck": "npm run typecheck:node && npm run typecheck:web",
+    "verify": "npm run typecheck && npm run lint && npm test",
     "start": "electron-vite preview",
     "dev": "electron-vite dev",
     "build": "npm run typecheck && electron-vite build",

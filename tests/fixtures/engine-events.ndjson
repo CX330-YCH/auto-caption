@@ -1,0 +1,6 @@
+{"command":"connect","content":""}
+{"command":"caption","index":1,"time_s":"10:00:00.000","time_t":"10:00:00.100","text":"Auto","translation":""}
+{"command":"caption","index":1,"time_s":"10:00:00.000","time_t":"10:00:00.600","text":"Auto Caption","translation":""}
+{"command":"translation","time_s":"10:00:00.000","text":"Auto Caption","translation":"自动字幕"}
+{"command":"caption","index":2,"time_s":"10:00:01.000","time_t":"10:00:01.400","text":"baseline","translation":""}
+{"command":"info","content":"fixture completed"}
