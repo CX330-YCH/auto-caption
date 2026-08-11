@@ -22,7 +22,7 @@
 
 ### 字幕识别
 
-- 字幕引擎进程：新建线程监听系统音频输出，将获取的音频数据块放入共享队列中（`shared_data.chunk_queue`）。字幕引擎不断读取共享队列中的音频数据块并解析。字幕引擎还可能新建线程执行翻译操作。最后字幕引擎通过标准输出发送解析的字幕数据对象字符串
+- 字幕引擎进程：音频采集线程通过 `AudioPipeline` 将音频块写入本次会话的有界队列；`RecognitionSession` 将音频交给所选 Provider，并统一处理字幕事件、final 翻译和关闭。最后由协议输出层通过标准输出发送字幕数据对象字符串
 - Electron 主进程：持续监听字幕引擎的标准输出，并根据解析的对象的 `command` 字段采取不同的操作
 
 ### 关闭引擎
@@ -61,7 +61,7 @@ stderr("Error Info")
 样例：
 
 ```python
-from utils import start_server
+from protocol.server import start_server
 from utils import shared_data
 port = 8080
 start_server(port)
@@ -124,18 +124,20 @@ while True:
 
 在得到了合适的音频流后，需要将音频流转换为文字了。一般使用各种模型（云端或本地）来实现音频流转文字。需要根据需求选择合适的模型。
 
-这部分建议封装为一个类，需要实现四个方法：
+这部分应实现为 `RecognitionProvider`，只负责识别生命周期与统一事件，需要实现三个方法：
 
 - `start(self)`：启动模型
-- `send_audio_frame(self, data: bytes)`：处理当前音频块数据，**生成的字幕数据通过标准输出发送给 Electron 主进程**
-- `translate(self)`：持续从 `shared_data.chunk_queue` 中取出数据块，并调用 `send_audio_frame` 方法处理数据块
+- `accept_audio(self, frame: AudioFrame)`：处理一个规范化音频帧，并产生 partial/final/lifecycle 事件
 - `stop(self)`：停止模型
+
+Provider 不读取全局队列、不直接写标准输出，也不创建自己的客户端翻译循环；这些职责分别属于 `RecognitionSession`、协议输出层和 `TranslationService`。
 
 完整的字幕引擎实例如下：
 
-- [gummy.py](../../engine/audio2text/gummy.py)
-- [vosk.py](../../engine/audio2text/vosk.py)
-- [sosv.py](../../engine/audio2text/sosv.py)
+- [gummy.py](../../engine/providers/gummy.py)
+- [vosk.py](../../engine/providers/vosk.py)
+- [sosv.py](../../engine/providers/sosv.py)
+- [glm.py](../../engine/providers/glm.py)
 
 ### 字幕翻译
 
@@ -217,8 +219,11 @@ python main.py -e gummy -s ja -t zh -a 0 -c 10 -k <dashscope-api-key>
 
 除音频转文字和翻译外，其他（音频获取、音频重采样、与主进程通信）建议直接复用本项目代码。如果这样，那么需要添加的内容为：
 
-- `engine/audio2text/`：添加新的音频转文字类（文件级别）
-- `engine/main.py`：添加新参数设置、流程函数（参考 `main_gummy` 函数和 `main_vosk` 函数）
+- `engine/providers/`：添加实现 `RecognitionProvider` 的识别适配器
+- `engine/providers/registry.py`：注册 Provider 及其音频 Pipeline、翻译服务装配
+- `engine/cli.py`：仅在模型确实需要新配置时添加参数；不要在 `main.py` 增加新的模型分支
+
+完整职责和依赖规则见[当前 Python 引擎架构](architecture.md)。
 
 ### 打包
 

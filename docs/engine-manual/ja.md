@@ -61,7 +61,7 @@ stderr("Error Info")
 サンプル：
 
 ```python
-from utils import start_server
+from protocol.server import start_server
 from utils import thread_data
 port = 8080
 start_server(port)
@@ -112,16 +112,20 @@ stream.close_stream()
 
 適切なオーディオストリームを取得した後、オーディオストリームを文字に変換する必要があります。一般的に、さまざまなモデル（クラウドまたはローカル）を使用してオーディオストリームを文字に変換します。要件に応じて適切なモデルを選択する必要があります。
 
-この部分はクラスとしてカプセル化することをお勧めします。以下の3つのメソッドを実装する必要があります：
+この境界は、認識ライフサイクルと統一イベントだけを担当する `RecognitionProvider` として実装します：
 
 - `start(self)`：モデルを起動
-- `send_audio_frame(self, data: bytes)`：現在のオーディオブロックデータを処理し、**生成された字幕データを標準出力を介してElectronメインプロセスに送信**
+- `accept_audio(self, frame: AudioFrame)`：正規化された音声フレームを処理し、partial/final/lifecycle イベントを生成
 - `stop(self)`：モデルを停止
+
+Provider はグローバルキューの読み取り、標準出力への直接書き込み、独自の翻訳ループを行いません。これらは `RecognitionSession`、プロトコル出力層、`TranslationService` の責務です。
 
 完全な字幕エンジンの実例：
 
-- [gummy.py](../../engine/audio2text/gummy.py)
-- [vosk.py](../../engine/audio2text/vosk.py)
+- [gummy.py](../../engine/providers/gummy.py)
+- [vosk.py](../../engine/providers/vosk.py)
+- [sosv.py](../../engine/providers/sosv.py)
+- [glm.py](../../engine/providers/glm.py)
 
 ### 字幕翻訳
 
@@ -189,8 +193,11 @@ python main.py -e gummy -s ja -t zh -a 0 -c 10 -k <dashscope-api-key>
 
 オーディオから文字への変換以外は、このプロジェクトのコードを直接再利用することをお勧めします。その場合、追加する必要がある内容は：
 
-- `engine/audio2text/`：新しいオーディオから文字への変換クラスを追加（ファイルレベル）
-- `engine/main.py`：新しいパラメータ設定とプロセス関数を追加（`main_gummy`関数と`main_vosk`関数を参照）
+- `engine/providers/`：`RecognitionProvider` を実装する認識アダプターを追加
+- `engine/providers/registry.py`：Provider と音声 Pipeline、翻訳サービスの組み立てを登録
+- `engine/cli.py`：モデルに新しい設定が本当に必要な場合だけ引数を追加し、`main.py` にモデル分岐を増やさない
+
+完全な責務と依存ルールは[現在の Python エンジン構成](architecture.md)を参照してください。
 
 ### パッケージ化
 

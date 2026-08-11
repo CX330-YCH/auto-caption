@@ -84,6 +84,12 @@ Python 测试覆盖：
 - Vosk 适配器的 partial 去重、partial/final ID 关联和 16 kHz 单声道 PCM16 输入约束。
 - 内部事件到现有 `caption`、`info`、`error`、`usage` 协议的映射。
 - 翻译后台队列的容量上限和过载警告。
+- CLI 默认值、现有 Provider 参数解析和凭据字段 `repr` 脱敏。
+- ProviderRegistry 的完整注册集合、重复注册和未知 Provider 拒绝。
+- `AudioCaptureWorker` 的 Pipeline 转换、有界入队和关闭信号。
+- SOSV backend partial/final 映射、重复 partial 抑制和输入格式约束。
+- GLM VAD 分段、异步 final、WAV 请求内容、URL 校验和错误正文脱敏。
+- Gummy SDK callback 的 partial/final、服务端翻译、usage 和累计发送失败策略。
 
 ## 本阶段未覆盖范围
 
@@ -91,7 +97,7 @@ Python 测试覆盖：
 - Electron 窗口和 IPC 集成。
 - Python 子进程启动、超时、停止和强杀。
 - Electron 与真实 Python 子进程之间的端到端 Socket/stdio 集成。
-- 真实 Vosk 模型文件以及实际 Gummy、GLM、SOSV 或其他 Provider。
+- 真实 Vosk/SOSV 模型文件以及实际 Gummy、GLM 或其他在线 Provider。
 - Ollama、OpenAI、Google 或阿里云付费 API。
 - Windows、macOS、Linux 打包安装程序。
 

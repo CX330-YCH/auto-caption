@@ -421,3 +421,156 @@
 - 根目录 `AGENTS.md` 中 AudioSource、AudioPipeline、RecognitionProvider、RecognitionSession、TranslationService、EventSink 和 ProviderRegistry 的目标职责。
 - Vosk 当前 `AcceptWaveform`/`PartialResult`/`Result` 同步调用语义及项目已有 index/time 规则。
 - Python 标准库 `dataclasses`、`queue`、`threading`、`typing.Protocol`；未新增第三方依赖。
+
+## 2026-08-11 至 2026-08-12 - 迁移剩余 Python Provider 并完成统一运行时
+
+### 授权与目标
+
+- 用户授权：要求“迁移剩余模型”。
+- 本次“剩余模型”按仓库当前已有实现解释为 Gummy、GLM 和 SOSV；Vosk 已在上一阶段完成迁移。
+- 目标：让四个现有识别引擎全部通过 `RecognitionProvider`、`RecognitionSession`、统一音频采集、统一翻译服务和统一协议输出运行，并删除已经被替代的旧循环。
+- 明确不在范围内：Fun-ASR 实时 WebSocket、热词服务、配置界面、外部协议版本升级和依赖升级。它们仍需在后续获得单独授权后设计、实现和验证。
+- 变更类型：Python 引擎架构重构、内部接口、测试和文档；没有 Electron UI/IPC、持久化配置或依赖变更。
+
+### 修改文件
+
+- `engine/cli.py`
+  - 从旧 `main.py` 提取完整 argparse 定义为 `CliOptions` 和 `parse_args()`；保持已有参数名、类型和默认值。
+  - API Key 字段禁止出现在 dataclass 的 `repr` 中。
+- `engine/main.py`
+  - 删除 Gummy、Vosk、SOSV、GLM 四套重复装配与音频线程分支，改为单一 `run()` 路径。
+  - 统一创建 `AudioCaptureWorker`、Provider runtime、`RecognitionSession` 和 `ProtocolEventSink`。
+  - 修复 `display_caption` 已解析为整数却与字符串比较、导致 `-d 1` 无效的问题。
+  - 保证共享状态为 `kill` 时只输出一次外部 `kill` 命令。
+- `engine/core/events.py`
+  - 为 `CaptionPartial`/`CaptionFinal` 增加可选 `translation`，用于携带 Gummy 服务端翻译。
+  - 新增 `ProviderInfo` 统一非错误运行信息事件。
+- `engine/core/provider.py`
+  - Provider 事件队列改为有界队列，默认容量 256；阻塞 0.5 秒仍无法投递时抛出不含凭证或响应内容的运行时错误。
+- `engine/core/audio.py`
+  - 新增统一 `AudioCaptureWorker`，负责打开设备、可选 WAV 录音、音频转换、有界队列背压、异常脱敏和关闭信号。
+- `engine/core/worker.py`
+  - 新增固定线程数、有限待处理容量、可取消等待任务和有限关闭等待的 `BoundedWorkerPool`。
+- `engine/core/__init__.py`
+  - 导出新增事件与统一音频采集组件。
+- `engine/providers/sosv.py`
+  - 新增 `SosvProvider`、可注入 backend 协议和 Sherpa-ONNX backend。
+  - 保留旧 VAD、周期 partial、final 标点、16 kHz 单声道 PCM16 输入约束及字幕 ID/时间关联语义。
+- `engine/providers/glm.py`
+  - 新增 `GlmProvider`，保留 RMS VAD 阈值 500、静音帧阈值和最小语音帧数。
+  - 使用固定 2 个 worker、最多 8 个等待识别任务；停止时取消未开始请求、最多等待 1 秒，并忽略迟到结果。
+  - 校验 GLM URL 只能使用 HTTP/HTTPS；错误事件不泄露响应正文、URL 查询凭证或 API Key。
+- `engine/providers/gummy.py`
+  - 新增 DashScope callback 到统一事件的适配器，按 SDK sentence-end 标志产生 partial/final，并保留服务端翻译和用量事件。
+  - 保留首次字幕 index 为 1、同句 ID/开始时间复用、发送重试提示和累计失败终止语义。
+  - DashScope SDK 延迟导入，测试不需要真实网络或凭证。
+- `engine/providers/registry.py`
+  - 新增 `ProviderConfig`、`ProviderRuntime` 和 `ProviderRegistry`，集中注册 `gummy`、`vosk`、`sosv`、`glm` 的 Provider、音频 Pipeline 与翻译服务装配。
+  - 凭证字段不进入配置对象 `repr`。
+- `engine/providers/__init__.py`
+  - 导出所有 Provider 和 registry 公共装配类型。
+- `engine/services/translation.py`
+  - 翻译服务改用通用 `BoundedWorkerPool`，保持 2 个 worker 和 32 个等待任务的容量策略。
+- `engine/protocol/output.py`
+  - 增加 `ProviderInfo` 映射，并保留 Provider 事件中已有的服务端翻译文本。
+- `engine/utils/shared.py`
+  - 删除迁移完成后不再使用的全局无界音频 `chunk_queue`，只保留进程状态。
+- `engine/utils/server.py`
+  - 删除上一阶段临时兼容模块；活动 TCP server 唯一位于 `engine/protocol/server.py`。
+- `engine/utils/__init__.py`
+  - 删除已无调用方的 `start_server` 延迟兼容导出。
+- `engine/audio2text/gummy.py`、`engine/audio2text/glm.py`、`engine/audio2text/sosv.py`、`engine/audio2text/__init__.py`
+  - 删除被新 Provider 和 Session 完整替代的旧识别类、全局队列消费、内部翻译循环和 stdout 拼装。
+- `engine/tests/test_sosv_provider.py`
+  - 验证 SOSV 生命周期、partial/final、重复 partial 抑制、ID/时间复用和输入格式。
+- `engine/tests/test_glm_provider.py`
+  - 验证 VAD 分段、WAV 请求、异步 final、URL 校验和请求异常脱敏。
+- `engine/tests/test_gummy_provider.py`
+  - 验证 callback 生命周期、partial/final、服务端翻译、用量、ID/时间、可恢复发送失败和终止错误。
+- `engine/tests/test_cli.py`
+  - 验证 CLI 默认值、显式参数转换和凭证脱敏表示。
+- `engine/tests/test_provider_registry.py`
+  - 验证四个 Provider 的完整注册集合、重复/未知名称错误与配置凭证脱敏。
+- `engine/tests/test_engine_core.py`
+  - 增加统一音频采集、录音、背压和采集异常关闭测试。
+- `engine/tests/test_protocol_output.py`
+  - 增加 Provider info 与内联翻译的协议映射测试。
+- `docs/engine-manual/architecture.md`
+  - 更新为四个 Provider 均已迁移后的真实目录、职责、依赖方向、容量边界和关闭语义。
+- `docs/api-docs/caption-engine.md`
+  - 说明内部 partial/final 映射及 Gummy 内联服务端翻译与其他 Provider 后续翻译消息的差异。
+- `docs/testing.md`
+  - 增加 CLI、registry、音频采集、SOSV、GLM 和 Gummy 的自动化覆盖说明。
+- `docs/engine-manual/zh.md`、`docs/engine-manual/en.md`、`docs/engine-manual/ja.md`
+  - 将旧全局队列、`audio2text` 链接、`utils.start_server` 和在 `main.py` 增加模型分支的扩展说明更新为 Provider/Session/registry 架构，避免多语言手册指向已删除实现。
+- `change.md`
+  - 追加本轮授权、实现范围、行为、兼容性、验证、风险和回滚记录。
+
+### 修改前后行为
+
+- 修改前：Gummy、GLM、SOSV 各自读取全局无界队列、维护 translate 循环或线程、直接拼装 stdout；`main.py` 为每个引擎重复创建音频线程和关闭流程。
+- 修改后：四个 Provider 只处理音频和产生统一事件；Session 负责队列消费、事件转发、final 翻译策略和资源关闭；registry 负责差异化装配；入口只有一条运行路径。
+- 修改前：旧全局音频队列无容量上限，GLM 每个语音段新建线程，Provider 事件也没有容量边界。
+- 修改后：音频队列约容纳 5 秒且至少 10 帧；GLM 使用 2 个固定 worker/8 个等待任务；翻译为 2/32；Provider 事件容量默认 256。队列满时使用明确背压或过载错误，不再无限增长。
+- 修改前：Gummy 自己管理服务端翻译、SDK callback 和停止输出；GLM/SOSV 自己启动翻译线程。
+- 修改后：Gummy 的服务端翻译随 caption 事件输出；GLM、SOSV、Vosk 的 final 由 Session 统一只提交一次翻译；Provider 不再持有客户端翻译线程。
+- 修改前：`-d 1` 因整数/字符串比较错误无法启用终端字幕显示。
+- 修改后：使用整数比较，`-d 1` 恢复生效。
+
+### 配置、接口与协议
+
+- 用户持久化配置及配置版本：无变化，不需要迁移。
+- Electron IPC、preload API 和 renderer 调用：无变化。
+- Python CLI 参数、别名、类型、默认值与 Provider 名称：无变化；只将解析实现移动到 `cli.py`。
+- Electron/Python 外部 stdout `command` 协议：命令名和现有字段无变化；仍未添加外部 partial/final 标志。
+- 内部事件：`CaptionPartial`/`CaptionFinal` 新增默认空字符串的 `translation`；新增 `ProviderInfo`。
+- 内部 Python 模块：Gummy/GLM/SOSV 活动实现由 `audio2text.*` 迁移到 `providers.*`；Provider 装配统一通过 registry。
+- 依赖、`requirements.txt`、npm package/lock 文件和 PyInstaller spec：无变化。
+- Fun-ASR 与热词配置/API：本轮没有新增占位接口、文件或未使用配置。
+
+### 兼容性、迁移与回滚
+
+- 应用级兼容：现有 Electron 启动参数、CLI 参数、Provider 名称、caption/translation/info/error/usage/kill 命令保持兼容。
+- 行为修复：`-d 1` 现在按其已有帮助文本正常启用显示；这是修复而非协议扩展。
+- Gummy 保留 DashScope 服务端翻译、字幕 index 和失败计数语义；GLM 保留请求格式/VAD；SOSV 保留 Sherpa-ONNX 识别与标点语义。
+- 未文档化的内部导入 `audio2text.GummyRecognizer`、`audio2text.GlmRecognizer`、`audio2text.SosvRecognizer`、`utils.server.start_server` 不再兼容；仓库内已确认无调用方，应用对这些路径没有公共 SDK 承诺。
+- 数据、模型文件和远端资源：无迁移或删除。
+- 精确回滚：恢复本轮修改前的 `engine/main.py`、`engine/core/`、`engine/services/translation.py`、`engine/protocol/output.py`、`engine/providers/__init__.py`、`engine/utils/` 和 `engine/audio2text/`；删除本轮新增的 `engine/cli.py`、`engine/core/worker.py`、三个新 Provider、registry 及对应测试；恢复三份文档对应段落。Vosk 的上一阶段迁移可以保留。
+
+### 验证
+
+- SOSV 迁移检查点：`npm run test:python` 通过，Python 23/23；相关模块 `compileall` 通过。
+- GLM 迁移检查点：`npm run test:python` 通过，Python 26/26；相关模块 `compileall` 通过。
+- Gummy 迁移检查点：`npm run test:python` 通过，Python 29/29；相关模块 `compileall` 通过。
+- 首次合并统一入口后的编译检查失败：`engine/core/__init__.py` 中 `AudioCaptureWorker` 导出位置缩进错误，`compileall` 报 `IndentationError`，后续测试因此没有执行。修正导出列表后再次编译通过；该失败没有被忽略。
+- 修正后的入口检查点：CLI `--help`、`compileall` 和 Python 29/29 均通过。
+- 加入 CLI、registry 与音频采集测试后：`npm run test:python` 通过，Python 36/36。
+- 最终 `npm run verify`：通过；TypeScript/Vue 类型检查、ESLint、Node 20/20 和 Python 36/36 全部通过。
+- 最终 `npm run build`：通过；Electron main、preload 和 renderer 均完成 Vite 生产构建。
+- 最终 `engine/.venv/bin/python3 engine/main.py --help`：通过；CLI 入口可加载且参数帮助可生成。
+- 最终 `engine/.venv/bin/python3 -m compileall -q engine/core engine/providers engine/services engine/protocol engine/cli.py engine/main.py`：通过。
+- 首次最终 `git diff --check` 发现 `docs/engine-manual/en.md` 末尾一处行尾空格；清理后重新执行通过。该格式失败没有被忽略。
+- 最终记录检索命令曾因 Markdown 反引号未正确隔离而被 shell 解释，意外再次执行 `npm run verify`（仍全部通过），随后 `rg` 因替换得到多行模式而失败；该命令没有修改仓库文件，改用无反引号的固定模式后重新核对。
+- 最终旧路径检索：活动引擎和三份多语言手册中没有 `shared_data.chunk_queue`、`utils.start_server`、`engine/audio2text` 或旧 `main_*` 分支引用。
+- `npm run verify`/`build` 仍输出仓库既有 npm Electron mirror 弃用警告和 Node `MODULE_TYPELESS_PACKAGE_JSON` 警告；没有为消除提示而修改 package 或依赖配置。
+- 未运行真实麦克风/系统音频、真实 Vosk/SenseVoice 模型、DashScope/GLM/Google/Ollama 网络请求或付费 API；单元测试使用注入式伪造 backend/client/source，避免设备、凭证和网络副作用。
+- 未运行 PyInstaller、Windows/Linux 安装包或真实 Electron/Python 音频端到端；这些需要目标平台、模型和设备环境。
+
+### 风险、限制与后续事项
+
+- GLM 正在执行的 HTTP 请求无法由标准同步 `requests` 强制取消；停止时最多等待 1 秒并屏蔽迟到事件，但底层 daemon worker 可能持续到请求超时。
+- 有界音频队列消除了无限内存增长，但 Provider 长期落后会对采集线程施加背压，设备缓冲区仍可能增加延迟或丢帧；需要用固定音频回放测量容量。
+- 翻译 worker 为 daemon；关闭时不等待已排队或正在进行的网络翻译，进程立即结束时这些结果可能丢失。网络取消与有限冲刷仍需后续单独设计。
+- Gummy 的发送失败计数按旧实现保持累计、不在成功后清零；长会话中的间歇性错误最终可能触发终止，后续若调整需作为独立行为变更。
+- SOSV 的真实 Sherpa-ONNX VAD/模型加载、Gummy SDK callback 时序和 GLM 服务端响应没有进行在线集成测试。
+- `audioop` 延续现有重采样实现，在未来 Python 版本中存在移除风险；本轮为保持行为没有替换或新增 DSP 依赖。
+- 外部协议仍不区分 partial/final；内部已经区分，但协议升级必须单独版本化并同步 Electron 消费端。
+- Fun-ASR 与热词仍未实现。下一阶段应先定义实时 Provider 的连接/重连/结束冲刷语义和热词能力模型，再做一个可验证纵向切片，不能把逻辑塞回当前 Provider 或入口。
+
+### 参考与决策依据
+
+- 用户指定的第三阶段目录、`RecognitionProvider` 接口、统一事件模型、`RecognitionSession` 职责和“逐个迁移而非一次性重写”要求。
+- 根目录 `AGENTS.md` 的 Provider/Session/Audio/Translation/Registry 边界、授权、测试和变更记录约束。
+- 仓库旧 Gummy、GLM、SOSV 实现的可观察参数、ID/时间、VAD、翻译和错误行为。
+- 本地已安装 DashScope SDK 中 `TranslationRecognizerRealtime` 的 callback 与同步 stop/join 行为；没有通过网络修改 SDK 或依赖版本。
+- Python 标准库 `queue`、`threading`、`wave`、`urllib.parse` 和项目既有第三方依赖；未新增第三方包。

@@ -5,6 +5,7 @@ from core import (
     CaptionFinal,
     CaptionPartial,
     ProviderError,
+    ProviderInfo,
     ProviderReady,
     ProviderStopped,
     RecognitionEvent,
@@ -36,9 +37,9 @@ class ProtocolEventSink:
                 'time_s': event.started_at,
                 'time_t': event.ended_at,
                 'text': event.text,
-                'translation': '',
+                'translation': event.translation,
             })
-        elif isinstance(event, (ProviderReady, ProviderStopped)):
+        elif isinstance(event, (ProviderReady, ProviderInfo, ProviderStopped)):
             self._command_writer('info', event.message)
         elif isinstance(event, ProviderError):
             self._command_writer('error', event.message)

@@ -8,6 +8,7 @@ class CaptionPartial:
     started_at: str
     ended_at: str
     text: str
+    translation: str = ''
 
 
 @dataclass(frozen=True)
@@ -16,10 +17,17 @@ class CaptionFinal:
     started_at: str
     ended_at: str
     text: str
+    translation: str = ''
 
 
 @dataclass(frozen=True)
 class ProviderReady:
+    provider: str
+    message: str
+
+
+@dataclass(frozen=True)
+class ProviderInfo:
     provider: str
     message: str
 
@@ -48,6 +56,7 @@ RecognitionEvent: TypeAlias = (
     CaptionPartial
     | CaptionFinal
     | ProviderReady
+    | ProviderInfo
     | ProviderStopped
     | ProviderError
     | UsageUpdated

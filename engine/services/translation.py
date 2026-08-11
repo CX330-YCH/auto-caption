@@ -1,8 +1,7 @@
-import threading
 from collections.abc import Callable
-from queue import Empty, Full, Queue
 
 from core import CaptionFinal
+from core.worker import BoundedWorkerPool
 
 
 class NoTranslationService:
@@ -29,21 +28,13 @@ class QueuedTranslationService:
             raise ValueError('max_pending must be positive')
         self._translator = translator
         self._warning_handler = warning_handler
-        self._tasks: Queue[CaptionFinal | None] = Queue(maxsize=max_pending)
+        self._workers = BoundedWorkerPool(worker_count, max_pending)
         self._closed = False
-        self._workers = [
-            threading.Thread(target=self._run, daemon=True)
-            for _ in range(worker_count)
-        ]
-        for worker in self._workers:
-            worker.start()
 
     def submit(self, caption: CaptionFinal) -> None:
         if self._closed:
             return
-        try:
-            self._tasks.put_nowait(caption)
-        except Full:
+        if not self._workers.submit(lambda: self._translate(caption)):
             self._warning_handler(
                 'Translation queue is full; the newest caption was skipped.'
             )
@@ -52,30 +43,15 @@ class QueuedTranslationService:
         if self._closed:
             return
         self._closed = True
-        for _ in self._workers:
-            try:
-                self._tasks.put_nowait(None)
-            except Full:
-                break
+        self._workers.close(cancel_pending=False, wait_timeout=0)
 
-    def _run(self) -> None:
-        while True:
-            try:
-                caption = self._tasks.get(timeout=0.1)
-            except Empty:
-                if self._closed:
-                    return
-                continue
-            if caption is None:
-                return
-            try:
-                self._translator(caption)
-            except Exception as error:
-                self._warning_handler(
-                    f'Translation failed ({type(error).__name__})'
-                )
-            finally:
-                self._tasks.task_done()
+    def _translate(self, caption: CaptionFinal) -> None:
+        try:
+            self._translator(caption)
+        except Exception as error:
+            self._warning_handler(
+                f'Translation failed ({type(error).__name__})'
+            )
 
 
 def build_legacy_translation_service(

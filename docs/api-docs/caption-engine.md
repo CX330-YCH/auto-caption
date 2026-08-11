@@ -81,7 +81,7 @@ JSON object + "\n" + JSON object + "\n" + ...
 
 字幕引擎产生的字幕数据。`index` 必须是有限数值，其余列出的字段必须是字符串。
 
-Python 内部已经区分 `CaptionPartial` 和 `CaptionFinal`，但为保持现有协议兼容，两者目前都映射为 `caption`。同一句的 partial/final 复用 `index` 和 `time_s`；外部协议暂不提供 final 标记。
+Python 内部已经区分 `CaptionPartial` 和 `CaptionFinal`，但为保持现有协议兼容，两者目前都映射为 `caption`。同一句的 partial/final 复用 `index` 和 `time_s`；外部协议暂不提供 final 标记。Provider 自带的翻译（当前为 Gummy）会直接写入 `translation`；其他 Provider 的 final 通过独立 `translation` 消息补充翻译。
 
 ### `translation`
 

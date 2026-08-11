@@ -8,6 +8,7 @@ ENGINE_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ENGINE_ROOT))
 
 from core import (  # noqa: E402
+    AudioCaptureWorker,
     AudioFrame,
     AudioPipeline,
     CaptionFinal,
@@ -36,16 +37,19 @@ class FakeAudioSource:
     SAMP_WIDTH = 2
 
     def __init__(self):
+        self.opened = False
         self.closed = False
+        self.close_signaled = False
 
     def open_stream(self):
+        self.opened = True
         return None
 
     def read_chunk(self):
         return None
 
     def close_stream_signal(self):
-        return None
+        self.close_signaled = True
 
     def close_stream(self):
         self.closed = True
@@ -133,6 +137,36 @@ class AudioCoreTests(unittest.TestCase):
     def test_audio_frame_rejects_invalid_metadata(self):
         with self.assertRaises(ValueError):
             AudioFrame(b'', 0, 1, 2, 0.0)
+
+    def test_capture_worker_uses_pipeline_and_bounded_output_queue(self):
+        source = FakeAudioSource()
+        source.read_chunk = lambda: b'\x01\x02'
+        output_queue = Queue(maxsize=1)
+        running_checks = iter([True, True, False])
+        stop_requests = []
+        errors = []
+        worker = AudioCaptureWorker(
+            source=source,
+            pipeline=AudioPipeline(
+                converter=lambda chunk: chunk[::-1],
+                output_sample_rate=16000,
+                clock=lambda: 1.5,
+            ),
+            output_queue=output_queue,
+            is_running=lambda: next(running_checks),
+            request_stop=lambda: stop_requests.append(True),
+            info_handler=lambda message: None,
+            error_handler=errors.append,
+        )
+
+        worker.run()
+
+        frame = output_queue.get_nowait()
+        self.assertTrue(source.opened)
+        self.assertTrue(source.close_signaled)
+        self.assertEqual(frame.data, b'\x02\x01')
+        self.assertEqual(stop_requests, [])
+        self.assertEqual(errors, [])
 
 
 class RecognitionSessionTests(unittest.TestCase):

@@ -1,8 +1,9 @@
-from .audio import AudioFrame, AudioPipeline, AudioSource
+from .audio import AudioCaptureWorker, AudioFrame, AudioPipeline, AudioSource
 from .events import (
     CaptionFinal,
     CaptionPartial,
     ProviderError,
+    ProviderInfo,
     ProviderReady,
     ProviderStopped,
     RecognitionEvent,
@@ -12,6 +13,7 @@ from .provider import RecognitionProvider
 from .session import EventSink, RecognitionSession, TranslationService
 
 __all__ = [
+    'AudioCaptureWorker',
     'AudioFrame',
     'AudioPipeline',
     'AudioSource',
@@ -19,6 +21,7 @@ __all__ = [
     'CaptionPartial',
     'EventSink',
     'ProviderError',
+    'ProviderInfo',
     'ProviderReady',
     'ProviderStopped',
     'RecognitionEvent',

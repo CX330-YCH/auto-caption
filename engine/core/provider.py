@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from queue import Empty, Queue
+from queue import Empty, Full, Queue
 
 from .audio import AudioFrame
 from .events import RecognitionEvent
@@ -8,8 +8,12 @@ from .events import RecognitionEvent
 class RecognitionProvider(ABC):
     """Provider boundary: start -> accept_audio(frame)* -> stop."""
 
-    def __init__(self) -> None:
-        self._events: Queue[RecognitionEvent] = Queue()
+    def __init__(self, max_pending_events: int = 256) -> None:
+        if max_pending_events <= 0:
+            raise ValueError('max_pending_events must be positive')
+        self._events: Queue[RecognitionEvent] = Queue(
+            maxsize=max_pending_events
+        )
 
     @property
     @abstractmethod
@@ -33,4 +37,7 @@ class RecognitionProvider(ABC):
                 return events
 
     def _emit(self, event: RecognitionEvent) -> None:
-        self._events.put(event)
+        try:
+            self._events.put(event, timeout=0.5)
+        except Full as error:
+            raise RuntimeError('Provider event queue is full') from error

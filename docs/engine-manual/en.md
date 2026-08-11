@@ -22,7 +22,7 @@ Process of communication between main process and caption engine:
 
 ### Caption Recognition
 
-- Caption engine process: Create a new thread to monitor system audio output, put acquired audio data chunks into a shared queue (`shared_data.chunk_queue`). The caption engine continuously reads audio data chunks from the shared queue and parses them. The caption engine may also create a new thread to perform translation operations. Finally, the caption engine sends parsed caption data object strings through standard output
+- Caption engine process: The audio capture thread passes chunks through `AudioPipeline` into a bounded, session-local queue. `RecognitionSession` sends frames to the selected Provider and owns caption forwarding, final-only translation, and shutdown. The protocol output layer then writes caption objects to standard output
 - Electron main process: Continuously listen to the caption engine's standard output and take different actions based on the parsed object's `command` field
 
 ### Stopping the Engine
@@ -61,7 +61,7 @@ This Socket service listens on a specified port, parses content sent by the Elec
 Example:
 
 ```python
-from utils import start_server
+from protocol.server import start_server
 from utils import shared_data
 port = 8080
 start_server(port)
@@ -124,18 +124,20 @@ while True:
 
 After obtaining suitable audio streams, the audio stream needs to be converted to text. Generally, various models (cloud or local) are used to implement audio-to-text conversion. Appropriate models should be selected according to requirements.
 
-It is recommended to encapsulate this as a class, implementing four methods:
+Implement this boundary as a `RecognitionProvider` that only owns recognition lifecycle and unified events:
 
 - `start(self)`: Start the model
-- `send_audio_frame(self, data: bytes)`: Process current audio chunk data, **generated caption data is sent to Electron main process through standard output**
-- `translate(self)`: Continuously retrieve data chunks from `shared_data.chunk_queue` and call `send_audio_frame` method to process data chunks
+- `accept_audio(self, frame: AudioFrame)`: Process one normalized audio frame and emit partial/final/lifecycle events
 - `stop(self)`: Stop the model
+
+A Provider must not consume a global queue, write to stdout, or create its own client-side translation loop. Those responsibilities belong to `RecognitionSession`, the protocol output layer, and `TranslationService`.
 
 Complete caption engine examples:
 
-- [gummy.py](../../engine/audio2text/gummy.py)
-- [vosk.py](../../engine/audio2text/vosk.py)
-- [sosv.py](../../engine/audio2text/sosv.py)
+- [gummy.py](../../engine/providers/gummy.py)
+- [vosk.py](../../engine/providers/vosk.py)
+- [sosv.py](../../engine/providers/sosv.py)
+- [glm.py](../../engine/providers/glm.py)
 
 ### Caption Translation
 
@@ -217,8 +219,11 @@ python main.py -e gummy -s ja -t zh -a 0 -c 10 -k <dashscope-api-key>
 
 Except for audio-to-text conversion and translation, other components (audio acquisition, audio resampling, and communication with the main process) are recommended to directly reuse the project's code. If this approach is taken, the content that needs to be added includes:
 
-- `engine/audio2text/`: Add a new audio-to-text class (file-level).  
-- `engine/main.py`: Add new parameter settings and workflow functions (refer to `main_gummy` and `main_vosk` functions).  
+- `engine/providers/`: Add a recognition adapter implementing `RecognitionProvider`.
+- `engine/providers/registry.py`: Register the Provider together with its audio Pipeline and translation-service assembly.
+- `engine/cli.py`: Add arguments only when the model genuinely requires new configuration; do not add another model branch to `main.py`.
+
+See [the current Python engine architecture](architecture.md) for the complete responsibility and dependency rules.
 
 ### Packaging  
 
@@ -228,4 +233,4 @@ After development and testing, the caption engine must be packaged into an execu
 
 With a functional caption engine, it can be launched in the caption software window by specifying the engine's path and runtime arguments.  
 
-![](../img/02_en.png)  
+![](../img/02_en.png)

@@ -10,6 +10,7 @@ from core import (  # noqa: E402
     CaptionFinal,
     CaptionPartial,
     ProviderError,
+    ProviderInfo,
     ProviderReady,
     UsageUpdated,
 )
@@ -60,16 +61,35 @@ class ProtocolEventSinkTests(unittest.TestCase):
         )
 
         sink.publish(ProviderReady('vosk', 'ready'))
+        sink.publish(ProviderInfo('vosk', 'working'))
         sink.publish(ProviderError('vosk', 'failed'))
         sink.publish(UsageUpdated('vosk', 10, 'seconds'))
         sink.warning('queue full')
 
         self.assertEqual(commands, [
             ('info', 'ready'),
+            ('info', 'working'),
             ('error', 'failed'),
             ('usage', '10 seconds'),
             ('warn', 'queue full'),
         ])
+
+    def test_preserves_provider_supplied_translation_on_caption(self):
+        objects = []
+        sink = ProtocolEventSink(
+            command_writer=lambda command, content: None,
+            object_writer=objects.append,
+        )
+
+        sink.publish(CaptionFinal(
+            4,
+            'start',
+            'end',
+            'hello',
+            '你好',
+        ))
+
+        self.assertEqual(objects[0]['translation'], '你好')
 
 
 if __name__ == '__main__':

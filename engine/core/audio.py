@@ -1,6 +1,9 @@
 import time
+import wave
 from collections.abc import Callable
 from dataclasses import dataclass
+from datetime import datetime
+from queue import Full, Queue
 from typing import Protocol
 
 
@@ -66,3 +69,73 @@ class AudioPipeline:
             sample_width=self._output_sample_width,
             captured_at=self._clock(),
         )
+
+
+class AudioCaptureWorker:
+    """Read, optionally record, transform and enqueue platform audio."""
+
+    def __init__(
+        self,
+        source: AudioSource,
+        pipeline: AudioPipeline,
+        output_queue: Queue[AudioFrame],
+        is_running: Callable[[], bool],
+        request_stop: Callable[[], None],
+        info_handler: Callable[[str], None],
+        error_handler: Callable[[str], None],
+        record: bool = False,
+        recording_path: str = '',
+    ) -> None:
+        self._source = source
+        self._pipeline = pipeline
+        self._output_queue = output_queue
+        self._is_running = is_running
+        self._request_stop = request_stop
+        self._info_handler = info_handler
+        self._error_handler = error_handler
+        self._record = record
+        self._recording_path = recording_path
+
+    def run(self) -> None:
+        recording = None
+        recording_name = ''
+        try:
+            self._source.open_stream()
+            if self._record:
+                recording_name, recording = self._open_recording()
+                self._info_handler('Audio recording...')
+            while self._is_running():
+                raw_chunk = self._source.read_chunk()
+                if raw_chunk is None:
+                    continue
+                if recording is not None:
+                    recording.writeframes(raw_chunk)
+                frame = self._pipeline.process(raw_chunk)
+                while self._is_running():
+                    try:
+                        self._output_queue.put(frame, timeout=0.1)
+                        break
+                    except Full:
+                        continue
+        except Exception as error:
+            self._error_handler(
+                f'Audio capture failed ({type(error).__name__})'
+            )
+            self._request_stop()
+        finally:
+            if recording is not None:
+                recording.close()
+                self._info_handler(f'Audio saved to {recording_name}')
+            self._source.close_stream_signal()
+
+    def _open_recording(self):
+        path = self._recording_path.strip('"')
+        if path and not path.endswith('/'):
+            path += '/'
+        timestamp = datetime.now().strftime('audio-%Y-%m-%dT%H-%M-%S')
+        full_name = f'{path}{timestamp}.wav'
+        recording = wave.open(full_name, 'wb')
+        recording.setnchannels(self._source.CHANNELS)
+        recording.setsampwidth(self._source.SAMP_WIDTH)
+        recording.setframerate(self._source.RATE)
+        return full_name, recording
