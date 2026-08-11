@@ -2,18 +2,31 @@ import wave
 import argparse
 import threading
 import datetime
+from queue import Full, Queue
+from core import AudioPipeline, RecognitionSession
+from protocol.output import ProtocolEventSink
+from protocol.server import start_server
+from providers import VoskProvider
+from services import build_legacy_translation_service
 from utils import stdout, stdout_cmd, change_caption_display
-from utils import shared_data, start_server
+from utils import shared_data
 from utils import merge_chunk_channels, resample_chunk_mono
 from audio2text import GummyRecognizer
-from audio2text import VoskRecognizer
 from audio2text import SosvRecognizer
 from audio2text import GlmRecognizer
 from sysaudio import AudioStream
 
 
-def audio_recording(stream: AudioStream, resample: bool, record = False, path = ''):
+def audio_recording(
+    stream: AudioStream,
+    resample: bool,
+    record = False,
+    path = '',
+    pipeline: AudioPipeline | None = None,
+    output_queue: Queue | None = None,
+):
     global shared_data
+    target_queue = output_queue or shared_data.chunk_queue
     stream.open_stream()
     wf = None
     full_name = ''
@@ -33,13 +46,20 @@ def audio_recording(stream: AudioStream, resample: bool, record = False, path = 
         stdout_cmd("info", "Audio recording...")
     while shared_data.status == 'running':
         raw_chunk = stream.read_chunk()
-        if record: wf.writeframes(raw_chunk) # type: ignore
         if raw_chunk is None: continue
-        if resample:
+        if record: wf.writeframes(raw_chunk) # type: ignore
+        if pipeline is not None:
+            chunk = pipeline.process(raw_chunk)
+        elif resample:
             chunk = resample_chunk_mono(raw_chunk, stream.CHANNELS, stream.RATE, 16000)
         else:
             chunk = merge_chunk_channels(raw_chunk, stream.CHANNELS)
-        shared_data.chunk_queue.put(chunk)
+        while shared_data.status == 'running':
+            try:
+                target_queue.put(chunk, timeout=0.1)
+                break
+            except Full:
+                continue
     if record:
         stdout_cmd("info", f"Audio saved to {full_name}")
         wf.close() # type: ignore
@@ -90,23 +110,47 @@ def main_vosk(a: int, c: int, vosk: str, t: str, tm: str, omn: str, ourl: str, o
         rp: Path to save the recorded audio
     """
     stream = AudioStream(a, c)
-    if t == 'none':
-        engine = VoskRecognizer(vosk, None, tm, omn, ourl, okey)
-    else:
-        engine = VoskRecognizer(vosk, t, tm, omn, ourl, okey)
-
-    engine.start()
+    target = None if t == 'none' else t
+    output = ProtocolEventSink()
+    provider = VoskProvider(vosk)
+    translation_service = build_legacy_translation_service(
+        target=target,
+        trans_model=tm,
+        model_name=omn,
+        url=ourl,
+        api_key=okey,
+        warning_handler=output.warning,
+    )
+    pipeline = AudioPipeline(
+        converter=lambda raw_chunk: resample_chunk_mono(
+            raw_chunk,
+            stream.CHANNELS,
+            stream.RATE,
+            16000,
+        ),
+        output_sample_rate=16000,
+    )
+    audio_queue = Queue(maxsize=max(10, c * 5))
     stream_thread = threading.Thread(
         target=audio_recording,
-        args=(stream, True, r, rp),
-        daemon=True
+        args=(stream, True, r, rp, pipeline, audio_queue),
+        daemon=True,
     )
-    stream_thread.start()
+    session = RecognitionSession(
+        provider=provider,
+        audio_queue=audio_queue,
+        audio_source=stream,
+        event_sink=output,
+        translation_service=translation_service,
+        start_audio_capture=stream_thread.start,
+        is_running=lambda: shared_data.status == 'running',
+        request_stop=lambda: setattr(shared_data, 'status', 'kill'),
+    )
     try:
-        engine.translate()
+        session.run()
     except KeyboardInterrupt:
+        shared_data.status = 'stop'
         stdout("Keyboard interrupt detected. Exiting...")
-    engine.stop()
 
 
 def main_sosv(a: int, c: int, sosv: str, s: str, t: str, tm: str, omn: str, ourl: str, okey: str, r: bool, rp: str):

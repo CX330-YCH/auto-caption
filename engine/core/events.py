@@ -1,0 +1,54 @@
+from dataclasses import dataclass
+from typing import TypeAlias
+
+
+@dataclass(frozen=True)
+class CaptionPartial:
+    caption_id: int
+    started_at: str
+    ended_at: str
+    text: str
+
+
+@dataclass(frozen=True)
+class CaptionFinal:
+    caption_id: int
+    started_at: str
+    ended_at: str
+    text: str
+
+
+@dataclass(frozen=True)
+class ProviderReady:
+    provider: str
+    message: str
+
+
+@dataclass(frozen=True)
+class ProviderStopped:
+    provider: str
+    message: str
+
+
+@dataclass(frozen=True)
+class ProviderError:
+    provider: str
+    message: str
+    fatal: bool = True
+
+
+@dataclass(frozen=True)
+class UsageUpdated:
+    provider: str
+    value: int | float
+    unit: str = ''
+
+
+RecognitionEvent: TypeAlias = (
+    CaptionPartial
+    | CaptionFinal
+    | ProviderReady
+    | ProviderStopped
+    | ProviderError
+    | UsageUpdated
+)

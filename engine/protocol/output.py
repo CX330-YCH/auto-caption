@@ -1,0 +1,50 @@
+from collections.abc import Callable
+from typing import Any
+
+from core import (
+    CaptionFinal,
+    CaptionPartial,
+    ProviderError,
+    ProviderReady,
+    ProviderStopped,
+    RecognitionEvent,
+    UsageUpdated,
+)
+
+
+class ProtocolEventSink:
+    """Map internal recognition events onto the existing command protocol."""
+
+    def __init__(
+        self,
+        command_writer: Callable[[str, str], None] | None = None,
+        object_writer: Callable[[dict[str, Any]], None] | None = None,
+    ) -> None:
+        if command_writer is None or object_writer is None:
+            from utils.sysout import stdout_cmd, stdout_obj
+
+            command_writer = command_writer or stdout_cmd
+            object_writer = object_writer or stdout_obj
+        self._command_writer = command_writer
+        self._object_writer = object_writer
+
+    def publish(self, event: RecognitionEvent) -> None:
+        if isinstance(event, (CaptionPartial, CaptionFinal)):
+            self._object_writer({
+                'command': 'caption',
+                'index': event.caption_id,
+                'time_s': event.started_at,
+                'time_t': event.ended_at,
+                'text': event.text,
+                'translation': '',
+            })
+        elif isinstance(event, (ProviderReady, ProviderStopped)):
+            self._command_writer('info', event.message)
+        elif isinstance(event, ProviderError):
+            self._command_writer('error', event.message)
+        elif isinstance(event, UsageUpdated):
+            content = f'{event.value} {event.unit}'.strip()
+            self._command_writer('usage', content)
+
+    def warning(self, message: str) -> None:
+        self._command_writer('warn', message)

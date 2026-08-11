@@ -270,3 +270,154 @@
 - 项目现有 `utils.sysout` 一行一条 JSON 并立即 flush 的输出行为。
 - TCP 是无消息边界的字节流，因此使用显式换行分帧，并在读取方维护跨块缓冲。
 - Node.js 标准库 `StringDecoder`、`Buffer` 和 Python 标准库 `json`、`socket`；未引入第三方协议依赖。
+
+## 2026-08-11 - 第三阶段：建立 Python 引擎核心边界并迁移 Vosk
+
+### 授权与目标
+
+- 用户授权：要求执行“第三阶段：重构 Python 引擎层”，建立 `RecognitionProvider`、统一事件和 `RecognitionSession`，并明确要求不要一次性重写所有引擎，应先用 Vosk 适配器验证行为。
+- 目标：完成一条可运行、可测试、可回滚的 Vosk 纵向切片，把音频帧、Provider、事件、Session、翻译调度和 stdout 协议分开；Gummy、GLM、SOSV 继续使用旧路径。
+- 变更类型：渐进式重构、内部功能修复、测试、文档。
+- 明确非目标：不接入 Fun-ASR、不实现热词、不创建空的 `fun_asr.py`/`hotwords.py`、不迁移其他三个 Provider、不改变 Electron UI、配置或 CLI 参数。
+
+### 修改文件
+
+- `engine/core/__init__.py`
+  - 新增核心接口和事件的统一导出边界。
+- `engine/core/audio.py`
+  - 新增不可变 `AudioFrame`，显式携带 PCM 数据、采样率、声道、样本宽度、格式和捕获时间。
+  - 新增结构化 `AudioSource` 协议和实际使用的 `AudioPipeline`。
+- `engine/core/events.py`
+  - 新增内部统一事件：`CaptionPartial`、`CaptionFinal`、`ProviderReady`、`ProviderError`、`UsageUpdated`。
+  - 为保持已有关闭日志，补充 `ProviderStopped` 生命周期事件。
+- `engine/core/provider.py`
+  - 新增抽象 `RecognitionProvider`，统一 `start -> accept_audio(frame)* -> stop` 生命周期。
+  - Provider 通过内部事件队列上报结果，不返回协议字典。
+- `engine/core/session.py`
+  - 新增 `RecognitionSession`，统一读取音频队列、调用 Provider、发布事件、处理 fatal stop 和关闭资源。
+  - partial 不提交翻译；final 按 `caption_id` 去重，每个 ID 最多提交一次。
+  - Provider 未处理异常只输出 Provider 名和异常类型，不回显可能包含凭据的异常文本。
+  - 无论正常或异常路径，都停止 Provider、冲刷事件、关闭翻译服务和音频设备。
+- `engine/providers/__init__.py`
+  - 新增已迁移 Provider 导出边界；当前只导出 Vosk。
+- `engine/providers/vosk.py`
+  - 新增 Vosk Provider 适配器，专注 Vosk SDK 和 partial/final 事件生成。
+  - 验证输入必须是 16 kHz、单声道、PCM16。
+  - 保留旧 Vosk 的 partial 去重、同句 ID/起始时间复用和非空 final 后 ID 递增语义。
+  - 支持注入 recognizer factory 和 clock，使测试不需要真实模型或音频设备。
+- `engine/services/__init__.py`
+  - 新增翻译服务导出边界。
+- `engine/services/translation.py`
+  - 新增无翻译实现和 Provider 无关的有界后台翻译服务。
+  - 固定使用 2 个 daemon worker 和最多 32 条等待任务，替代每条 final 创建一个线程。
+  - 队列过载时保留原字幕、跳过最新翻译并输出明确警告。
+  - 提供旧 Google/Ollama 翻译函数的装配适配器。
+- `engine/protocol/output.py`
+  - 新增内部事件到现有 stdout `command` 协议的唯一映射点。
+  - `CaptionPartial` 和 `CaptionFinal` 都映射为兼容的 `caption` 消息；生命周期、错误和用量映射为已有日志命令。
+- `engine/protocol/server.py`
+  - 将第二阶段建立的 TCP 命令服务移动到协议目录，使 server 和 NDJSON decoder 同属协议层。
+  - 保持 stop、错误恢复和 Socket 行为不变；绑定失败时补充关闭监听 Socket。
+- `engine/utils/server.py`
+  - 改为 `protocol.server` 的临时兼容导入，不再保存活动实现。
+- `engine/utils/__init__.py`
+  - 将 `start_server` 改为延迟兼容入口，避免协议层移动产生循环导入。
+- `engine/main.py`
+  - Vosk 装配改用 `AudioPipeline`、本地有界音频队列、`VoskProvider`、`RecognitionSession`、统一翻译服务和 `ProtocolEventSink`。
+  - Vosk Provider ready 后才启动音频采集，模型加载期间不积压音频。
+  - Vosk 音频队列容量为 `max(10, chunk_rate × 5)` 帧；队列满时采集线程等待并定期检查停止状态。
+  - 音频采集函数增加可选 pipeline 和 output queue；其他旧 Provider 不传这些参数，继续保持旧行为。
+  - Vosk KeyboardInterrupt 路径显式停止共享运行状态，避免关闭设备后采集线程继续循环。
+- `engine/audio2text/vosk.py`
+  - 删除旧 Vosk 类，消除其内部共享队列循环、stdout 构造和逐字幕翻译线程。
+- `engine/audio2text/__init__.py`
+  - 删除旧 `VoskRecognizer` 导出；应用入口改用 `providers.VoskProvider`。
+- `engine/tests/test_engine_core.py`
+  - 新增 AudioFrame/Pipeline、Provider 生命周期、Session partial/final 策略、final 翻译去重、资源关闭和异常脱敏测试。
+- `engine/tests/test_vosk_provider.py`
+  - 使用伪造 recognizer 验证 Vosk partial 去重、final ID/时间关联、生命周期和音频格式约束。
+- `engine/tests/test_protocol_output.py`
+  - 验证统一内部事件映射为现有 caption/info/error/usage/warn 协议。
+- `engine/tests/test_translation_service.py`
+  - 验证翻译服务的有界等待队列和过载警告。
+- `docs/engine-manual/architecture.md`
+  - 新增 Python 引擎当前结构、依赖方向、核心接口、Vosk 兼容边界、临时兼容层删除条件和逐 Provider 迁移顺序。
+  - 明确 `cli.py`、Fun-ASR 和 hotwords 尚未创建的原因，避免无调用方空壳。
+- `docs/api-docs/caption-engine.md`
+  - 记录内部 partial/final 当前仍映射为相同外部 `caption` 命令，外部协议尚无 final 标记。
+- `docs/testing.md`
+  - 补充核心事件、Session、Vosk 适配器、协议输出和翻译容量测试范围。
+- `change.md`
+  - 追加本阶段完整授权、结构、行为、兼容性、验证、风险和回滚说明。
+
+### 修改前后行为
+
+- 修改前：Vosk 类同时加载 SDK、读取全局共享队列、构造 stdout 字典、识别 partial/final、选择翻译后端并为每条 final 创建线程。
+- 修改后：Vosk Provider 只接受 `AudioFrame` 并产生统一事件；Session 统一读取队列和执行 final 翻译策略；协议层统一输出旧 command 消息。
+- 修改前：Vosk 使用无界全局音频队列，慢识别可能持续积压内存。
+- 修改后：Vosk 使用独立有界队列，容量约为 5 秒且至少 10 帧；队列满时通过背压暂停采集端入队。
+- 修改前：Vosk 每个 final 创建一个 daemon 翻译线程，没有并发和等待任务上限。
+- 修改后：翻译最多 2 个并发 worker、32 条等待任务；过载时明确警告并保留已经输出的原字幕。
+- 修改前：Vosk Google 翻译分支向四参数函数传入六个参数，后台线程会抛出 `TypeError`。
+- 修改后：统一翻译装配器使用正确函数签名；这是迁移过程中消除的旧路径缺陷。
+- 修改前：Vosk 的队列读取可能在 stop 后因阻塞 `get()` 延迟退出，音频设备关闭责任分散。
+- 修改后：Session 使用带超时的队列读取，并在 finally 中统一停止 Provider、关闭翻译服务和音频设备。
+- Gummy、GLM、SOSV 的运行路径和旧 `translate()` 循环没有修改。
+
+### 配置、接口与协议
+
+- 用户持久化配置及版本：无变化，不需要迁移。
+- Electron IPC：无变化。
+- Python CLI 参数、默认值和 Provider 名称：无变化；`-e vosk` 调用方式保持不变。
+- Electron/Python 外部子进程协议：命令名和字段无变化。
+- 内部 Python API：新增 `AudioFrame`、`RecognitionProvider`、统一事件、`RecognitionSession`、`TranslationService` 和 `ProtocolEventSink`。
+- 内部模块路径：Vosk 活动实现从 `audio2text.vosk` 迁移到 `providers.vosk`；`protocol.server` 成为 TCP server 的活动实现。
+- 内部事件数据结构：partial/final 显式区分并共享稳定 `caption_id`；映射到旧协议后仍使用 `index/time_s/time_t/text/translation` 字段。
+- 依赖、`requirements.txt`、npm 包和锁文件：无变化。
+- PyInstaller spec：无变化；新模块通过 `main.py` 静态导入进入依赖图。
+
+### 兼容性、迁移与回滚
+
+- 应用 CLI 和 Electron 进程协议兼容：现有 Vosk 启动参数、caption 日志和翻译消息结构不变。
+- Vosk model path 的包围双引号处理保持兼容。
+- partial/final 继续复用同一个 `index` 和 `time_s`；外部暂时无法显式判断 final。
+- `from utils import start_server` 和 `from utils.server import start_server` 通过兼容入口继续工作；新代码使用 `protocol.server`。
+- 直接导入未文档化内部路径 `audio2text.vosk.VoskRecognizer` 的第三方代码不再兼容；应用本身没有该外部扩展承诺。若需要公共 Python SDK，应在后续单独定义版本化接口，而不是永久保留两套 Vosk 实现。
+- Gummy、GLM、SOSV 无迁移要求；它们仍依赖 `audio2text`、全局队列和旧翻译逻辑。
+- 数据迁移和远端资源迁移：不需要。
+- 回滚方式：恢复 `engine/main.py`、`audio2text/__init__.py`、`audio2text/vosk.py`、`utils/__init__.py` 和第二阶段版本的 `utils/server.py`；删除本阶段新增的 `core/`、`providers/`、`services/`、`protocol/output.py`、`protocol/server.py`、四个新测试和架构文档；恢复协议/测试文档对应段落。第二阶段的 NDJSON decoder 和 Electron 协议组件无需回滚。
+
+### 验证
+
+- 首轮 `npm run test:python`：通过，Python 19/19；验证最初的 core、Session、Vosk 和协议输出纵向切片。
+- `engine/.venv/bin/python3 engine/main.py --help`：通过；CLI 参数列表和入口模块加载正常。
+- `engine/.venv/bin/python3 -m compileall -q engine/core engine/providers engine/services engine/protocol engine/main.py`：通过；新增/修改 Python 模块可编译。
+- 引入 Vosk 有界音频队列后再次 `npm run test:python`：通过，Python 19/19。
+- 增加 Provider 异常脱敏和翻译过载测试后 `npm run test:python`：通过，Python 21/21。
+- 最终 `npm run verify`：通过；TypeScript/Vue 类型检查、ESLint、Node 20/20 和 Python 21/21 全部通过。
+- 最终 `npm run build`：通过；Electron main、preload 和 renderer 均完成 Vite 构建。
+- 最终再次执行 Python CLI help 和 compileall：通过。
+- 最终 `git diff --check`：通过。
+- 本阶段没有出现需要隐瞒或跳过的失败验证。
+- 未运行真实 Vosk 模型、麦克风/系统音频、Google/Ollama 网络翻译或付费 API：单元测试使用伪造 recognizer、AudioSource、EventSink 和 TranslationService，避免外部设备与网络。
+- 未执行 PyInstaller `main.spec` 打包、Windows/Linux 安装包或真实 Electron/Python Vosk 端到端：这些需要模型、设备和目标平台环境；普通 Electron 构建不包含重新生成的 Python 可执行文件。
+
+### 风险、限制与后续事项
+
+- 当前只有 Vosk 使用新架构；Gummy、GLM、SOSV 仍是明确的临时旧路径。每迁移一个 Provider 后必须删除对应旧循环，全部迁移完成后删除 `audio2text/` 和 `utils.server` 兼容层。
+- `main.py` 仍包含 argparse 和旧 Provider 装配；在 registry/config 对象稳定前没有创建 `cli.py`，避免本阶段同时重写所有入口分支。
+- 外部协议仍没有 partial/final 标记；Fun-ASR 接入前必须决定是否保持内部区别、还是设计带版本的外部事件 envelope。
+- 有界音频队列避免无限内存增长，但 Provider 持续落后时会对采集线程施加背压，设备层可能产生延迟或丢帧；需要在固定音频回放测试中测量后再调整容量。
+- 翻译 worker 是 daemon，关闭时不阻塞等待外部网络；与旧 daemon 线程相同，进程立即退出时尚未完成的翻译可能丢失。后续 TranslationService 应增加可取消请求、超时和有限冲刷策略。
+- 翻译仍通过旧 `time_s` 映射到 Electron 字幕；内部已经有稳定 `caption_id`，但外部关联改造需要协议版本，未在本阶段扩展范围。
+- `RecognitionProvider` 事件队列适合 Vosk 同步结果；Gummy/Fun-ASR 等异步回调 Provider 迁移前应增加显式事件唤醒和停止冲刷测试，不能直接复制 Vosk 循环。
+- 本阶段没有创建 `providers/fun_asr.py` 和 `services/hotwords.py`；它们只能在真实能力、配置和测试调用方同时落地时新增。
+- Python 暂无 mypy/ruff 等静态检查依赖；本阶段没有未经授权安装工具，使用 compileall、CLI 加载和单元测试验证。
+- npm 的既有 Electron mirror 弃用提示和 Node `MODULE_TYPELESS_PACKAGE_JSON` 提示仍存在，本阶段未修改。
+
+### 参考与决策依据
+
+- 用户给出的目标目录、Provider 生命周期、统一事件和渐进迁移顺序。
+- 根目录 `AGENTS.md` 中 AudioSource、AudioPipeline、RecognitionProvider、RecognitionSession、TranslationService、EventSink 和 ProviderRegistry 的目标职责。
+- Vosk 当前 `AcceptWaveform`/`PartialResult`/`Result` 同步调用语义及项目已有 index/time 规则。
+- Python 标准库 `dataclasses`、`queue`、`threading`、`typing.Protocol`；未新增第三方依赖。
