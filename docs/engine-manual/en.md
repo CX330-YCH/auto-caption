@@ -135,6 +135,7 @@ A Provider must not consume a global queue, write to stdout, or create its own c
 Complete caption engine examples:
 
 - [gummy.py](../../engine/providers/gummy.py)
+- [fun_asr.py](../../engine/providers/fun_asr.py)
 - [vosk.py](../../engine/providers/vosk.py)
 - [sosv.py](../../engine/providers/sosv.py)
 - [glm.py](../../engine/providers/glm.py)
@@ -175,6 +176,8 @@ export interface CaptionItem {
 
 Custom caption engine settings provide command line parameter specification, so the caption engine parameters need to be set properly. Currently used parameters in this project are as follows:
 
+> `engine/cli.py` and `python main.py --help` are the authoritative complete parameter reference. Fun-ASR selects `-e fun_asr` and uses `-fmodel`, `-furl`, `-fworkspace`, `-fkey`, `-fsemantic`, `-fsilence`, and `-fheartbeat`; do not duplicate provider assembly in `main.py`.
+
 ```python
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Convert system audio stream to text')
@@ -204,6 +207,17 @@ For example, for this project's caption engine, if I want to use the Gummy model
 ```bash
 python main.py -e gummy -s ja -t zh -a 0 -c 10 -k <dashscope-api-key>
 ```
+
+Fun-ASR example:
+
+```bash
+python main.py -e fun_asr -s en -t zh -a 0 -c 10 \
+  -fworkspace <workspace-id> \
+  -furl wss://<workspace-id>.cn-beijing.maas.aliyuncs.com/api-ws/v1/inference \
+  -fkey <dashscope-api-key>
+```
+
+This Provider uses the official DashScope SDK and accepts 16 kHz mono PCM16. It only maps partial/final results, server timestamps, usage, and lifecycle callbacks into unified events; the Session and protocol layer retain translation, stdout, and shutdown responsibilities. Hotwords are not supported in this stage.
 
 ## Additional Notes  
 

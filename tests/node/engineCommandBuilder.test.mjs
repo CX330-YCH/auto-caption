@@ -22,8 +22,11 @@ test('builds common and Provider-specific arguments from V2 config', () => {
   engine.providers.vosk.modelPath = '/models/vosk'
   engine.providers.sosv.modelPath = '/models/sosv'
   engine.providers.glm.apiKey = 'glm-secret'
+  engine.providers.funAsr.workspaceId = 'workspace-1'
+  engine.providers.funAsr.websocketUrl = 'wss://workspace-1.cn-beijing.maas.aliyuncs.com/api-ws/v1/inference'
+  engine.providers.funAsr.apiKey = 'fun-asr-secret'
 
-  for (const provider of ['gummy', 'vosk', 'sosv', 'glm']) {
+  for (const provider of ['gummy', 'vosk', 'sosv', 'glm', 'fun_asr']) {
     engine.provider = provider
     const args = buildBundledEngineArguments(engine, 2345)
 
@@ -55,6 +58,15 @@ test('builds common and Provider-specific arguments from V2 config', () => {
   const glmArgs = buildBundledEngineArguments(engine, 2345)
   assert.equal(valueAfter(glmArgs, '-gkey'), 'glm-secret')
   assert.equal(valueAfter(glmArgs, '-okey'), 'translation-secret')
+
+  engine.provider = 'fun_asr'
+  const funAsrArgs = buildBundledEngineArguments(engine, 2345)
+  assert.equal(valueAfter(funAsrArgs, '-fmodel'), 'fun-asr-realtime')
+  assert.equal(valueAfter(funAsrArgs, '-fworkspace'), 'workspace-1')
+  assert.equal(valueAfter(funAsrArgs, '-fkey'), 'fun-asr-secret')
+  assert.equal(valueAfter(funAsrArgs, '-fsemantic'), '0')
+  assert.equal(valueAfter(funAsrArgs, '-fsilence'), '1300')
+  assert.equal(valueAfter(funAsrArgs, '-fheartbeat'), '1')
 })
 
 test('uses none target when translation is disabled', () => {

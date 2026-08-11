@@ -77,6 +77,17 @@ def _provider_config(options: CliOptions) -> ProviderConfig:
         glm_url=options.glm_url,
         glm_model=options.glm_model,
         glm_api_key=options.glm_api_key,
+        fun_asr_model=options.fun_asr_model,
+        fun_asr_url=options.fun_asr_url,
+        fun_asr_workspace=options.fun_asr_workspace,
+        fun_asr_api_key=options.fun_asr_api_key,
+        fun_asr_semantic_punctuation=(
+            options.fun_asr_semantic_punctuation
+        ),
+        fun_asr_max_sentence_silence=(
+            options.fun_asr_max_sentence_silence
+        ),
+        fun_asr_heartbeat=options.fun_asr_heartbeat,
     )
 
 

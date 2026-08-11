@@ -30,7 +30,11 @@ export default {
     "styleInfo": "字幕のスタイル変更が保存され、適用されました",
     "engineStartTimeout": "字幕エンジンの起動がタイムアウトしました。自動的に強制停止しました",
     "ollamaNameNull": "Ollama フィールドが空です",
-    "ollamaNameNullNote": "Ollama モデルを翻訳モデルとして選択する場合、Ollama フィールドは空にできません。ローカルで設定された Ollama モデルの名前を入力してください。"
+    "ollamaNameNullNote": "Ollama モデルを翻訳モデルとして選択する場合、Ollama フィールドは空にできません。ローカルで設定された Ollama モデルの名前を入力してください。",
+    "funAsrConfigMissing": "Fun-ASR の設定が不完全です",
+    "funAsrConfigMissingNote": "Fun-ASR を開始する前に、ワークスペース ID と同じリージョンの専用 WebSocket URL を入力してください。",
+    "funAsrEndpointInvalid": "Fun-ASR エンドポイントが一致しません",
+    "funAsrEndpointInvalidNote": "中国（北京）またはシンガポールの公式専用 URL を使用し、ホスト名の WorkspaceId を設定値と完全に一致させてください。"
   },
   general: {
     "title": "一般設定",
@@ -67,6 +71,7 @@ export default {
     "recordingPath": "保存パス",
     "startTimeout": "時間制限",
     "seconds": "秒",
+    "milliseconds": "ミリ秒",
     "apikeyInfo": "Gummy 字幕エンジンに必要な API KEY は、アリババクラウド百煉プラットフォームから取得する必要があります。詳細情報はプロジェクトのユーザーマニュアルをご覧ください。",
     "glmApikeyInfo": "GLM 字幕エンジンに必要な API KEY で、智譜 AI プラットフォームから取得する必要があります。",
     "voskModelPathInfo": "Vosk 字幕エンジンに必要なモデルのフォルダパスです。必要なモデルを事前にローカルマシンにダウンロードする必要があります。詳細情報はプロジェクトのユーザーマニュアルをご覧ください。",
@@ -75,6 +80,61 @@ export default {
     "modelDownload": "モデルダウンロードリンク",
     "startTimeoutInfo": "字幕エンジンの起動タイムアウト時間です。この時間を超えると自動的に強制停止されます。10-120秒の範囲で設定することを推奨します。",
     "customEngine": "カスタム",
+    fields: {
+      "baseUrl": "Base URL",
+      "translationApiKey": "翻訳 API KEY",
+      "gummyApiKey": "Alibaba Cloud API KEY",
+      "glmUrl": "GLM API URL",
+      "glmModel": "GLM モデル名",
+      "glmApiKey": "GLM API KEY",
+      "funAsrModel": "Fun-ASR モデル",
+      "funAsrWorkspace": "ワークスペース ID",
+      "funAsrWebsocketUrl": "WebSocket URL",
+      "funAsrApiKey": "Fun-ASR API KEY",
+      "funAsrSemanticPunctuation": "セマンティック文分割",
+      "funAsrSentenceSilence": "文分割の無音時間",
+      "funAsrHeartbeat": "接続ハートビート",
+      "openProviderConsole": "プロバイダーコンソールを開く"
+    },
+    options: {
+      providers: {
+        "gummy": "クラウド / アリババクラウド / Gummy",
+        "vosk": "ローカル / Vosk",
+        "sosv": "ローカル / SOSV",
+        "glm": "クラウド / 智譜 AI / GLM-ASR",
+        "funAsr": "クラウド / Alibaba Cloud / Fun-ASR Realtime"
+      },
+      languages: {
+        "auto": "自動検出",
+        "modelDefined": "モデルを手動で設定する必要があります",
+        "en": "英語",
+        "zh": "中国語",
+        "ja": "日本語",
+        "ko": "韓国語",
+        "de": "ドイツ語",
+        "fr": "フランス語",
+        "ru": "ロシア語",
+        "es": "スペイン語",
+        "it": "イタリア語",
+        "yue": "広東語"
+      },
+      translation: {
+        "ollama": "Ollama モデルまたは OpenAI 互換モデル",
+        "google": "Google API 呼び出し"
+      },
+      funAsrModels: {
+        "current": "Fun-ASR Realtime（ローリング版）",
+        "snapshot": "Fun-ASR Realtime 2025-11-07（スナップショット版）"
+      }
+    },
+    funAsr: {
+      "workspaceInfo": "Alibaba Cloud Model Studio のワークスペース ID です。API キー、ワークスペース、WebSocket リージョンは同じリソースに属している必要があります。",
+      "websocketInfo": "中国（北京）またはシンガポールの公式ワークスペース専用 wss:// URL を使用します。ホスト名の WorkspaceId は上の値と完全に一致させてください。",
+      "apiKeyInfo": "Fun-ASR 用の Alibaba Cloud Model Studio API キーです。空の場合、エンジンは環境変数 DASHSCOPE_API_KEY を読み取ります。",
+      "semanticPunctuationInfo": "有効にすると高精度のセマンティック文分割、無効にすると低遅延の VAD 文分割を使用します。",
+      "sentenceSilenceInfo": "VAD 文分割の無音しきい値です。公式範囲は 200～6000 ミリ秒、既定値は 1300 ミリ秒です。",
+      "heartbeatInfo": "無音が続く間もサービス接続を維持します。ハートビート結果から字幕は生成されません。"
+    },
     custom: {
       "title": "カスタムキャプションエンジン",
       "attention": "注意事項",

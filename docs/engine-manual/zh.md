@@ -135,6 +135,7 @@ Provider 不读取全局队列、不直接写标准输出，也不创建自己�
 完整的字幕引擎实例如下：
 
 - [gummy.py](../../engine/providers/gummy.py)
+- [fun_asr.py](../../engine/providers/fun_asr.py)
 - [vosk.py](../../engine/providers/vosk.py)
 - [sosv.py](../../engine/providers/sosv.py)
 - [glm.py](../../engine/providers/glm.py)
@@ -175,6 +176,8 @@ export interface CaptionItem {
 
 自定义字幕引擎的设置提供命令行参数指定，因此需要设置好字幕引擎的参数，本项目目前用到的参数如下：
 
+> `engine/cli.py` 和 `python main.py --help` 是完整参数的唯一权威来源。新增 Fun-ASR 使用 `-e fun_asr`，并通过 `-fmodel`、`-furl`、`-fworkspace`、`-fkey`、`-fsemantic`、`-fsilence`、`-fheartbeat` 配置；不得在 `main.py` 再复制一条装配分支。
+
 ```python
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Convert system audio stream to text')
@@ -204,6 +207,17 @@ if __name__ == "__main__":
 ```bash
 python main.py -e gummy -s ja -t zh -a 0 -c 10 -k <dashscope-api-key>
 ```
+
+Fun-ASR 示例：
+
+```bash
+python main.py -e fun_asr -s ja -t zh -a 0 -c 10 \
+  -fworkspace <workspace-id> \
+  -furl wss://<workspace-id>.cn-beijing.maas.aliyuncs.com/api-ws/v1/inference \
+  -fkey <dashscope-api-key>
+```
+
+该 Provider 使用官方 DashScope SDK，输入必须为 16 kHz 单声道 PCM16。partial/final、服务端时间戳、用量和生命周期只转换为统一事件；final 翻译、stdout 和关闭流程仍由 Session/协议层负责。当前不支持热词。
 
 ## 其他
 

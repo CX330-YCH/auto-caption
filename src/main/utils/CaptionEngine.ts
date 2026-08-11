@@ -49,6 +49,12 @@ export class CaptionEngine {
         controlWindow.sendErrorMessage(i18n('gummy.key.missing'))
         return false
       }
+      if(engineConfig.provider === 'fun_asr' &&
+        !engineConfig.providers.funAsr.apiKey && !process.env.DASHSCOPE_API_KEY
+      ) {
+        controlWindow.sendErrorMessage(i18n('fun_asr.key.missing'))
+        return false
+      }
       this.command = []
       if (is.dev) {
         if(process.platform === "win32") {

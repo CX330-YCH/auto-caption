@@ -12,6 +12,7 @@ test('masks every supported command-line secret without mutating the input', () 
     '-k', 'dashscope-secret',
     '-okey', 'openai-secret',
     '-gkey', 'glm-secret',
+    '-fkey', 'fun-asr-secret',
     '-s', 'zh'
   ]
 
@@ -20,6 +21,7 @@ test('masks every supported command-line secret without mutating the input', () 
     '-k', '****************',
     '-okey', '*************',
     '-gkey', '**********',
+    '-fkey', '**************',
     '-s', 'zh'
   ])
   assert.equal(command[3], 'dashscope-secret')

@@ -149,6 +149,7 @@ import { useCaptionLogStore } from '@renderer/stores/captionLog'
 import { useSoftwareLogStore } from '@renderer/stores/softwareLog'
 import { useEngineControlStore } from '@renderer/stores/engineControl'
 import { GithubOutlined, InfoCircleOutlined, LoadingOutlined } from '@ant-design/icons-vue'
+import { validateEngineConfig } from '@renderer/engines/catalog.ts'
 
 const showAbout = ref(false)
 const pending = ref(false)
@@ -177,20 +178,9 @@ function openCaptionWindow() {
 function startEngine() {
   pending.value = true
   isStarting.value = true
-  if(
-    engineControl.engineConfig.provider === 'vosk' &&
-    engineControl.engineConfig.providers.vosk.modelPath.trim() === ''
-  ) {
-    engineControl.emptyModelPathErr()
-    pending.value = false
-    isStarting.value = false
-    return
-  }
-  if(
-    engineControl.engineConfig.provider === 'sosv' &&
-    engineControl.engineConfig.providers.sosv.modelPath.trim() === ''
-  ) {
-    engineControl.emptyModelPathErr()
+  const validationIssue = validateEngineConfig(engineControl.engineConfig, 'start')
+  if(validationIssue) {
+    engineControl.showConfigValidationError(validationIssue)
     pending.value = false
     isStarting.value = false
     return

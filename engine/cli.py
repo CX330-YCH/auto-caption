@@ -23,6 +23,13 @@ class CliOptions:
     glm_url: str = ''
     glm_model: str = ''
     glm_api_key: str = field(default='', repr=False)
+    fun_asr_model: str = 'fun-asr-realtime'
+    fun_asr_url: str = ''
+    fun_asr_workspace: str = ''
+    fun_asr_api_key: str = field(default='', repr=False)
+    fun_asr_semantic_punctuation: bool = False
+    fun_asr_max_sentence_silence: int = 1300
+    fun_asr_heartbeat: bool = True
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -31,7 +38,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         '-e', '--caption_engine', default='gummy',
-        help='Caption engine: gummy, glm, vosk or sosv'
+        help='Caption engine: gummy, glm, vosk, sosv or fun_asr'
     )
     parser.add_argument(
         '-a', '--audio_type', type=int, default=0,
@@ -100,6 +107,37 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         '-gkey', '--glm_api_key', default='', help='GLM API Key'
     )
+    parser.add_argument(
+        '-fmodel', '--fun_asr_model', default='fun-asr-realtime',
+        help='Fun-ASR realtime model name'
+    )
+    parser.add_argument(
+        '-furl', '--fun_asr_url', default='',
+        help='Fun-ASR workspace WebSocket URL'
+    )
+    parser.add_argument(
+        '-fworkspace', '--fun_asr_workspace', default='',
+        help='Fun-ASR Workspace ID'
+    )
+    parser.add_argument(
+        '-fkey', '--fun_asr_api_key', default='',
+        help='Fun-ASR API Key'
+    )
+    parser.add_argument(
+        '-fsemantic', '--fun_asr_semantic_punctuation',
+        type=int, choices=(0, 1), default=0,
+        help='Enable Fun-ASR semantic punctuation'
+    )
+    parser.add_argument(
+        '-fsilence', '--fun_asr_max_sentence_silence',
+        type=int, default=1300,
+        help='Fun-ASR VAD sentence silence in milliseconds'
+    )
+    parser.add_argument(
+        '-fheartbeat', '--fun_asr_heartbeat',
+        type=int, choices=(0, 1), default=1,
+        help='Enable Fun-ASR heartbeat events'
+    )
     return parser
 
 
@@ -125,4 +163,13 @@ def parse_args(arguments: list[str] | None = None) -> CliOptions:
         glm_url=args.glm_url,
         glm_model=args.glm_model,
         glm_api_key=args.glm_api_key,
+        fun_asr_model=args.fun_asr_model,
+        fun_asr_url=args.fun_asr_url,
+        fun_asr_workspace=args.fun_asr_workspace,
+        fun_asr_api_key=args.fun_asr_api_key,
+        fun_asr_semantic_punctuation=bool(
+            args.fun_asr_semantic_punctuation
+        ),
+        fun_asr_max_sentence_silence=args.fun_asr_max_sentence_silence,
+        fun_asr_heartbeat=bool(args.fun_asr_heartbeat),
     )

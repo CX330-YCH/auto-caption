@@ -60,7 +60,8 @@ npm run build
 Node.js 测试覆盖：
 
 - V2 分层配置默认值、严格版本拒绝、嵌套字段校验和未知扩展字段保留。
-- 从 V2 `EngineConfig` 为 Gummy、Vosk、SOSV、GLM 及自定义引擎生成启动参数。
+- 从 V2 `EngineConfig` 为 Gummy、Vosk、SOSV、GLM、Fun-ASR 及自定义引擎生成启动参数，并验证 Fun-ASR Endpoint/Workspace 一致性。
+- Renderer 引擎目录的 Provider 唯一注册、能力驱动字段组合、嵌套草稿路径读写、条件可见性、Provider 启动要求、默认值归一化和语言默认值。
 - 字幕时间字符串解析、毫秒换算和当前跨日行为。
 - 命令行与配置对象中的 API Key 日志脱敏。
 - 现有 Python/Electron NDJSON 协议夹具的基本结构。
@@ -92,15 +93,17 @@ Python 测试覆盖：
 - SOSV backend partial/final 映射、重复 partial 抑制和输入格式约束。
 - GLM VAD 分段、异步 final、WAV 请求内容、URL 校验和错误正文脱敏。
 - Gummy SDK callback 的 partial/final、服务端翻译、usage 和累计发送失败策略。
+- Fun-ASR SDK callback 的 partial/final/heartbeat/usage 映射、服务端时间戳、final 去重、有界重连、缓冲溢出、错误脱敏、停止冲刷和 16 kHz 单声道 PCM16 输入约束。测试使用伪造 SDK 客户端，不建立网络连接。
 
 ## 本阶段未覆盖范围
 
 - 真实音频设备和平台驱动。
 - Electron 窗口和 IPC 集成。
+- Ant Design Vue 通用引擎字段控件的浏览器交互、视觉布局和键盘可访问性。
 - Electron `userData/config.json` 的真实磁盘读写和旧配置被 V2 默认值替换的桌面端流程。
 - Python 子进程启动、超时、停止和强杀。
 - Electron 与真实 Python 子进程之间的端到端 Socket/stdio 集成。
-- 真实 Vosk/SOSV 模型文件以及实际 Gummy、GLM 或其他在线 Provider。
+- 真实 Vosk/SOSV 模型文件以及实际 Gummy、GLM、Fun-ASR 或其他在线 Provider。
 - Ollama、OpenAI、Google 或阿里云付费 API。
 - Windows、macOS、Linux 打包安装程序。
 

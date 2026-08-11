@@ -45,11 +45,6 @@
       "count": 5
     }
   },
-  "src/renderer/src/components/EngineControl.vue": {
-    "@typescript-eslint/explicit-function-return-type": {
-      "count": 3
-    }
-  },
   "src/renderer/src/components/EngineStatus.vue": {
     "@typescript-eslint/explicit-function-return-type": {
       "count": 5

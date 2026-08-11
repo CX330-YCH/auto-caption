@@ -1,4 +1,4 @@
-dashscope
+dashscope==1.26.6
 numpy
 resampy
 vosk

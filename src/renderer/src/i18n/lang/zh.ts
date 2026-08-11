@@ -30,7 +30,11 @@ export default {
     "styleInfo": "字幕样式修改已经保存并生效",
     "engineStartTimeout": "字幕引擎启动超时，已自动强制停止",
     "ollamaNameNull": "Ollama 字段为空",
-    "ollamaNameNullNote": "选择 Ollama 模型作为翻译模型时，Ollama 字段不能为空，需要填写本地已经配置好的 Ollama 模型的名称。"
+    "ollamaNameNullNote": "选择 Ollama 模型作为翻译模型时，Ollama 字段不能为空，需要填写本地已经配置好的 Ollama 模型的名称。",
+    "funAsrConfigMissing": "Fun-ASR 配置不完整",
+    "funAsrConfigMissingNote": "启动 Fun-ASR 前必须填写业务空间 ID 和与其地域一致的专属 WebSocket 地址。",
+    "funAsrEndpointInvalid": "Fun-ASR 地址不匹配",
+    "funAsrEndpointInvalidNote": "WebSocket 地址必须是华北2（北京）或新加坡的官方专属地址，并且地址中的 WorkspaceId 必须与配置完全一致。"
   },
   general: {
     "title": "通用设置",
@@ -67,6 +71,7 @@ export default {
     "recordingPath": "保存路径",
     "startTimeout": "启动超时",
     "seconds": "秒",
+    "milliseconds": "毫秒",
     "apikeyInfo": "Gummy 字幕引擎需要的 API KEY，需要在阿里云百炼平台获取。详细信息见项目用户手册。",
     "glmApikeyInfo": "GLM 字幕引擎需要的 API KEY，需要在智谱 AI 平台获取。",
     "voskModelPathInfo": "Vosk 字幕引擎需要的模型的文件夹路径，需要提前下载需要的模型到本地。信息详情见项目用户手册。",
@@ -75,6 +80,61 @@ export default {
     "modelDownload": "模型下载地址",
     "startTimeoutInfo": "字幕引擎启动超时时间，超过此时间将自动强制停止。建议设置为 10-120 秒之间。",
     "customEngine": "自定义引擎",
+    fields: {
+      "baseUrl": "Base URL",
+      "translationApiKey": "翻译 API KEY",
+      "gummyApiKey": "阿里云 API KEY",
+      "glmUrl": "GLM API URL",
+      "glmModel": "GLM 模型名称",
+      "glmApiKey": "GLM API KEY",
+      "funAsrModel": "Fun-ASR 模型",
+      "funAsrWorkspace": "业务空间 ID",
+      "funAsrWebsocketUrl": "WebSocket 地址",
+      "funAsrApiKey": "Fun-ASR API KEY",
+      "funAsrSemanticPunctuation": "语义断句",
+      "funAsrSentenceSilence": "断句静音阈值",
+      "funAsrHeartbeat": "连接心跳",
+      "openProviderConsole": "打开服务商控制台"
+    },
+    options: {
+      providers: {
+        "gummy": "云端 / 阿里云 / Gummy",
+        "vosk": "本地 / Vosk",
+        "sosv": "本地 / SOSV",
+        "glm": "云端 / 智谱 AI / GLM-ASR",
+        "funAsr": "云端 / 阿里云 / Fun-ASR 实时"
+      },
+      languages: {
+        "auto": "自动检测",
+        "modelDefined": "需要自行配置模型",
+        "en": "英语",
+        "zh": "中文",
+        "ja": "日语",
+        "ko": "韩语",
+        "de": "德语",
+        "fr": "法语",
+        "ru": "俄语",
+        "es": "西班牙语",
+        "it": "意大利语",
+        "yue": "粤语"
+      },
+      translation: {
+        "ollama": "Ollama 模型或 OpenAI 兼容模型",
+        "google": "Google API 调用"
+      },
+      funAsrModels: {
+        "current": "Fun-ASR Realtime（滚动版本）",
+        "snapshot": "Fun-ASR Realtime 2025-11-07（快照版本）"
+      }
+    },
+    funAsr: {
+      "workspaceInfo": "阿里云百炼业务空间 ID。API Key、业务空间和 WebSocket 地域必须属于同一套资源。",
+      "websocketInfo": "必须使用官方业务空间专属 wss:// 地址，支持华北2（北京）或新加坡地域。地址中的 WorkspaceId 必须与上方字段完全一致。",
+      "apiKeyInfo": "Fun-ASR 使用的阿里云百炼 API KEY。留空时引擎读取 DASHSCOPE_API_KEY 环境变量。",
+      "semanticPunctuationInfo": "开启后使用准确性更高的语义断句；关闭时使用延迟更低的 VAD 断句。",
+      "sentenceSilenceInfo": "VAD 断句静音阈值，官方范围为 200-6000 毫秒，默认 1300 毫秒。",
+      "heartbeatInfo": "持续静音时保持服务连接。心跳结果只维持连接，不会生成字幕。"
+    },
     custom: {
       "title": "自定义字幕引擎",
       "attention": "注意事项",

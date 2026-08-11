@@ -8,15 +8,12 @@ import { useI18n } from 'vue-i18n'
 
 import type { EngineConfig } from '../../../shared/config/schema'
 import { createDefaultConfig } from '../../../shared/config/schema'
-import { engines, audioTypes } from '@renderer/i18n'
-import { useGeneralSettingStore } from './generalSetting'
+import type { EngineValidationIssue } from '@renderer/engines/types.ts'
 
 export const useEngineControlStore = defineStore('engineControl', () => {
   const { t } = useI18n()
   const platform = ref('unknown')
 
-  const captionEngine = ref(engines[useGeneralSettingStore().uiLanguage])
-  const audioType = ref(audioTypes[useGeneralSettingStore().uiLanguage])
   const engineConfig = ref<EngineConfig>(createDefaultConfig('').engine)
   const engineEnabled = ref(false)
   const changeSignal = ref(false)
@@ -34,10 +31,10 @@ export const useEngineControlStore = defineStore('engineControl', () => {
     changeSignal.value = true
   }
 
-  function emptyModelPathErr(): void {
+  function showConfigValidationError(issue: EngineValidationIssue): void {
     notification.open({
-      message: t('noti.empty'),
-      description: t('noti.emptyInfo'),
+      message: t(issue.titleKey),
+      description: t(issue.descriptionKey),
       duration: null,
       icon: () => h(ExclamationCircleOutlined, { style: 'color: #ff4d4f' })
     })
@@ -84,13 +81,11 @@ export const useEngineControlStore = defineStore('engineControl', () => {
 
   return {
     platform,
-    captionEngine,
-    audioType,
     engineConfig,
     engineEnabled,
     setEngineConfig,
     sendEngineConfigChange,
-    emptyModelPathErr,
+    showConfigValidationError,
     changeSignal,
     errorSignal
   }

@@ -718,3 +718,255 @@
 - 根目录 `AGENTS.md` 的 schemaVersion、Provider 通用/专属分层、主进程 IPC 校验、未知字段保留和单一类型来源约束；用户最新要求覆盖其中旧配置迁移建议。
 - 当前 `AllConfig`、`CaptionEngine`、Pinia stores 和 Electron IPC 的实际调用关系。
 - TypeScript 类型系统、Vue reactive/ref/toRaw、Electron structured-clone IPC 和 Node 标准 JSON/URL 校验；未新增第三方依赖。
+
+## 2026-08-12 - 第五阶段：Renderer 引擎配置改为能力目录驱动
+
+### 授权与目标
+
+- 用户授权：要求执行第五阶段，将前端改为能力驱动，建立引擎目录，以字段描述渲染通用控件，只为热词管理器等特殊交互保留专用组件，避免未来接入 Paraformer、Qwen-ASR 等 Provider 时继续扩大巨型 Vue 文件。
+- 目标：把 Gummy、Vosk、SOSV、GLM 的能力、语言、专属字段、默认值和启动要求从 Vue 模板及三份重复元数据中迁入独立目录；让表单通过统一字段渲染器读写 V2 `EngineConfig` 草稿。
+- 明确非目标：本阶段不接入 Paraformer、Qwen-ASR、Fun-ASR，不实现热词管理器或远端热词操作，不增加 V2 配置字段，不修改 Python Provider、Electron 主进程、IPC、子进程协议、依赖或打包配置。
+- 变更类型：Renderer 架构重构、用户界面、测试和文档。
+
+### 修改文件
+
+- `src/renderer/src/engines/types.ts`
+  - 新增 Provider capability、语言角色、配置路径、字段控件、分组、条件可见性、默认值和分阶段校验描述类型。
+  - 当前通用控件类型为 `select`、`text`、`password`、`number`、`switch` 和 `directory`；热词能力被显式建模，但四个现有 Provider 均声明为不支持。
+- `src/renderer/src/engines/form.ts`
+  - 新增不依赖 Vue 的 `EngineConfig` 深复制、嵌套路径读写、条件判断、字段可见性和空值判断工具。
+- `src/renderer/src/engines/catalog.ts`
+  - 集中注册四个现有 Provider，并根据 capability 合成引擎选择、语言、翻译、音频、录音、启动超时和自定义引擎公共字段。
+  - 集中处理字段默认值、应用前翻译模型校验、启动前本地模型路径校验和切换 Provider 时的语言默认值。
+- `src/renderer/src/engines/providers/shared.ts`
+  - 新增语言描述辅助函数，避免各 Provider 重复拼装 i18n 键。
+- `src/renderer/src/engines/providers/gummy.ts`
+  - 声明 Gummy 的集成翻译、语言集合和阿里云 API Key 高级字段。
+- `src/renderer/src/engines/providers/vosk.ts`
+  - 声明 Vosk 的模型决定源语言、外部翻译、目标语言集合和启动必需模型目录。
+- `src/renderer/src/engines/providers/sosv.ts`
+  - 声明 SOSV 的可选源语言、外部翻译、目标语言集合和启动必需模型目录。
+- `src/renderer/src/engines/providers/glm.ts`
+  - 声明 GLM 的外部翻译、语言集合、URL/模型/API Key 字段及既有空值默认值。
+- `src/renderer/src/components/engine/EngineFieldRenderer.vue`
+  - 新增通用字段组件，统一渲染标签、帮助 Popover、服务商链接、选择、文本、密码、数字、开关和目录选择控件。
+- `src/renderer/src/components/EngineControl.vue`
+  - 从 460 余行 Provider/字段分支和 20 余个独立 ref 重构为约 170 行目录消费组件。
+  - 只维护一份完整 `EngineConfig` 草稿，按 primary/advanced/custom section 渲染字段；应用时整体复制，取消时整体恢复。
+  - 删除 Gummy/Vosk/SOSV/GLM 专属 `v-if`、手工字段复制、专属文件夹类型分支和本地重复校验。
+- `src/renderer/src/components/EngineStatus.vue`
+  - 删除 Vosk、SOSV 两段启动条件分支，改为调用目录统一启动校验。
+- `src/renderer/src/stores/engineControl.ts`
+  - 删除只为 UI 元数据服务的 `captionEngine`、`audioType` 状态。
+  - 将固定模型路径通知改为接收目录产生的通用校验问题。
+- `src/renderer/src/stores/generalSetting.ts`
+  - 语言切换不再手工替换引擎和音频元数据；Vue i18n 变化会直接重新计算目录选项标签。
+- `src/renderer/src/i18n/config/engine.ts`、`src/renderer/src/i18n/config/audio.ts`
+  - 删除按 zh/en/ja 完整复制能力、字段值和标签的旧元数据文件。
+- `src/renderer/src/i18n/index.ts`
+  - 删除已移除旧元数据的导出。
+- `src/renderer/src/i18n/lang/zh.ts`、`src/renderer/src/i18n/lang/en.ts`、`src/renderer/src/i18n/lang/ja.ts`
+  - 增加字段、Provider、语言和翻译选项的三语 i18n 键；语言与 Provider 的能力值只在目录维护一份。
+- `tests/node/engineCatalog.test.mjs`
+  - 新增 7 个纯逻辑测试，覆盖注册唯一性、能力字段组合、草稿路径读写与复制、条件可见性、Provider 启动要求、翻译校验、默认值、UI 语言默认目标和全部目录文案的三语完整性。
+- `docs/engine-manual/architecture.md`
+  - 新增 Renderer 引擎目录结构、职责、普通 Provider 接入顺序和专用热词组件边界。
+- `docs/testing.md`
+  - 增加引擎目录测试覆盖，并明确通用控件浏览器交互和视觉布局仍未自动化。
+- `docs/user-manual/zh.md`、`docs/user-manual/en.md`、`docs/user-manual/ja.md`
+  - 同步说明表单按当前引擎能力显示字段、“更多设置”只显示当前 Provider 专属字段，以及切换引擎不会删除其他 Provider 已保存配置。
+- `eslint-suppressions.json`
+  - 清理由本阶段重写 `EngineControl.vue` 后不再命中的 3 个旧显式返回类型 suppression；没有新增 suppression 或放宽规则。
+- `change.md`
+  - 追加本阶段授权、文件范围、行为、兼容性、验证、限制和回滚记录。
+
+### 修改前后行为
+
+- 修改前：`EngineControl.vue` 直接写死四个 Provider 的字段和条件，表单字段分别维护为大量 ref，应用和取消需要逐项复制。
+- 修改后：Vue 组件只遍历字段描述；Provider 差异位于 `engines/providers/`，公共字段由 capability 合成，草稿以完整 V2 `EngineConfig` 为单位应用或恢复。
+- 修改前：“更多设置”同时显示 Gummy、GLM、Vosk、SOSV 的全部 API Key/模型路径，即使这些字段与当前 Provider 无关。
+- 修改后：“更多设置”只显示当前 Provider 的专属字段，并继续显示录音路径和启动超时；切换 Provider 只切换视图，不清除 `engine.providers` 中其他 Provider 的值。
+- 修改前：翻译、录音、自定义引擎和更多设置开关分别两两排列在同一行。
+- 修改后：三个持久化开关由通用组件各占一行，“更多设置”仍为独立 UI 开关；保存语义不变。
+- 修改前：Vosk/SOSV 模型路径启动校验在 `EngineStatus.vue` 重复硬编码。
+- 修改后：启动要求随 Provider 字段定义注册；状态组件不再知道本地模型名单。
+- 修改前：引擎和语言的值、角色与标签按界面语言复制三份，SOSV 中文目标值在中文 UI 为 `zh`、英文/日文 UI 为 `zh-cn`。
+- 修改后：能力和值只维护一份，标签使用三语 i18n；SOSV 中文目标统一为 Python CLI 文档和翻译映射均支持的 `zh`，Vosk 保留既有 `zh-cn` 值。
+- Gummy 继续使用集成翻译，不显示客户端翻译 Provider 字段；Vosk/SOSV/GLM 继续显示 Ollama/OpenAI 兼容或 Google 翻译选项。
+- GLM URL/模型留空后应用时继续回落到原有默认值；启用外部 Ollama 翻译时模型名称仍必须填写。
+
+### 配置、接口与协议
+
+- 持久化配置和 `schemaVersion`：无变化，仍为严格 V2；没有配置迁移。
+- V2 字段、默认值和主进程校验：没有新增或删除字段；仅把 Renderer 的字段表现、空值默认和启动前要求集中为元数据。
+- Electron IPC、`FullConfig`、Pinia 对主进程发送的 `EngineConfig` 数据结构：无变化。
+- Python CLI、Provider registry、音频、翻译、stdout/TCP 协议：无变化。
+- Renderer 内部接口：新增 `EngineDefinition`、`EngineFieldDescriptor`、`EngineCapabilities` 和纯表单工具；删除旧 `engines`/`audioTypes` 导出及对应 store 状态。
+- 依赖、`package.json`、lockfile、Python requirements、PyInstaller 和 Electron 构建配置：无变化。
+- API Key 仍按现有 V2 行为进入 Renderer 表单并明文持久化；本阶段没有扩大凭据使用面，也没有引入安全存储。
+
+### 兼容性与回滚
+
+- 磁盘 V2 配置兼容：现有字段和值继续读取；切换 Provider 不删除非当前 Provider 的专属配置。
+- UI 布局有轻微变化：持久化开关改为通用单行控件，更多设置仅展示当前 Provider 字段。
+- SOSV 中文翻译目标由界面语言相关值统一为 `zh`；`engine/utils/translation.py` 同时支持 `zh` 与 `zh-cn`，CLI 用户文档把 `zh` 定义为简体中文。
+- 未接入 Provider、热词或远端资源，不产生费用，不创建或删除云端数据。
+- 回滚方式：恢复本阶段修改前的两个组件、两个 store、i18n index/三语文件和 suppression 文件；恢复被删除的 `i18n/config/engine.ts`、`audio.ts`；删除 `components/engine/`、`engines/` 和目录测试；恢复五份文档对应段落。V2 磁盘配置无需回滚或迁移。
+
+### 验证
+
+- 第一次 `npm run typecheck:web`：失败，`catalog.ts` 错误地从 `schema.ts` 导入未重新导出的 `UILanguage`，报 TS2459；修正导入来源后继续验证，该失败没有被忽略。
+- 第二次 `npm run typecheck:web`：失败，`UILanguage` 的共享类型路径误写为不存在的 `shared/types/index.ts`，报 TS2307；改为实际的 `shared/types.ts` 后继续验证，该失败没有被忽略。
+- 修正后 `npm run typecheck:web`：通过。
+- 首次 `npm run test:node`：通过，Node 32/32，其中当时已有的新增目录/表单测试 6/6；随后补充三语目录键完整性测试并在最终验证中一并执行。
+- 首次 `npm run lint`：ESLint 未报告代码违规，但因重写后的 `EngineControl.vue` 对应旧 suppression 已失效而退出码 2；执行 `npx eslint . --prune-suppressions` 删除 3 个失效记录后，`npm run lint` 通过。没有新增 suppression。
+- 补充三语目录键测试后的最终 `npm run verify`：通过；Node/Web TypeScript 检查、Vue 类型检查、ESLint、Node 33/33 和 Python 36/36 全部通过。
+- 最终 `npm run build`：通过；Electron main、preload 和 renderer 生产构建完成，分别转换 19、1、3247 个模块。
+- 最终 `git diff --check`：通过。
+- Provider 分支审计：`EngineControl.vue`、`EngineStatus.vue` 和相关 store 中没有 Gummy/Vosk/SOSV/GLM 选择条件；旧 `captionEngine`/`audioTypes` 活动引用已清除。
+- 依赖差异检查：`package.json`、`package-lock.json`、`engine/requirements.txt`、`engine/main.spec` 无差异。
+- 验证仍输出仓库既有 npm Electron mirror 弃用警告和 Node `MODULE_TYPELESS_PACKAGE_JSON` 警告；没有为消除提示而修改依赖或模块类型。
+- 未运行真实 Electron GUI 手工回归、Ant Design Vue 浏览器交互测试、视觉快照、真实音频设备、模型、付费 API、PyInstaller 或安装包；本阶段自动化验证覆盖纯目录逻辑、类型、lint、现有 Python 回归和生产构建，但不能替代真实表单点击与视觉检查。
+
+### 风险、限制与后续事项
+
+- 当前没有 Vue 组件级测试框架，通用字段的目录按钮、Popover、Apply/Cancel 点击、键盘操作和三语视觉宽度仍需真实 Electron 窗口回归。
+- `EngineConfigPath` 与 V2 schema 是显式闭合类型；新增 Provider 时必须同时扩展共享 V2 Provider 配置、主进程校验、命令构建、Renderer 路径联合和 Provider 目录，不能只添加前端选项。
+- capability 已明确热词支持状态，但没有创建无调用方的热词组件或配置。未来接入需要远端列表编辑、创建/更新/删除和确认流程时，应新增专用组件并从 Provider 能力入口挂载，普通字段仍由通用渲染器处理。
+- 目录目前通过一个显式注册数组汇总 Provider。新增常规 Provider 仍需在目录中增加一次 import/注册，但不需要修改 `EngineControl.vue` 或复制公共表单逻辑。
+- Provider i18n 标签仍需为 zh/en/ja 各增加一个键；能力、语言值和字段结构不再按语言复制。
+- API Key 仍明文持久化并进入 Renderer；应在单独授权的安全改造中评估系统凭据存储和只传凭据句柄。
+
+### 参考与决策依据
+
+- 用户提出的第五阶段目标：“前端改成能力驱动”“建立引擎目录”“字段描述渲染通用控件”“特殊交互使用专用组件”。
+- 根目录 `AGENTS.md` 的 Renderer capability registry、通用控件、三语文本、Pinia 职责、禁止在 `EngineControl.vue` 继续堆 Provider `v-if` 和无使用者抽象约束。
+- 当前 V2 `EngineConfig`、四个 Python Provider/Registry、Electron 启动参数 builder 和原有三语引擎元数据的实际能力。
+- Vue 3 Composition API、Pinia、Vue i18n、Ant Design Vue 现有组件和浏览器原生 `structuredClone`；未新增第三方依赖。
+
+## 2026-08-12 - 第六阶段：接入阿里云 Fun-ASR Realtime
+
+### 授权与范围
+
+- 用户授权：要求参照阿里云官方 Fun-ASR Realtime WebSocket API 文档完成第六阶段接入。
+- 目标：在第五阶段能力目录、第四阶段严格 V2 配置、第三阶段统一 Python Provider/Session 和第二阶段稳定进程协议之上，完成从 Renderer 配置到 Electron 启动参数、Python Registry、DashScope SDK Provider、统一事件、外部翻译、测试和文档的完整纵向切片。
+- 明确非目标：不实现热词资源创建/更新/删除，不创建 `services/hotwords.py` 空壳，不发起真实阿里云识别或计费请求，不修改远端 Workspace/API Key，不执行真实麦克风或系统音频测试，不提交或推送代码。
+- 变更类型：新增在线 Provider、V2 配置扩展、能力目录扩展、CLI/进程参数、凭据脱敏、自动化测试和项目文档。
+
+### 官方协议决策
+
+- 采用阿里云官方 DashScope Python SDK，而不是在项目中自行复制 WebSocket 帧和任务状态机。SDK 对外使用 `Recognition.start()`、`send_audio_frame()` 和 `stop()`；底层负责 `run-task`、等待任务启动、发送二进制音频、`finish-task` 和等待任务结束。
+- Endpoint 使用 Workspace 专属 WSS 地址，只接受北京 `cn-beijing` 或新加坡 `ap-southeast-1` 地域，固定路径 `/api-ws/v1/inference`。地址主机中的 Workspace ID 必须与独立配置字段一致。
+- 音频使用官方要求的 16 kHz、单声道、PCM16；共享 AudioPipeline 完成声道合并和重采样，默认 `chunk_rate=10`，即约 100 ms 一帧。
+- `sentence_end` 映射为内部 partial/final；服务端 `begin_time`/`end_time` 毫秒偏移映射为本次任务起点上的字幕时间；心跳不生成字幕；duration 映射为 usage。
+- 正常停止调用 SDK `stop()`，使 SDK 发送结束任务并阻塞等待剩余结果或失败；Provider 和 Session 再保证关闭事件只发一次并冲刷待发布事件。
+
+### 修改文件与职责
+
+- `src/shared/config/schema.ts`
+  - Provider union 新增稳定 ID `fun_asr`。
+  - V2 `engine.providers` 新增必需 `funAsr` 层：模型、专属 WebSocket 地址、Workspace ID、API Key、语义断句、最大句间静音和心跳。
+  - 默认模型为 `fun-asr-realtime`，最大句间静音 1300 ms，语义断句关闭，心跳开启；连接字段和凭据默认留空。
+- `src/shared/config/validation.ts`、`src/shared/config/document.ts`
+  - 新增 Fun-ASR 模型白名单、Workspace 字符限制、WSS、官方地域主机、固定路径和 Endpoint/Workspace 交叉校验。
+  - 最大句间静音限制为 200–6000 ms；凭据长度和布尔字段继续由主进程共享解析器校验。
+  - 允许默认配置的 Endpoint/Workspace 同时为空；真正启动前由能力目录要求二者齐全。
+- `src/main/engine/config/EngineCommandBuilder.ts`
+  - 新增 Fun-ASR 参数 builder，生成 `-e fun_asr` 以及 `-fmodel/-furl/-fworkspace/-fkey/-fsemantic/-fsilence/-fheartbeat`；共用音频、语言、录音和外部翻译参数仍只生成一次。
+- `src/main/utils/CaptionEngine.ts`
+  - Fun-ASR 启动前检查配置 API Key 或 `DASHSCOPE_API_KEY`，缺失时通过现有三语通知拒绝启动。
+- `src/main/utils/UtilsFunc.ts`
+  - 将 `-fkey` 加入进程命令日志脱敏列表。
+- `src/main/i18n/lang/zh.ts`、`en.ts`、`ja.ts`
+  - 新增 Fun-ASR 凭据缺失的主进程通知。
+- `engine/cli.py`、`engine/main.py`
+  - Typed CLI 增加七个 Fun-ASR 参数并映射到 ProviderConfig；布尔开关只接受 0/1，凭据字段不进入 dataclass `repr`。
+- `engine/providers/fun_asr.py`
+  - 新增官方 DashScope SDK 适配器、显式配置对象、SDK callback generation 隔离和 Endpoint/音频契约校验。
+  - partial/final 使用同一服务端 sentence ID 派生 caption ID，final 去重后只允许 Session 提交一次翻译；心跳忽略，usage 去重。
+  - 非主动断线最多重连 3 次，退避 0.25、0.5、1 秒；重连期间最多保存 50 帧（默认约 5 秒），满时丢弃最旧帧并上报不含音频内容的信息事件。
+  - SDK 异常、回调错误和重连耗尽消息不回显服务端正文、URL、音频或凭据。
+  - 每次重连建立新的服务端时间戳 epoch，并按当前任务已成功发送的 16 kHz PCM16 字节数计算 partial 缺失结束时间的回退，避免把新任务的毫秒偏移套到旧任务起点。
+- `engine/providers/registry.py`、`engine/providers/__init__.py`
+  - 注册第五个 Provider builder，并复用 16 kHz 单声道 Pipeline 和现有外部 TranslationService；`main.py` 没有增加模型流程分支。
+- `engine/requirements.txt`
+  - 将项目原有、已经被 Gummy 使用的官方 `dashscope` 依赖固定为本阶段实际检查和测试的 `1.26.6`，提高构建可复现性；没有增加新的依赖包或 Node lockfile 变更。
+- `src/renderer/src/engines/types.ts`、`catalog.ts`
+  - 闭合配置路径加入 Fun-ASR 字段；Provider definition 支持可选跨字段校验，目录注册第五个 Provider。
+- `src/renderer/src/engines/providers/fun_asr.ts`
+  - 新增能力定义：可选源语言、外部翻译、录音支持、热词明确不支持。
+  - 以通用控件描述模型、Workspace、WSS、API Key、语义断句、最大句间静音和心跳；启动时要求 Workspace/WSS，并校验二者一致性。
+- `src/renderer/src/i18n/lang/zh.ts`、`en.ts`、`ja.ts`
+  - 新增 Provider、模型选项、字段、帮助、单位和校验通知三语文本。
+- `tests/node/configDocument.test.mjs`
+  - 覆盖 Fun-ASR 默认配置、合法配置和 Endpoint/Workspace 不一致拒绝。
+- `tests/node/engineCommandBuilder.test.mjs`
+  - 将内置 Provider 启动参数覆盖从四个扩展为五个，并验证全部 Fun-ASR 参数。
+- `tests/node/engineCatalog.test.mjs`
+  - 验证第五个 Provider 唯一注册、语言默认值、能力字段和三语键完整性。
+- `tests/node/utilsFunc.test.mjs`
+  - 验证 `-fkey` 不出现在脱敏日志结果中。
+- `engine/tests/test_cli.py`、`test_provider_registry.py`
+  - 覆盖 Fun-ASR 参数解析、默认值、五 Provider 注册集合和两层 Python 配置凭据脱敏。
+- `engine/tests/test_fun_asr_provider.py`
+  - 使用伪造 SDK client/result，覆盖 partial/final/heartbeat/usage、服务端时间戳、重连后新时间戳 epoch、final 去重、重连退避、缓冲冲刷、重试耗尽、错误脱敏、停止冲刷和音频/Endpoint 契约；不访问网络。
+- `README.md`、`docs/api-docs/config-v2.md`、`caption-engine.md`、`docs/engine-manual/architecture.md`、`docs/testing.md`
+  - 更新第五个引擎的用户选择、配置结构、协议映射、Provider 职责、重连/关闭语义、测试边界和热词非目标。
+- `docs/user-manual/zh.md`、`en.md`、`ja.md`
+  - 增加 Workspace/Endpoint/API Key 地域一致性、计费提示、界面设置、CLI 参数和热词限制。
+- `docs/engine-manual/zh.md`、`en.md`、`ja.md`
+  - 将 Fun-ASR 添加到 Provider 示例，说明 CLI 正本、SDK 边界和接入示例。
+- `change.md`
+  - 追加本阶段授权、技术决策、完整文件范围、行为、依赖、兼容性、验证、限制与回滚记录。
+
+### 修改前后行为
+
+- 修改前：V2、Electron builder、Renderer 目录和 Python Registry 只有 Gummy、Vosk、SOSV、GLM；选择 Fun-ASR 没有配置、进程参数或运行实现。
+- 修改后：Fun-ASR 是第五个能力驱动 Provider，完整走共享 V2 校验、通用表单、纯启动参数 builder、统一 Registry/Pipeline/Session/TranslationService 和既有 stdout/TCP 协议。
+- 修改前：接入在线 WebSocket 引擎可能需要在 `EngineControl.vue`、`CaptionEngine`、`main.py` 和识别类各复制一套条件与循环。
+- 修改后：Vue 组件和 `main.py` 均无 Fun-ASR 条件分支；差异分别位于 Renderer definition、Electron 参数 builder 和 Python Provider builder。
+- Fun-ASR partial 只更新字幕，final 固化一次并触发一次客户端翻译。外部 command 仍都是 `caption`/`translation`，没有增加未版本化 final 字段。
+- 服务端时间戳成为字幕时间来源；partial 缺少结束时间时才使用已发送音频相对时长作为保守回退，不用网络回调到达时间冒充音频位置。
+- 正常关闭会等待 SDK 完成结束任务；异常断线使用有界退避和有界音频缓冲，不无限创建线程、任务或队列。
+
+### 配置、接口、兼容性与依赖
+
+- V2 schemaVersion 仍为 `2`，但 `engine.providers.funAsr` 成为必需已知层。按用户此前“V2 完整迁移，不考虑已安装版本兼容性”的决策，不添加旧 V2 增量迁移：缺少该层的已安装配置会整体拒绝并使用最新默认值，退出时写回。
+- 未知扩展字段继续保留；Fun-ASR 已知字段仍严格按类型、范围和跨字段关系解析。
+- 新增 Python CLI 参数和 Provider ID，不修改既有 Provider 参数、默认值或自定义引擎参数。
+- Electron/Python stdout 与 TCP NDJSON command envelope 完全不变；自定义引擎协议无迁移。
+- 凭据仍按当前 V2 安全模型明文持久化并传入 Renderer；进程日志和 Python `repr` 已扩展脱敏，但本阶段没有引入系统安全存储。
+- `dashscope==1.26.6` 是阿里云官方维护、Apache 2.0 许可、项目原有依赖的版本固定，不是新增 SDK。当前项目虚拟环境元数据确认 Name `dashscope`、Version `1.26.6`、Author `Alibaba Cloud`、Home-page `https://dashscope.aliyun.com/`；`package.json`、`package-lock.json` 和 `engine/main.spec` 无变化。
+- 精确回滚：恢复本阶段修改前的共享 schema/validation/document、Electron builder/CaptionEngine/脱敏/i18n、Python CLI/main/registry/requirements、Renderer types/catalog/三语 i18n 和相关测试；删除 `engine/providers/fun_asr.py`、其测试及 Renderer `providers/fun_asr.ts`；恢复本文列出的 README/API/架构/测试/三语手册段落。第五阶段能力目录和前四阶段架构可以保留。已被最新默认值覆盖的旧 V2 配置不能由代码回滚恢复。
+
+### 验证记录
+
+- 实现配置和 UI 后首次 `npm run typecheck`：通过。
+- 首次组合执行 `npm run test:node` 与 `npm run test:python`：Python 42/42 通过；Node 33/34，唯一失败是新 WSS 校验器错误地拒绝默认空 Endpoint。修正 `requireWebSocketUrl` 的 `allowEmpty` 传递后继续验证，该失败没有被忽略。
+- 修正后 `npm run typecheck`：通过；`npm run test:node` 为 34/34；`npm run test:python` 为 42/42。
+- 最终审计发现重连后仍沿用首次任务时间起点；改为每个 generation 建立独立时间戳 epoch，并新增重连时间轴测试。最终验证计数因此增加到 Python 43 个。
+- 最终 `npm run verify`：通过；Node/Web TypeScript 和 Vue 类型检查、ESLint、Node 34/34、Python 43/43 全部通过。
+- 最终 `npm run build`：通过；Electron main、preload、renderer 生产构建分别转换 19、1、3249 个模块。
+- `engine/.venv/bin/python3 engine/main.py --help`：通过；第五个 Provider 和七个参数出现在入口帮助中。
+- `engine/.venv/bin/python3 -m compileall -q engine/core engine/providers engine/services engine/protocol engine/cli.py engine/main.py`：通过。
+- `git diff --check`：通过。
+- 依赖元数据检查：项目虚拟环境的 `dashscope` 为 1.26.6、Apache 2.0、Alibaba Cloud；requirements 仅把原有未固定依赖改为精确版本。
+- 验证仍输出仓库既有 npm Electron mirror 弃用警告和 Node `MODULE_TYPELESS_PACKAGE_JSON` 警告；未为消除提示扩大本阶段依赖或模块配置范围。
+
+### 未执行、风险与后续事项
+
+- 没有使用真实 API Key、Workspace、Endpoint、麦克风或系统音频，没有建立 Fun-ASR WebSocket，也没有产生云端费用或修改远端资源。所有 SDK 行为通过可注入伪客户端验证。
+- 没有运行 Electron GUI 手工表单回归、真实 Python 子进程端到端、PyInstaller、安装包或 Windows/Linux 构建。生产 Web/Electron bundle 已构建，但不代表打包后的 Python 可执行文件已包含并成功运行所有 DashScope SDK 运行时模块。
+- SDK `on_open` 表示异步 worker/连接已启动；SDK 内部负责等待服务端 task-started 并缓存待发送音频。项目的 `ProviderReady` 因此表示“SDK 已可接收音频”，不是向外暴露原始 task-started 帧。
+- 重连只能保留失败后进入的有限音频，新连接生成新的 caption ID generation；连接中断前尚未 final 的句子不会跨服务端任务合并。该行为优先保证有限内存、去重和旧回调隔离，真实弱网体验仍需在线回放测试。
+- `dashscope.base_websocket_api_url` 和 `dashscope.api_key` 是 SDK 进程级配置；当前架构每个字幕进程只运行一个 Provider，因此没有同进程多 Workspace 并发冲突。若未来改为多 Provider 同进程并发，必须先封装 SDK 全局状态。
+- 热词尚未实现。后续阶段必须先确认 Fun-ASR 热词资源生命周期、地域/Workspace 绑定、计费和删除确认，再新增 `services/hotwords.py`、专用 Electron 组件和远端操作测试；不得把热词 ID 堆入通用文本字段。
+- 应在用户显式提供测试账号并确认可产生费用后，增加 opt-in 在线测试：固定 PCM 回放、北京/新加坡 Endpoint、task-started/result-generated/task-finished、静音/心跳、断网重连、停止尾句、用量和错误码。默认 CI 仍不得访问付费 API。
+
+### 参考与决策依据
+
+- 阿里云官方 [Fun-ASR 实时语音识别 WebSocket API](https://help.aliyun.com/zh/model-studio/fun-asr-realtime-websocket-api)：Endpoint、鉴权、任务流、二进制音频和结束流程。
+- 阿里云官方 [Fun-ASR Python SDK](https://help.aliyun.com/zh/model-studio/fun-asr-realtime-python-sdk)：Recognition 调用、约 100 ms 帧、模型、语义断句、静音、心跳和停止等待行为。
+- 阿里云官方 [服务端事件](https://help.aliyun.com/zh/model-studio/fun-asr-server-events)与[客户端事件](https://help.aliyun.com/zh/model-studio/fun-asr-client-events)：partial/final、时间戳、usage、task-finished/task-failed 和 finish-task 语义。
+- 根目录 `AGENTS.md` 的官方 SDK 优先、单声道音频、时间戳、心跳、Provider/Session、有限重试、停止冲刷、能力目录、三语、凭据脱敏、测试和变更记录约束。
+- 用户此前明确的第三至第五阶段架构路线，以及“V2 完整迁移、不考虑已安装版本兼容性”的配置决策。

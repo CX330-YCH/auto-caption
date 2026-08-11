@@ -68,6 +68,7 @@ macOS 平台和 Linux 平台获取系统音频输出需要进行额外设置，�
 |                                                              | 准确率 | 实时性 | 部署类型          | 支持语言   | 翻译       | 备注                                                       |
 | ------------------------------------------------------------ | -------- | ------------- | ---------- | ---------- | ---------------------------------------------------------- | ---------------------------------------------------------- |
 | [Gummy](https://help.aliyun.com/zh/model-studio/gummy-speech-recognition-translation) | 很好😊    | 很好😊 | 云端 / 阿里云 | 10 种      | 自带翻译   | 收费，识别0.54CNY / 小时，识别+翻译1.08CNY/小时           |
+| [Fun-ASR Realtime](https://help.aliyun.com/zh/model-studio/fun-asr-realtime-websocket-api) | 很好😊 | 很好😊 | 云端 / 阿里云 | 多语言 | 需额外配置 | 按阿里云百炼当前计费规则收费；本项目使用 16 kHz 单声道 PCM16 实时流 |
 | [glm-asr-2512](https://docs.bigmodel.cn/cn/guide/models/sound-and-video/glm-asr-2512) | 很好😊 | 较差😞 | 云端 / 智谱 AI | 4 种 | 需额外配置 | 收费，约 0.72CNY / 小时 |
 | [Vosk](https://alphacephei.com/vosk)                         | 较差😞    | 很好😊 | 本地 / CPU    | 超过 30 种 | 需额外配置 | 支持的语言非常多                                           |
 | [SOSV](https://k2-fsa.github.io/sherpa/onnx/sense-voice/index.html) | 一般😐    | 一般😐 | 本地 / CPU    | 5 种       | 需额外配置 | 仅有一个模型                                               |
@@ -119,6 +120,15 @@ API Key 需要在对应的模型提供商处获取。
 
 API KEY 获取相关链接：[快速开始](https://docs.bigmodel.cn/cn/guide/start/quick-start)。
 
+### 使用 Fun-ASR Realtime 模型
+
+Fun-ASR 通过阿里云百炼实时 WebSocket API 工作。使用前需要在同一个阿里云百炼 Workspace 下准备 API Key，并从控制台复制该 Workspace 对应的专属 WebSocket 地址和 Workspace ID。当前只接受官方北京或新加坡地域的 `wss://<WorkspaceId>.<region>.maas.aliyuncs.com/api-ws/v1/inference` 地址，地址中的 Workspace ID 必须与设置字段完全一致；API Key、Workspace 和 Endpoint 必须属于同一地域和账号空间。
+
+界面可选择 `fun-asr-realtime` 或快照 `fun-asr-realtime-2025-11-07`，并配置语义断句、200–6000 ms 最大句间静音和心跳。Fun-ASR 本身不提供本项目所需的字幕翻译，最终句会按现有统一翻译设置调用一次外部翻译。第六阶段尚未接入热词管理，界面不会为 Fun-ASR 显示热词功能。
+
+- [Fun-ASR 实时语音识别 WebSocket API](https://help.aliyun.com/zh/model-studio/fun-asr-realtime-websocket-api)
+- [Fun-ASR Python SDK](https://help.aliyun.com/zh/model-studio/fun-asr-realtime-python-sdk)
+
 ### 使用 Vosk 模型
 
 > Vosk 模型的识别效果较差，请谨慎使用。
@@ -156,7 +166,7 @@ python main.py \
 
 ## ⚙️ 自带字幕引擎说明
 
-目前软件自带 4 个字幕引擎。它们的详细信息如下。
+目前软件自带 5 个字幕引擎。它们的详细信息如下。
 
 ### Gummy 字幕引擎（云端）
 
@@ -186,6 +196,10 @@ $$
 ### GLM-ASR 字幕引擎（云端）
 
 https://docs.bigmodel.cn/cn/guide/models/sound-and-video/glm-asr-2512
+
+### Fun-ASR Realtime 字幕引擎（云端）
+
+使用阿里云官方 DashScope Python SDK 接入实时 WebSocket 任务协议。音频由统一 Pipeline 转换为 16 kHz、单声道、PCM16，并以约 100 ms 的帧发送；服务端 partial/final、时间戳、用量和任务生命周期映射到项目统一事件。连接异常采用有界指数退避，关闭时由 SDK 发送结束任务并等待剩余结果。该引擎需要联网并可能产生费用，使用前请核对阿里云当前模型开通范围与计费说明。
 
 ### Vosk 字幕引擎（本地）
 

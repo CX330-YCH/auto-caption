@@ -43,6 +43,12 @@ Auto Caption 是一个跨平台的字幕显示软件，能够实时获取系统�
 
 需要先获取 API KEY，参考：[Quick Start](https://docs.bigmodel.cn/en/guide/start/quick-start)。
 
+## Fun-ASR Realtime 引擎使用前准备
+
+先在阿里云百炼同一个 Workspace 中准备 API Key、Workspace ID 和专属 WebSocket 地址。地址必须是官方北京或新加坡地域的 `wss://<WorkspaceId>.<region>.maas.aliyuncs.com/api-ws/v1/inference`，其中的 Workspace ID 必须与设置字段一致，三者也必须属于同一地域。该云端服务会产生费用，使用前请查看[官方 WebSocket API 文档](https://help.aliyun.com/zh/model-studio/fun-asr-realtime-websocket-api)和当前计费规则。
+
+设置页可选择模型、语义断句、最大句间静音（200–6000 ms）和心跳。Fun-ASR 的最终句使用现有外部翻译配置；当前版本尚不支持 Fun-ASR 热词。
+
 ## Vosk 引擎使用前准备
 
 如果要使用 Vosk 本地字幕引擎，首先需要在 [Vosk Models](https://alphacephei.com/vosk/models) 页面下载你需要的模型。然后将下载的模型安装包解压到本地，并将对应的模型文件夹的路径添加到软件的设置中。
@@ -109,6 +115,8 @@ sudo yum install pulseaudio pavucontrol
 
 当前版本使用带 `schemaVersion: 2` 的分层配置文件，不读取旧版无版本配置。首次从旧配置启动时将使用默认设置，退出应用后写入新的 V2 配置；旧设置不会自动迁移。
 
+字幕引擎设置会根据当前选择的引擎显示其支持的语言、翻译选项和专属字段。“更多设置”只显示当前引擎需要的 API Key 或本地模型路径，以及通用录音路径和启动超时；切换引擎不会删除其他引擎已经保存的专属配置。修改仍需点击“应用更改”才会保存。
+
 ### 启动和关闭字幕
 
 在修改完全部配置后，点击界面的“启动字幕引擎”按钮，即可启动字幕。如果需要独立的字幕展示窗口，单击界面的“打开字幕窗口”按钮即可激活独立的字幕展示窗口。如果需要暂停字幕识别，单击界面的“关闭字幕引擎”按钮即可。
@@ -127,7 +135,7 @@ sudo yum install pulseaudio pavucontrol
 
 所谓的字幕引擎实际上是一个子程序，它会实时获取系统音频输入（录音）或输出（播放声音）的流式数据，并调用音频转文字的模型生成对应音频的字幕。生成的字幕通过转换为字符串的 JSON 数据，并通过标准输出传递给主程序。主程序读取字幕数据，处理后显示在窗口上。
 
-软件提供了两个默认的字幕引擎，如果你需要其他的字幕引擎，可以通过打开自定义引擎选项来调用其他字幕引擎（其他引擎需要针对该软件进行开发）。其中引擎路径是自定义字幕引擎在你的电脑上的路径，引擎指令是自定义字幕引擎的运行参数，这部分需要按该字幕引擎的规则进行填写。
+软件提供了五个内置字幕引擎，如果你需要其他的字幕引擎，可以通过打开自定义引擎选项来调用其他字幕引擎（其他引擎需要针对该软件进行开发）。其中引擎路径是自定义字幕引擎在你的电脑上的路径，引擎指令是自定义字幕引擎的运行参数，这部分需要按该字幕引擎的规则进行填写。
 
 ![](../img/02_zh.png)
 
@@ -151,7 +159,7 @@ sudo yum install pulseaudio pavucontrol
 
 #### `-e , --caption_engine`
 
-需要选择的字幕引擎模型，目前有四个可用，分别为：`gummy, glm, vosk, sosv`。
+需要选择的字幕引擎模型，目前有五个可用，分别为：`gummy, glm, vosk, sosv, fun_asr`。
 
 该项的默认值为 `gummy`。
 
@@ -203,13 +211,15 @@ sudo yum install pulseaudio pavucontrol
 
 但是指定源语言能在一定程度上提高识别准确率，可用使用上面的语言代码指定源语言。
 
-该项适用于 Gummy、GLM 和 SOSV 模型。
+该项适用于 Gummy、GLM、SOSV 和 Fun-ASR 模型。
 
 其中 Gummy 模型可用使用上述全部的语言，在加上粤语（`yue`）。
 
 GLM 模型支持指定的语言有：英语、中文、日语、韩语。
 
 SOSV 模型支持指定的语言有：英语、中文、日语、韩语、粤语。
+
+Fun-ASR 支持 `auto`，以及中文、英语、日语、韩语、德语、法语、俄语、西班牙语和意大利语提示。
 
 #### `-k, --api_key`
 
@@ -230,6 +240,24 @@ SOSV 模型支持指定的语言有：英语、中文、日语、韩语、粤语
 #### `-gurl, --glm_url`
 
 指定 `glm` 模型需要使用的 API URL，默认值为：`https://open.bigmodel.cn/api/paas/v4/audio/transcriptions`。
+
+#### Fun-ASR 专属参数
+
+- `-fmodel, --fun_asr_model`：`fun-asr-realtime`（默认）或 `fun-asr-realtime-2025-11-07`。
+- `-furl, --fun_asr_url`：Workspace 专属 WSS Endpoint。
+- `-fworkspace, --fun_asr_workspace`：Workspace ID。
+- `-fkey, --fun_asr_api_key`：阿里云百炼 API Key；留空时读取 `DASHSCOPE_API_KEY`。
+- `-fsemantic, --fun_asr_semantic_punctuation`：语义断句，`0` 关闭（默认），`1` 开启。
+- `-fsilence, --fun_asr_max_sentence_silence`：最大句间静音毫秒数，默认 `1300`，范围 200–6000。
+- `-fheartbeat, --fun_asr_heartbeat`：心跳，`1` 开启（默认），`0` 关闭。
+
+独立运行示例：
+
+```bash
+python main.py -e fun_asr -fworkspace <workspace-id> \
+  -furl wss://<workspace-id>.cn-beijing.maas.aliyuncs.com/api-ws/v1/inference \
+  -fkey <dashscope-api-key> -s zh -t none -d 1
+```
 
 #### `-tm, --translation_model`
 

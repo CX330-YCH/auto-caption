@@ -123,6 +123,7 @@ Provider はグローバルキューの読み取り、標準出力への直接�
 完全な字幕エンジンの実例：
 
 - [gummy.py](../../engine/providers/gummy.py)
+- [fun_asr.py](../../engine/providers/fun_asr.py)
 - [vosk.py](../../engine/providers/vosk.py)
 - [sosv.py](../../engine/providers/sosv.py)
 - [glm.py](../../engine/providers/glm.py)
@@ -156,6 +157,8 @@ export interface CaptionItem {
 
 カスタム字幕エンジンの設定はコマンドラインパラメータで指定するため、字幕エンジンのパラメータを設定する必要があります。このプロジェクトで現在使用されているパラメータは以下のとおりです：
 
+> 完全な引数の正本は `engine/cli.py` と `python main.py --help` です。Fun-ASR は `-e fun_asr` を選び、`-fmodel`、`-furl`、`-fworkspace`、`-fkey`、`-fsemantic`、`-fsilence`、`-fheartbeat` を使用します。`main.py` に Provider 分岐を複製しないでください。
+
 ```python
 import argparse
 if __name__ == "__main__":
@@ -178,6 +181,17 @@ if __name__ == "__main__":
 ```bash
 python main.py -e gummy -s ja -t zh -a 0 -c 10 -k <dashscope-api-key>
 ```
+
+Fun-ASR の例：
+
+```bash
+python main.py -e fun_asr -s ja -t zh -a 0 -c 10 \
+  -fworkspace <workspace-id> \
+  -furl wss://<workspace-id>.cn-beijing.maas.aliyuncs.com/api-ws/v1/inference \
+  -fkey <dashscope-api-key>
+```
+
+この Provider は公式 DashScope SDK を使用し、16 kHz モノラル PCM16 を受け取ります。partial/final、サーバー時刻、usage、ライフサイクルを統一イベントへ変換するだけで、翻訳、stdout、終了処理は Session/プロトコル層が担当します。この段階ではホットワードは未対応です。
 
 ## その他
 

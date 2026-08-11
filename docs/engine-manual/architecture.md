@@ -4,7 +4,7 @@
 
 ## 当前结构
 
-现有 Gummy、Vosk、SOSV 和 GLM 均已迁移到统一架构：
+现有 Gummy、Vosk、SOSV、GLM 和 Fun-ASR 均通过统一架构运行：
 
 ```text
 engine/
@@ -19,6 +19,7 @@ engine/
 ├── providers/
 │   ├── registry.py            # Provider 注册和运行时构建
 │   ├── gummy.py
+│   ├── fun_asr.py
 │   ├── glm.py
 │   ├── sosv.py
 │   └── vosk.py
@@ -32,10 +33,7 @@ engine/
 
 旧 `audio2text/` 目录、各识别类的 `translate()` 循环、全局无界音频队列和 `utils.server` 兼容层已经删除。仓库中只有一套活动 Provider 实现。
 
-以下节点尚未创建：
-
-- `providers/fun_asr.py`：Fun-ASR 是新功能，不属于现有模型迁移，必须在配置、能力和在线测试同时落地时新增。
-- `services/hotwords.py`：远端热词资源语义和用户操作流程尚未实现，不创建无调用方空壳。
+`services/hotwords.py` 仍未创建：远端热词资源语义和用户操作流程不属于第六阶段，不创建无调用方空壳。Fun-ASR 目录也明确声明当前不支持热词，不能把热词 ID 暂存为普通文本字段。
 
 ## 依赖方向
 
@@ -92,7 +90,7 @@ Provider 通过容量有限的内部事件队列上报结果。`accept_audio()` 
 - `ProviderError`：经过分类和脱敏的错误；`fatal` 表示 Session 必须停止。
 - `UsageUpdated`：用量变化，不携带凭据。
 
-`CaptionPartial` 和 `CaptionFinal` 可携带 Provider 已产生的翻译。Gummy 使用该字段承载服务端翻译；其他 Provider 的最终字幕由统一 TranslationService 异步翻译。
+`CaptionPartial` 和 `CaptionFinal` 可携带 Provider 已产生的翻译。Gummy 使用该字段承载服务端翻译；包括 Fun-ASR 在内的其他 Provider 的最终字幕由统一 TranslationService 异步翻译。
 
 内部 partial/final 目前都由 `ProtocolEventSink` 映射为现有 `command: "caption"`，外部协议没有新增字段。未来若要暴露 final，必须进行带版本的协议设计。
 
@@ -111,7 +109,7 @@ Session 捕获的异常只输出 Provider 名和异常类型，不直接回显�
 
 ## ProviderRegistry
 
-`main.py` 不再使用四套 `main_<provider>()` 和 `if/elif` 装配。Registry 根据 `ProviderConfig.name` 选择唯一 builder，并返回：
+`main.py` 不再使用按 Provider 复制的 `main_<provider>()` 和 `if/elif` 装配。Registry 根据 `ProviderConfig.name` 选择唯一 builder，并返回：
 
 - Provider 实例。
 - 对应音频 Pipeline。
@@ -153,9 +151,19 @@ API Key 字段在 `CliOptions` 和 `ProviderConfig` 的 `repr` 中隐藏。未�
 - SDK usage 在关闭时映射为 `UsageUpdated`。
 - 可重试音频发送错误最多累计 5 次；超过上限产生 fatal ProviderError，由 Session 统一终止。
 
+### Fun-ASR Realtime
+
+- 使用阿里云官方 DashScope Python SDK 的 `Recognition.start()`、`send_audio_frame()` 和 `stop()`，不在 Provider 内复制底层 WebSocket 任务协议。
+- 输入经共享 Pipeline 规范化为 16 kHz、单声道、PCM16；默认 `chunk_rate=10`，即约 100 ms 一帧。
+- SDK callback 中的 `sentence_end` 映射为 partial/final；心跳被忽略；服务端毫秒时间戳映射为任务起点上的字幕时间；duration 用量映射为 `UsageUpdated`。
+- API Key 可来自 `-fkey` 或 `DASHSCOPE_API_KEY`。Workspace ID、API Key 和专属 Endpoint 必须属于同一地域；配置层只接受官方北京或新加坡 WSS 主机和固定 inference 路径。
+- 非主动关闭连接最多重连 3 次，退避为 0.25、0.5、1 秒；重连期间最多保留约 5 秒（50 帧）新音频，溢出时丢弃最旧帧并上报信息事件。回调带连接 generation，旧连接迟到事件会被忽略。
+- `stop()` 由 SDK 发送 `finish-task` 并等待剩余结果和 `task-finished`/失败。Session 再冲刷统一事件，`ProviderStopped` 只发布一次。
+- Fun-ASR 不提供集成翻译，final 由统一翻译服务提交一次。热词不在第六阶段范围内。
+
 ## 翻译服务与后台任务
 
-Vosk、SOSV 和 GLM 的 final 通过统一翻译服务调用已有 Google/Ollama 实现：
+Vosk、SOSV、GLM 和 Fun-ASR 的 final 通过统一翻译服务调用已有 Google/Ollama 实现：
 
 - 固定 2 个 daemon worker。
 - 最多等待 32 条翻译任务。
@@ -176,7 +184,7 @@ ConfigDocumentV2
 ├── engine
 │   ├── provider         # 当前内置 Provider
 │   ├── common           # 语言、音频、翻译、录音、启动超时
-│   ├── providers        # Gummy/Vosk/SOSV/GLM 专属配置
+│   ├── providers        # 五个内置 Provider 的专属配置
 │   └── custom           # 自定义可执行文件和命令
 └── caption              # 字幕样式
 ```
@@ -187,11 +195,42 @@ ConfigDocumentV2
 
 本阶段按明确决策不提供旧无版本配置迁移：旧文件被拒绝，本次运行使用默认 V2，退出时写回 V2。完整字段、范围和凭据限制见 [`config-v2.md`](../api-docs/config-v2.md)。
 
+## Renderer 能力目录
+
+字幕引擎设置不再在 `EngineControl.vue` 中按 Provider 编写表单分支。Renderer 使用独立目录描述引擎能力、语言和字段：
+
+```text
+src/renderer/src/engines/
+├── catalog.ts                 # 注册、公共字段合成、默认值和统一校验
+├── form.ts                    # V2 配置路径读写、草稿复制和可见性判断
+├── types.ts                   # capability、字段和校验描述类型
+└── providers/
+    ├── gummy.ts
+    ├── fun_asr.ts
+    ├── vosk.ts
+    ├── sosv.ts
+    ├── glm.ts
+    └── shared.ts              # 语言描述辅助函数
+```
+
+每个 Provider 定义以下内容：
+
+- 稳定 Provider ID 和三语名称键。
+- 源语言选择方式、翻译模式、录音和热词能力。
+- 支持的源/目标语言及其角色。
+- 仅属于该 Provider 的字段描述、帮助链接、默认值和启动校验。
+
+`catalog.ts` 根据能力补齐语言、音频、翻译、录音、超时和自定义引擎等公共字段。`EngineFieldRenderer.vue` 统一渲染 text、password、number、select、switch 和 directory 控件；`EngineControl.vue` 只维护一份 `EngineConfig` 草稿并按字段 section 分组，不了解任何 Provider 的专属字段。Fun-ASR 的模型、Workspace、Endpoint、凭据、断句和心跳字段完全由 `providers/fun_asr.ts` 描述，并通过目录级跨字段校验检查 Endpoint/Workspace 一致性。
+
+新增普通 Provider 的前端流程是：先扩展 V2 Provider 类型和主进程校验，再新增一个 `providers/<name>.ts` 定义并在目录注册。常规字段不得在 `EngineControl.vue` 增加 Provider `v-if`。热词远端资源管理器等包含列表编辑、远端创建/删除和确认流程的交互应使用专用组件，并由 capability 明确声明；不得把这类状态压成普通文本字段。
+
+Provider 的启动前要求同样由目录字段校验提供，`EngineStatus.vue` 不再维护本地模型名单。目录和嵌套表单工具均为无 Vue 依赖的纯 TypeScript，可由 Node 单元测试验证。
+
 ## 兼容性
 
 - `main.py` 路径、全部 CLI 参数、默认值和 Provider 名称保持不变。
 - Electron/Python 的 `caption`、`translation`、`info`、`warn`、`error`、`usage` 和 `kill` command 结构不变。
-- Vosk、SOSV 和 GLM 的 final 使用统一客户端翻译；Gummy 继续使用服务端翻译。
+- Vosk、SOSV、GLM 和 Fun-ASR 的 final 使用统一客户端翻译；Gummy 继续使用服务端翻译。
 - `-d 1` 现在按参数声明正确启用终端字幕显示；迁移前入口把整数错误地与字符串比较，导致该参数不生效。
 - 直接导入旧 `audio2text.*Recognizer` 的未文档化内部路径不再支持。应用公开扩展点仍是命令行和进程协议。
 - Electron 内部配置 IPC 已由扁平 `Controls` 切换为 V2 application/engine/caption 分层对象；该 IPC 不作为第三方公开扩展点。
@@ -203,6 +242,6 @@ ConfigDocumentV2
 3. 实现只接受 `AudioFrame`、只产生统一事件的 Provider。
 4. 在 Registry 注册 Provider/Pipeline/TranslationService builder。
 5. 验证外部 command 协议和错误脱敏。
-6. 对需要网络的 Provider 增加有界重试、停止冲刷和显式在线测试。
+6. 对需要网络的 Provider 增加有界重试、停止冲刷和显式启用的在线测试。
 
-Fun-ASR 和热词属于后续功能阶段，不能通过复制 Gummy 或在 `main.py` 增加条件分支接入。
+Fun-ASR 已按上述顺序完成离线可验证纵向接入；真实账号、地域、设备和计费链路仍需在有凭据时显式执行在线验收。热词仍是后续独立阶段，不能通过复制 Gummy、在 `main.py` 增加条件分支或向通用表单塞入临时字段接入。

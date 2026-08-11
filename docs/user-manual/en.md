@@ -46,6 +46,12 @@ Alibaba Cloud provides detailed tutorials for this part, which can be referenced
 
 You need to obtain an API KEY first, refer to: [Quick Start](https://docs.bigmodel.cn/en/guide/start/quick-start).
 
+## Preparation for Fun-ASR Realtime
+
+Create or select an Alibaba Cloud Model Studio Workspace, then use an API key, Workspace ID, and dedicated WebSocket endpoint from that same Workspace and region. The endpoint must be an official Beijing or Singapore URL in the form `wss://<WorkspaceId>.<region>.maas.aliyuncs.com/api-ws/v1/inference`, and the embedded Workspace ID must match the configured value. This online service may incur charges; review the [official WebSocket API documentation](https://help.aliyun.com/zh/model-studio/fun-asr-realtime-websocket-api) and current pricing before use.
+
+The UI exposes the model, semantic punctuation, maximum sentence silence (200–6000 ms), and heartbeat settings. Final Fun-ASR sentences use the existing external translation configuration. Fun-ASR hotwords are not supported in this stage.
+
 ## Preparation for Using Vosk Engine
 
 To use the Vosk local caption engine, first download your required model from the [Vosk Models](https://alphacephei.com/vosk/models) page. Then extract the downloaded model package locally and add the corresponding model folder path to the software settings.
@@ -112,6 +118,8 @@ Caption settings can be divided into three categories: general settings, caption
 
 The current version uses a layered configuration file with `schemaVersion: 2` and does not read the previous unversioned format. The first launch with an old configuration uses defaults and writes a new V2 file when the application exits; old settings are not migrated automatically.
 
+Caption engine settings now show the supported languages, translation options, and provider-specific fields for the selected engine. "More Settings" shows only the selected engine's API key or local model path, plus the shared recording path and startup timeout. Switching engines does not delete provider-specific settings already saved for other engines. Changes are still saved only after clicking "Apply Changes."
+
 ### Starting and Stopping Captions
 
 After completing all configurations, click the "Start Caption Engine" button on the interface to start the captions. If you need a separate caption display window, click the "Open Caption Window" button to activate the independent caption display window. To pause caption recognition, click the "Stop Caption Engine" button.
@@ -130,7 +138,7 @@ In the caption control window, you can see the records of all collected captions
 
 The so-called caption engine is essentially a subprogram that captures real-time streaming data from system audio input (recording) or output (playback), and invokes speech-to-text models to generate corresponding captions. The generated captions are converted into JSON-formatted strings and passed to the main program through standard output. The main program reads the caption data, processes it, and displays it in the window.
 
-The software provides two default caption engines. If you need other caption engines, you can invoke them by enabling the custom engine option (other engines need to be specifically developed for this software). The engine path refers to the location of the custom caption engine on your computer, while the engine command represents the runtime parameters of the custom caption engine, which should be configured according to the rules of that particular caption engine.
+The software provides five built-in caption engines. If you need other caption engines, you can invoke them by enabling the custom engine option (other engines need to be specifically developed for this software). The engine path refers to the location of the custom caption engine on your computer, while the engine command represents the runtime parameters of the custom caption engine, which should be configured according to the rules of that particular caption engine.
 
 ![](../img/02_en.png)
 
@@ -154,7 +162,7 @@ The following parameter descriptions only include necessary parameters.
 
 #### `-e , --caption_engine`
 
-The caption engine model to select, currently three options are available: `gummy, glm, vosk, sosv`.
+The caption engine model to select; five options are available: `gummy, glm, vosk, sosv, fun_asr`.
 
 The default value is `gummy`.
 
@@ -206,13 +214,15 @@ Source language for recognition. Default value is `auto`, meaning no specific so
 
 Specifying the source language can improve recognition accuracy to some extent. You can specify the source language using the language codes above.
 
-This applies to Gummy, GLM and SOSV models.
+This applies to Gummy, GLM, SOSV, and Fun-ASR models.
 
 The Gummy model can use all the languages mentioned above, plus Cantonese (`yue`).
 
 The GLM model supports specifying the following languages: English, Chinese, Japanese, Korean.
 
 The SOSV model supports specifying the following languages: English, Chinese, Japanese, Korean, and Cantonese.
+
+Fun-ASR supports `auto` plus Chinese, English, Japanese, Korean, German, French, Russian, Spanish, and Italian hints.
 
 #### `-k, --api_key`
 
@@ -233,6 +243,24 @@ Specifies the model name to be used for the `glm` model. The default value is `g
 #### `-gurl, --glm_url`  
 
 Specifies the API URL required for the `glm` model. The default value is: `https://open.bigmodel.cn/api/paas/v4/audio/transcriptions`.  
+
+#### Fun-ASR-specific parameters
+
+- `-fmodel, --fun_asr_model`: `fun-asr-realtime` (default) or `fun-asr-realtime-2025-11-07`.
+- `-furl, --fun_asr_url`: the Workspace-specific WSS endpoint.
+- `-fworkspace, --fun_asr_workspace`: the Workspace ID.
+- `-fkey, --fun_asr_api_key`: the Model Studio API key; when empty, `DASHSCOPE_API_KEY` is used.
+- `-fsemantic, --fun_asr_semantic_punctuation`: semantic punctuation, `0` off (default), `1` on.
+- `-fsilence, --fun_asr_max_sentence_silence`: maximum sentence silence in milliseconds, default `1300`, range 200–6000.
+- `-fheartbeat, --fun_asr_heartbeat`: heartbeat, `1` on (default), `0` off.
+
+Standalone example:
+
+```bash
+python main.py -e fun_asr -fworkspace <workspace-id> \
+  -furl wss://<workspace-id>.cn-beijing.maas.aliyuncs.com/api-ws/v1/inference \
+  -fkey <dashscope-api-key> -s en -t none -d 1
+```
 
 #### `-tm, --translation_model`
 

@@ -81,7 +81,9 @@ JSON object + "\n" + JSON object + "\n" + ...
 
 字幕引擎产生的字幕数据。`index` 必须是有限数值，其余列出的字段必须是字符串。
 
-Python 内部已经区分 `CaptionPartial` 和 `CaptionFinal`，但为保持现有协议兼容，两者目前都映射为 `caption`。同一句的 partial/final 复用 `index` 和 `time_s`；外部协议暂不提供 final 标记。Provider 自带的翻译（当前为 Gummy）会直接写入 `translation`；其他 Provider 的 final 通过独立 `translation` 消息补充翻译。
+Python 内部已经区分 `CaptionPartial` 和 `CaptionFinal`，但为保持现有协议兼容，两者目前都映射为 `caption`。同一句的 partial/final 复用 `index` 和 `time_s`；外部协议暂不提供 final 标记。Provider 自带的翻译（当前为 Gummy）会直接写入 `translation`；包括 Fun-ASR 在内的其他 Provider 只在 final 后通过独立 `translation` 消息补充一次翻译。
+
+Fun-ASR 的 `sentence_end: false/true` 分别映射为内部 partial/final。服务端 `begin_time`/`end_time` 毫秒偏移会基于本次任务起始时间转换为协议中的 `time_s`/`time_t`，不会用回调到达时间冒充音频时间；缺少 partial 结束时间时才以已发送音频时长作为保守上界。服务端心跳不形成 stdout 消息；任务用量映射为 `usage`，失败映射为已脱敏的 `error`，外部 command envelope 没有变化。
 
 ### `translation`
 

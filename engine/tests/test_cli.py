@@ -19,6 +19,9 @@ class CliTests(unittest.TestCase):
         self.assertEqual(options.target_language, 'none')
         self.assertFalse(options.record)
         self.assertEqual(options.glm_model, 'glm-asr-2512')
+        self.assertEqual(options.fun_asr_model, 'fun-asr-realtime')
+        self.assertEqual(options.fun_asr_max_sentence_silence, 1300)
+        self.assertTrue(options.fun_asr_heartbeat)
 
     def test_parses_existing_provider_arguments_and_hides_credentials_in_repr(self):
         options = parse_args([
@@ -36,6 +39,27 @@ class CliTests(unittest.TestCase):
         self.assertTrue(options.record)
         self.assertEqual(options.glm_url, 'https://example.test/asr')
         self.assertNotIn('dummy-credential', repr(options))
+
+    def test_parses_fun_asr_arguments_and_hides_credentials(self):
+        options = parse_args([
+            '-e', 'fun_asr',
+            '-fworkspace', 'workspace-1',
+            '-furl', (
+                'wss://workspace-1.cn-beijing.maas.aliyuncs.com/'
+                'api-ws/v1/inference'
+            ),
+            '-fkey', 'dummy-fun-asr-credential',
+            '-fsemantic', '1',
+            '-fsilence', '800',
+            '-fheartbeat', '0',
+        ])
+
+        self.assertEqual(options.caption_engine, 'fun_asr')
+        self.assertEqual(options.fun_asr_workspace, 'workspace-1')
+        self.assertTrue(options.fun_asr_semantic_punctuation)
+        self.assertEqual(options.fun_asr_max_sentence_silence, 800)
+        self.assertFalse(options.fun_asr_heartbeat)
+        self.assertNotIn('dummy-fun-asr-credential', repr(options))
 
 
 if __name__ == '__main__':

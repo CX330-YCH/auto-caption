@@ -11,6 +11,7 @@ from services import NoTranslationService, build_legacy_translation_service
 
 from .glm import GlmProvider
 from .gummy import GummyProvider
+from .fun_asr import FunAsrClientOptions, FunAsrProvider
 from .sosv import SosvProvider
 from .vosk import VoskProvider
 
@@ -30,6 +31,13 @@ class ProviderConfig:
     glm_url: str
     glm_model: str
     glm_api_key: str = field(repr=False)
+    fun_asr_model: str
+    fun_asr_url: str
+    fun_asr_workspace: str
+    fun_asr_api_key: str = field(repr=False)
+    fun_asr_semantic_punctuation: bool
+    fun_asr_max_sentence_silence: int
+    fun_asr_heartbeat: bool
 
 
 @dataclass(frozen=True)
@@ -77,6 +85,7 @@ def build_provider_registry() -> ProviderRegistry:
     registry.register('vosk', _build_vosk)
     registry.register('sosv', _build_sosv)
     registry.register('glm', _build_glm)
+    registry.register('fun_asr', _build_fun_asr)
     return registry
 
 
@@ -141,6 +150,32 @@ def _build_glm(
 ) -> ProviderRuntime:
     return _build_mono_16k_runtime(
         GlmProvider(config.glm_url, config.glm_model, config.glm_api_key),
+        config,
+        audio_source,
+        warning_handler,
+    )
+
+
+def _build_fun_asr(
+    config: ProviderConfig,
+    audio_source: AudioSource,
+    warning_handler: Callable[[str], None],
+) -> ProviderRuntime:
+    return _build_mono_16k_runtime(
+        FunAsrProvider(FunAsrClientOptions(
+            model=config.fun_asr_model,
+            websocket_url=config.fun_asr_url,
+            workspace_id=config.fun_asr_workspace,
+            api_key=config.fun_asr_api_key,
+            source_language=config.source_language,
+            semantic_punctuation_enabled=(
+                config.fun_asr_semantic_punctuation
+            ),
+            max_sentence_silence_ms=(
+                config.fun_asr_max_sentence_silence
+            ),
+            heartbeat_enabled=config.fun_asr_heartbeat,
+        )),
         config,
         audio_source,
         warning_handler,

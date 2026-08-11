@@ -12,12 +12,16 @@ import {
   isRecord,
   requireBoolean,
   requireColor,
+  requireFunAsrModel,
   requireLanguage,
   requireNumber,
   requireProvider,
   requireString,
   requireTheme,
-  requireUrl
+  requireUrl,
+  requireWebSocketUrl,
+  requireWorkspaceId,
+  validateFunAsrEndpoint
 } from './validation.ts'
 
 export function parseConfigDocumentV2(value: unknown): ConfigDocumentV2 {
@@ -225,6 +229,13 @@ function parseProviderConfigs(value: Record<string, unknown>): ProviderConfigs {
   const vosk = requireRecord(value.vosk, 'providers.vosk')
   const sosv = requireRecord(value.sosv, 'providers.sosv')
   const glm = requireRecord(value.glm, 'providers.glm')
+  const funAsr = requireRecord(value.funAsr, 'providers.funAsr')
+  const workspaceId = requireWorkspaceId(funAsr.workspaceId)
+  const websocketUrl = requireWebSocketUrl(
+    funAsr.websocketUrl,
+    'funAsr.websocketUrl'
+  )
+  validateFunAsrEndpoint(websocketUrl, workspaceId)
   return {
     ...value,
     gummy: {
@@ -244,6 +255,27 @@ function parseProviderConfigs(value: Record<string, unknown>): ProviderConfigs {
       url: requireUrl(glm.url, 'glm.url', false),
       model: requireString(glm.model, 'glm.model', 256, false),
       apiKey: requireString(glm.apiKey, 'glm.apiKey', 8192)
+    },
+    funAsr: {
+      ...funAsr,
+      model: requireFunAsrModel(funAsr.model),
+      websocketUrl,
+      workspaceId,
+      apiKey: requireString(funAsr.apiKey, 'funAsr.apiKey', 8192),
+      semanticPunctuationEnabled: requireBoolean(
+        funAsr.semanticPunctuationEnabled,
+        'funAsr.semanticPunctuationEnabled'
+      ),
+      maxSentenceSilenceMs: requireNumber(
+        funAsr.maxSentenceSilenceMs,
+        'funAsr.maxSentenceSilenceMs',
+        200,
+        6000
+      ),
+      heartbeatEnabled: requireBoolean(
+        funAsr.heartbeatEnabled,
+        'funAsr.heartbeatEnabled'
+      )
     }
   }
 }

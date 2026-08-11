@@ -2,7 +2,7 @@ import type { Styles, UILanguage, UITheme } from '../types'
 
 export const CONFIG_SCHEMA_VERSION = 2 as const
 
-export type KnownProviderName = 'gummy' | 'vosk' | 'sosv' | 'glm'
+export type KnownProviderName = 'gummy' | 'vosk' | 'sosv' | 'glm' | 'fun_asr'
 export type AudioSourceType = 0 | 1
 
 export interface TranslationConfig {
@@ -52,12 +52,24 @@ export interface GlmProviderConfig {
   apiKey: string
 }
 
+export interface FunAsrProviderConfig {
+  [key: string]: unknown
+  model: string
+  websocketUrl: string
+  workspaceId: string
+  apiKey: string
+  semanticPunctuationEnabled: boolean
+  maxSentenceSilenceMs: number
+  heartbeatEnabled: boolean
+}
+
 export interface ProviderConfigs {
   [key: string]: unknown
   gummy: GummyProviderConfig
   vosk: VoskProviderConfig
   sosv: SosvProviderConfig
   glm: GlmProviderConfig
+  funAsr: FunAsrProviderConfig
 }
 
 export interface CustomEngineConfig {
@@ -179,6 +191,15 @@ export function createDefaultConfig(recordingPath: string): ConfigDocumentV2 {
           url: 'https://open.bigmodel.cn/api/paas/v4/audio/transcriptions',
           model: 'glm-asr-2512',
           apiKey: ''
+        },
+        funAsr: {
+          model: 'fun-asr-realtime',
+          websocketUrl: '',
+          workspaceId: '',
+          apiKey: '',
+          semanticPunctuationEnabled: false,
+          maxSentenceSilenceMs: 1300,
+          heartbeatEnabled: true
         }
       },
       custom: {

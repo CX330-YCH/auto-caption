@@ -4,8 +4,7 @@ import { i18n } from '../i18n'
 import type { ApplicationConfig } from '../../../shared/config/schema'
 import { createDefaultConfig } from '../../../shared/config/schema'
 
-import { engines, audioTypes, breakOptions, setThemeColor, getTheme } from '../i18n'
-import { useEngineControlStore } from './engineControl'
+import { breakOptions, setThemeColor, getTheme } from '../i18n'
 import { useCaptionStyleStore } from './captionStyle'
 
 type RealTheme = 'light' | 'dark'
@@ -54,8 +53,6 @@ export const useGeneralSettingStore = defineStore('generalSetting', () => {
 
   watch(uiLanguage, (newValue) => {
     i18n.global.locale.value = newValue
-    useEngineControlStore().captionEngine = engines[newValue]
-    useEngineControlStore().audioType = audioTypes[newValue]
     useCaptionStyleStore().iBreakOptions = breakOptions[newValue]
     sendApplicationConfig()
   })

@@ -42,6 +42,22 @@ const providerArgumentBuilders: Record<
     }
     args.push(...translationArguments(config))
     return args
+  },
+  fun_asr: (config) => {
+    const funAsr = config.providers.funAsr
+    const args = [
+      '-e', 'fun_asr',
+      '-s', config.common.sourceLanguage,
+      '-fmodel', funAsr.model,
+      '-furl', funAsr.websocketUrl,
+      '-fworkspace', funAsr.workspaceId,
+      '-fsemantic', funAsr.semanticPunctuationEnabled ? '1' : '0',
+      '-fsilence', funAsr.maxSentenceSilenceMs.toString(),
+      '-fheartbeat', funAsr.heartbeatEnabled ? '1' : '0'
+    ]
+    if (funAsr.apiKey) args.push('-fkey', funAsr.apiKey)
+    args.push(...translationArguments(config))
+    return args
   }
 }
 

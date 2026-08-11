@@ -30,7 +30,11 @@ export default {
     "styleInfo": "Caption style changes have been saved and applied.",
     "engineStartTimeout": "Caption engine startup timeout, automatically force stopped",
     "ollamaNameNull": "'Ollama' Field is Empty",
-    "ollamaNameNullNote": "When selecting Ollama model as the translation model, the 'Ollama' field cannot be empty and must be filled with the name of a locally configured Ollama model."
+    "ollamaNameNullNote": "When selecting Ollama model as the translation model, the 'Ollama' field cannot be empty and must be filled with the name of a locally configured Ollama model.",
+    "funAsrConfigMissing": "Incomplete Fun-ASR Configuration",
+    "funAsrConfigMissingNote": "Enter a Workspace ID and its region-matching dedicated WebSocket URL before starting Fun-ASR.",
+    "funAsrEndpointInvalid": "Fun-ASR Endpoint Mismatch",
+    "funAsrEndpointInvalidNote": "Use an official China (Beijing) or Singapore workspace endpoint whose hostname WorkspaceId exactly matches the configuration."
   },
   general: {
     "title": "General Settings",
@@ -67,6 +71,7 @@ export default {
     "recordingPath": "Save Path",
     "startTimeout": "Timeout",
     "seconds": "seconds",
+    "milliseconds": "milliseconds",
     "apikeyInfo": "API KEY required for the Gummy caption engine, which needs to be obtained from the Alibaba Cloud Bailing platform. For more details, see the project user manual.",
     "glmApikeyInfo": "API KEY required for GLM caption engine, which needs to be obtained from the Zhipu AI platform.",
     "voskModelPathInfo": "The folder path of the model required by the Vosk caption engine. You need to download the required model to your local machine in advance. For more details, see the project user manual.",
@@ -75,7 +80,61 @@ export default {
     "modelDownload": "Model Download Link",
     "startTimeoutInfo": "Caption engine startup timeout duration. Engine will be forcefully stopped if startup exceeds this time. Recommended range: 10-120 seconds.",
     "customEngine": "Custom Eng",
-
+    fields: {
+      "baseUrl": "Base URL",
+      "translationApiKey": "Translation API KEY",
+      "gummyApiKey": "Alibaba Cloud API KEY",
+      "glmUrl": "GLM API URL",
+      "glmModel": "GLM Model Name",
+      "glmApiKey": "GLM API KEY",
+      "funAsrModel": "Fun-ASR Model",
+      "funAsrWorkspace": "Workspace ID",
+      "funAsrWebsocketUrl": "WebSocket URL",
+      "funAsrApiKey": "Fun-ASR API KEY",
+      "funAsrSemanticPunctuation": "Semantic Segmentation",
+      "funAsrSentenceSilence": "Sentence Silence",
+      "funAsrHeartbeat": "Connection Heartbeat",
+      "openProviderConsole": "Open provider console"
+    },
+    options: {
+      providers: {
+        "gummy": "Cloud / Alibaba Cloud / Gummy",
+        "vosk": "Local / Vosk",
+        "sosv": "Local / SOSV",
+        "glm": "Cloud / Zhipu AI / GLM-ASR",
+        "funAsr": "Cloud / Alibaba Cloud / Fun-ASR Realtime"
+      },
+      languages: {
+        "auto": "Auto Detect",
+        "modelDefined": "Model needs to be configured manually",
+        "en": "English",
+        "zh": "Chinese",
+        "ja": "Japanese",
+        "ko": "Korean",
+        "de": "German",
+        "fr": "French",
+        "ru": "Russian",
+        "es": "Spanish",
+        "it": "Italian",
+        "yue": "Cantonese"
+      },
+      translation: {
+        "ollama": "Ollama Model or OpenAI-compatible Model",
+        "google": "Google API Call"
+      },
+      funAsrModels: {
+        "current": "Fun-ASR Realtime (rolling alias)",
+        "snapshot": "Fun-ASR Realtime 2025-11-07 (snapshot)"
+      }
+    },
+    funAsr: {
+      "workspaceInfo": "Alibaba Cloud Model Studio Workspace ID. The API key, workspace, and WebSocket region must belong to the same resources.",
+      "websocketInfo": "Use an official workspace-specific wss:// endpoint for China (Beijing) or Singapore. The WorkspaceId in the hostname must exactly match the field above.",
+      "apiKeyInfo": "Alibaba Cloud Model Studio API key for Fun-ASR. When empty, the engine reads DASHSCOPE_API_KEY from the environment.",
+      "semanticPunctuationInfo": "Enable higher-accuracy semantic segmentation, or disable it for lower-latency VAD segmentation.",
+      "sentenceSilenceInfo": "VAD sentence silence threshold. Official range: 200-6000 ms; default: 1300 ms.",
+      "heartbeatInfo": "Keeps the service connected during continuous silence. Heartbeat results never create captions."
+    },
     custom: {
       "title": "Custom Caption Engine",
       "attention": "Attention",

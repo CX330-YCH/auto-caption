@@ -1,131 +1,27 @@
 <template>
-  <div style="height: 20px;"></div>
+  <div style="height: 20px"></div>
   <a-card size="small" :title="$t('engine.title')">
     <template #extra>
       <a @click="applyChange">{{ $t('engine.applyChange') }}</a> |
       <a @click="cancelChange">{{ $t('engine.cancelChange') }}</a>
     </template>
+
+    <EngineFieldRenderer
+      v-for="field in primaryFields"
+      :key="field.id"
+      :field="field"
+      :model-value="fieldValue(field)"
+      :accent-color="uiColor"
+      @update:model-value="updateField(field, $event)"
+      @browse="selectFolderPath(field)"
+    />
+
     <div class="input-item">
-      <span class="input-label">{{ $t('engine.captionEngine') }}</span>
-      <a-select
-        class="input-area"
-        v-model:value="currentEngine"
-        :options="captionEngine"
-      ></a-select>
-    </div>
-    <div class="input-item">
-      <span class="input-label">{{ $t('engine.sourceLang') }}</span>
-      <a-select
-        :disabled="currentEngine === 'vosk'"
-        class="input-area"
-        v-model:value="currentSourceLang"
-        :options="sLangList"
-      ></a-select>
-    </div>
-    <div class="input-item">
-      <span class="input-label">{{ $t('engine.transLang') }}</span>
-      <a-select
-        class="input-area"
-        v-model:value="currentTargetLang"
-        :options="tLangList"
-      ></a-select>
-    </div>
-    <div class="input-item" v-if="transModel">
-      <span class="input-label">{{ $t('engine.transModel') }}</span>
-      <a-select
-        class="input-area"
-        v-model:value="currentTransModel"
-        :options="transModel"
-      ></a-select>
-    </div>
-    <div class="input-item" v-if="transModel && currentTransModel === 'ollama'">
-      <a-popover placement="right">
-        <template #content>
-          <p class="label-hover-info">{{ $t('engine.modelNameNote') }}</p>
-        </template>
-        <span class="input-label info-label"
-          :style="{color: uiColor}"
-        >{{ $t('engine.modelName') }}</span>
-      </a-popover>
-      <a-input
-        class="input-area"
-        v-model:value="currentOllamaName"
-      ></a-input>
-    </div>
-    <div class="input-item" v-if="transModel && currentTransModel === 'ollama'">
-      <a-popover placement="right">
-        <template #content>
-          <p class="label-hover-info">{{ $t('engine.baseURL') }}</p>
-        </template>
-        <span class="input-label info-label"
-          :style="{color: uiColor}"
-        >Base URL</span>
-      </a-popover>
-      <a-input
-        class="input-area"
-        v-model:value="currentOllamaUrl"
-        placeholder="http://localhost:11434"
-      ></a-input>
-    </div>
-    <div class="input-item" v-if="transModel && currentTransModel === 'ollama'">
-      <a-popover placement="right">
-        <template #content>
-          <p class="label-hover-info">{{ $t('engine.apiKey') }}</p>
-        </template>
-        <span class="input-label info-label"
-          :style="{color: uiColor}"
-        >API Key</span>
-      </a-popover>
-      <a-input
-          class="input-area"
-          type="password"
-          v-model:value="currentOllamaApiKey"
-      />
-    </div>
-    <div class="input-item" v-if="currentEngine === 'glm'">
-      <span class="input-label">GLM API URL</span>
-      <a-input
-        class="input-area"
-        v-model:value="currentGlmUrl"
-        placeholder="https://open.bigmodel.cn/api/paas/v4/audio/transcriptions"
-      ></a-input>
-    </div>
-    <div class="input-item" v-if="currentEngine === 'glm'">
-      <span class="input-label">GLM Model Name</span>
-      <a-input
-        class="input-area"
-        v-model:value="currentGlmModel"
-        placeholder="glm-asr-2512"
-      ></a-input>
-    </div>
-    <div class="input-item">
-      <span class="input-label">{{ $t('engine.audioType') }}</span>
-      <a-select
-        class="input-area"
-        v-model:value="currentAudio"
-        :options="audioType"
-      ></a-select>
-    </div>
-    <div class="input-item">
-      <span class="input-label">{{ $t('engine.enableTranslation') }}</span>
-      <a-switch v-model:checked="currentTranslation" />
-      <span style="display:inline-block;width:10px;"></span>
-      <div style="display: inline-block;">
-        <span class="switch-label">{{ $t('engine.enableRecording') }}</span>
-        <a-switch v-model:checked="currentRecording" />
-      </div>
-    </div>
-    <div class="input-item">
-      <span class="input-label">{{ $t('engine.customEngine') }}</span>
-      <a-switch v-model:checked="currentCustomized" />
-      <span style="display:inline-block;width:10px;"></span>
-      <div style="display: inline-block;">
-        <span class="switch-label">{{ $t('engine.showMore') }}</span>
-        <a-switch v-model:checked="showMore" />
-      </div>
+      <span class="input-label">{{ $t('engine.showMore') }}</span>
+      <a-switch v-model:checked="showMore" />
     </div>
 
-    <a-card size="small" :title="$t('engine.custom.title')" v-show="currentCustomized">
+    <a-card size="small" :title="$t('engine.custom.title')" v-show="draft.custom.enabled">
       <template #extra>
         <a-popover>
           <template #content>
@@ -134,345 +30,140 @@
           <a><InfoCircleOutlined />{{ $t('engine.custom.attention') }}</a>
         </a-popover>
       </template>
-      <div class="input-item">
-        <span class="input-label">{{ $t('engine.custom.app') }}</span>
-        <a-input
-          class="input-area"
-          v-model:value="currentCustomizedApp"
-        ></a-input>
-      </div>
-      <div class="input-item">
-        <span class="input-label">{{ $t('engine.custom.command') }}</span>
-        <a-input
-          class="input-area"
-          v-model:value="currentCustomizedCommand"
-        ></a-input>
-      </div>
+      <EngineFieldRenderer
+        v-for="field in customFields"
+        :key="field.id"
+        :field="field"
+        :model-value="fieldValue(field)"
+        :accent-color="uiColor"
+        @update:model-value="updateField(field, $event)"
+        @browse="selectFolderPath(field)"
+      />
     </a-card>
 
-    <a-card size="small" :title="$t('engine.showMore')" v-show="showMore" style="margin-top:10px;">
-      <div class="input-item">
-        <a-popover placement="right">
-          <template #content>
-            <p class="label-hover-info">{{ $t('engine.apikeyInfo') }}</p>
-            <p><a href="https://bailian.console.aliyun.com" target="_blank">
-              https://bailian.console.aliyun.com
-            </a></p>
-          </template>
-          <span class="input-label info-label"
-            :style="{color: uiColor}"
-          >ALI {{ $t('engine.apikey') }}</span>
-        </a-popover>
-        <a-input
-          class="input-area"
-          type="password"
-          v-model:value="currentAPI_KEY"
-        />
-      </div>
-      <div class="input-item">
-        <a-popover placement="right">
-          <template #content>
-            <p class="label-hover-info">{{ $t('engine.glmApikeyInfo') }}</p>
-            <p><a href="https://open.bigmodel.cn/" target="_blank">
-              https://open.bigmodel.cn
-            </a></p>
-          </template>
-          <span class="input-label info-label"
-            :style="{color: uiColor}"
-          >GLM {{ $t('engine.apikey') }}</span>
-        </a-popover>
-        <a-input
-          class="input-area"
-          type="password"
-          v-model:value="currentGlmApiKey"
-        />
-      </div>
-      <div class="input-item">
-        <a-popover placement="right">
-          <template #content>
-            <p class="label-hover-info">{{ $t('engine.voskModelPathInfo') }}</p>
-            <p class="label-hover-info">
-              <a href="https://alphacephei.com/vosk/models" target="_blank">Vosk {{ $t('engine.modelDownload') }}</a>
-            </p>
-          </template>
-          <span class="input-label info-label"
-            :style="{color: uiColor}"
-          >{{ $t('engine.voskModelPath') }}</span>
-        </a-popover>
-        <span
-          class="input-folder"
-          :style="{color: uiColor}"
-          @click="selectFolderPath('vosk')"
-        ><span><FolderOpenOutlined /></span></span>
-        <a-input
-          class="input-area"
-          style="width:calc(100% - 140px);"
-          v-model:value="currentVoskModelPath"
-        />
-      </div>
-      <div class="input-item">
-        <a-popover placement="right">
-          <template #content>
-            <p class="label-hover-info">{{ $t('engine.sosvModelPathInfo') }}</p>
-            <p class="label-hover-info">
-              <a href="https://github.com/HiMeditator/auto-caption/releases/tag/sosv-model" target="_blank">SOSV {{ $t('engine.modelDownload') }}</a>
-            </p>
-          </template>
-          <span class="input-label info-label"
-            :style="{color: uiColor}"
-          >{{ $t('engine.sosvModelPath') }}</span>
-        </a-popover>
-        <span
-          class="input-folder"
-          :style="{color: uiColor}"
-          @click="selectFolderPath('sosv')"
-        ><span><FolderOpenOutlined /></span></span>
-        <a-input
-          class="input-area"
-          style="width:calc(100% - 140px);"
-          v-model:value="currentSosvModelPath"
-        />
-      </div>
-      <div class="input-item">
-        <a-popover placement="right">
-          <template #content>
-            <p class="label-hover-info">{{ $t('engine.recordingPathInfo') }}</p>
-          </template>
-          <span class="input-label info-label"
-            :style="{color: uiColor}"
-          >{{ $t('engine.recordingPath') }}</span>
-        </a-popover>
-        <span
-          class="input-folder"
-          :style="{color: uiColor}"
-          @click="selectFolderPath('rec')"
-        ><span><FolderOpenOutlined /></span></span>
-        <a-input
-          class="input-area"
-          style="width:calc(100% - 140px);"
-          v-model:value="currentRecordingPath"
-        />
-      </div>
-      <div class="input-item">
-        <a-popover placement="right">
-          <template #content>
-            <p class="label-hover-info">{{ $t('engine.startTimeoutInfo') }}</p>
-          </template>
-          <span
-            class="input-label info-label"
-            :style="{color: uiColor, verticalAlign: 'middle'}"
-          >{{ $t('engine.startTimeout') }}</span>
-        </a-popover>
-        <a-input-number
-          class="input-area"
-          v-model:value="currentStartTimeoutSeconds"
-          :min="10"
-          :max="120"
-          :step="5"
-          :addon-after="$t('engine.seconds')"
-        />
-      </div>
+    <a-card size="small" :title="$t('engine.showMore')" v-show="showMore" style="margin-top: 10px">
+      <EngineFieldRenderer
+        v-for="field in advancedFields"
+        :key="field.id"
+        :field="field"
+        :model-value="fieldValue(field)"
+        :accent-color="uiColor"
+        @update:model-value="updateField(field, $event)"
+        @browse="selectFolderPath(field)"
+      />
     </a-card>
   </a-card>
-  <div style="height: 20px;"></div>
+  <div style="height: 20px"></div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, h } from 'vue'
+import { computed, h, ref, watch } from 'vue'
 import { storeToRefs } from 'pinia'
+import { notification } from 'ant-design-vue'
+import { ExclamationCircleOutlined, InfoCircleOutlined } from '@ant-design/icons-vue'
+import { useI18n } from 'vue-i18n'
+import EngineFieldRenderer from '@renderer/components/engine/EngineFieldRenderer.vue'
+import {
+  applyEngineLanguageDefaults,
+  getEngineFields,
+  normalizeEngineConfig,
+  validateEngineConfig
+} from '@renderer/engines/catalog.ts'
+import {
+  cloneEngineConfig,
+  getEngineConfigValue,
+  isEngineFieldVisible,
+  setEngineConfigValue
+} from '@renderer/engines/form.ts'
+import type { EngineFieldDescriptor } from '@renderer/engines/types.ts'
 import { useGeneralSettingStore } from '@renderer/stores/generalSetting'
 import { useEngineControlStore } from '@renderer/stores/engineControl'
-import { notification } from 'ant-design-vue'
-import { ExclamationCircleOutlined, FolderOpenOutlined ,InfoCircleOutlined } from '@ant-design/icons-vue';
-import { useI18n } from 'vue-i18n'
 
 const { t } = useI18n()
 const showMore = ref(false)
-
 const engineControl = useEngineControlStore()
-const { captionEngine, audioType, changeSignal } = storeToRefs(engineControl)
-
+const { changeSignal } = storeToRefs(engineControl)
 const generalSetting = useGeneralSettingStore()
-const { uiColor } = storeToRefs(generalSetting)
+const { uiColor, uiLanguage } = storeToRefs(generalSetting)
+const draft = ref(cloneEngineConfig(engineControl.engineConfig))
+let resettingDraft = false
 
-const currentSourceLang = ref('auto')
-const currentTargetLang = ref('zh')
-const currentEngine = ref<string>('gummy')
-const currentAudio = ref<0 | 1>(0)
-const currentTranslation = ref<boolean>(true)
-const currentRecording = ref<boolean>(false)
-const currentTransModel = ref('ollama')
-const currentOllamaName = ref('')
-const currentOllamaUrl = ref('')
-const currentOllamaApiKey = ref('')
-const currentAPI_KEY = ref<string>('')
-const currentVoskModelPath = ref<string>('')
-const currentSosvModelPath = ref<string>('')
-const currentGlmUrl = ref<string>('')
-const currentGlmModel = ref<string>('')
-const currentGlmApiKey = ref<string>('')
-const currentRecordingPath = ref<string>('')
-const currentCustomized = ref<boolean>(false)
-const currentCustomizedApp = ref('')
-const currentCustomizedCommand = ref('')
-const currentStartTimeoutSeconds = ref<number>(30)
+const visibleFields = computed(() =>
+  getEngineFields(draft.value.provider).filter((field) => {
+    return isEngineFieldVisible(draft.value, field)
+  })
+)
+const primaryFields = computed(() =>
+  visibleFields.value.filter((field) => field.section === 'primary')
+)
+const advancedFields = computed(() =>
+  visibleFields.value.filter((field) => field.section === 'advanced')
+)
+const customFields = computed(() =>
+  visibleFields.value.filter((field) => field.section === 'custom')
+)
 
-const sLangList = computed(() => {
-  for(let item of captionEngine.value){
-    if(item.value === currentEngine.value) {
-      return item.languages.filter(item => item.type <= 0)
-    }
-  }
-  return []
-})
+function fieldValue(field: EngineFieldDescriptor): unknown {
+  return getEngineConfigValue(draft.value, field.path)
+}
 
-const tLangList = computed(() => {
-  for(let item of captionEngine.value){
-    if(item.value === currentEngine.value) {
-      return item.languages.filter(item => item.type >= 0)
-    }
-  }
-  return []
-})
+function updateField(field: EngineFieldDescriptor, value: unknown): void {
+  setEngineConfigValue(draft.value, field.path, value)
+}
 
-const transModel = computed(() => {
-  for(let item of captionEngine.value){
-    if(item.value === currentEngine.value) {
-      return item.transModel
-    }
-  }
-  return []
-})
-
-function applyChange(){
-  if(
-    currentTranslation.value && transModel.value &&
-    currentTransModel.value === 'ollama' && !currentOllamaName.value.trim()
-  ) {
+function applyChange(): void {
+  normalizeEngineConfig(draft.value)
+  const validationIssue = validateEngineConfig(draft.value, 'apply')
+  if (validationIssue) {
     notification.open({
-      message: t('noti.ollamaNameNull'),
-      description: t('noti.ollamaNameNullNote'),
+      message: t(validationIssue.titleKey),
+      description: t(validationIssue.descriptionKey),
       duration: null,
       icon: () => h(ExclamationCircleOutlined, { style: 'color: #ff4d4f' })
     })
     return
   }
 
-  const config = engineControl.engineConfig
-  config.provider = currentEngine.value as typeof config.provider
-  config.common.sourceLanguage = currentSourceLang.value
-  config.common.targetLanguage = currentTargetLang.value
-  config.common.audioSource = currentAudio.value
-  config.common.translation.provider = currentTransModel.value
-  config.common.translation.model = currentOllamaName.value
-  config.common.translation.url = currentOllamaUrl.value ?? "http://localhost:11434"
-  config.common.translation.apiKey = currentOllamaApiKey.value
-  config.common.translation.enabled = currentTranslation.value
-  config.common.recording.enabled = currentRecording.value
-  config.common.recording.path = currentRecordingPath.value
-  config.common.startTimeoutSeconds = currentStartTimeoutSeconds.value
-  config.providers.gummy.apiKey = currentAPI_KEY.value
-  config.providers.vosk.modelPath = currentVoskModelPath.value
-  config.providers.sosv.modelPath = currentSosvModelPath.value
-  config.providers.glm.url = currentGlmUrl.value || "https://open.bigmodel.cn/api/paas/v4/audio/transcriptions"
-  config.providers.glm.model = currentGlmModel.value || "glm-asr-2512"
-  config.providers.glm.apiKey = currentGlmApiKey.value
-  config.custom.enabled = currentCustomized.value
-  config.custom.executable = currentCustomizedApp.value
-  config.custom.command = currentCustomizedCommand.value
-
+  engineControl.engineConfig = cloneEngineConfig(draft.value)
   engineControl.sendEngineConfigChange()
-
   notification.open({
     placement: 'topLeft',
     message: t('noti.engineChange'),
     description: t('noti.changeInfo')
-  });
-}
-
-function cancelChange(){
-  const config = engineControl.engineConfig
-  currentSourceLang.value = config.common.sourceLanguage
-  currentTargetLang.value = config.common.targetLanguage
-  currentTransModel.value = config.common.translation.provider
-  currentOllamaName.value = config.common.translation.model
-  currentOllamaUrl.value = config.common.translation.url
-  currentOllamaApiKey.value = config.common.translation.apiKey
-  currentEngine.value = config.provider
-  currentAudio.value = config.common.audioSource
-  currentTranslation.value = config.common.translation.enabled
-  currentRecording.value = config.common.recording.enabled
-  currentAPI_KEY.value = config.providers.gummy.apiKey
-  currentVoskModelPath.value = config.providers.vosk.modelPath
-  currentSosvModelPath.value = config.providers.sosv.modelPath
-  currentGlmUrl.value = config.providers.glm.url
-  currentGlmModel.value = config.providers.glm.model
-  currentGlmApiKey.value = config.providers.glm.apiKey
-  currentRecordingPath.value = config.common.recording.path
-  currentCustomized.value = config.custom.enabled
-  currentCustomizedApp.value = config.custom.executable
-  currentCustomizedCommand.value = config.custom.command
-  currentStartTimeoutSeconds.value = config.common.startTimeoutSeconds
-}
-
-function selectFolderPath(type: 'vosk' | 'sosv' | 'rec') {
-  window.electron.ipcRenderer.invoke('control.folder.select').then((folderPath) => {
-    if(!folderPath) return
-    if(type == 'vosk')
-      currentVoskModelPath.value = folderPath
-    else if(type == 'sosv')
-      currentSosvModelPath.value = folderPath
-    else if(type == 'rec')
-      currentRecordingPath.value = folderPath
   })
 }
 
-watch(changeSignal, (val) => {
-  if(val == true) {
-    cancelChange();
-    engineControl.changeSignal = false;
-  }
+function cancelChange(): void {
+  resettingDraft = true
+  draft.value = cloneEngineConfig(engineControl.engineConfig)
+  resettingDraft = false
+}
+
+function selectFolderPath(field: EngineFieldDescriptor): void {
+  if (field.control !== 'directory') return
+  window.electron.ipcRenderer.invoke('control.folder.select').then((folderPath) => {
+    if (folderPath) setEngineConfigValue(draft.value, field.path, folderPath)
+  })
+}
+
+watch(changeSignal, (changed) => {
+  if (!changed) return
+  cancelChange()
+  engineControl.changeSignal = false
 })
 
-watch(currentEngine, (val) => {
-  if(val == 'vosk'){
-    currentSourceLang.value = 'auto'
-    currentTargetLang.value = useGeneralSettingStore().uiLanguage
-    if(currentTargetLang.value === 'zh') {
-      currentTargetLang.value = 'zh-cn'
-    }
-  }
-  else{
-    currentSourceLang.value = 'auto'
-    currentTargetLang.value = useGeneralSettingStore().uiLanguage
-  }
-})
+watch(
+  () => draft.value.provider,
+  (provider) => {
+    if (resettingDraft) return
+    applyEngineLanguageDefaults(draft.value, provider, uiLanguage.value)
+  },
+  { flush: 'sync' }
+)
 </script>
 
 <style scoped>
 @import url(../assets/input.css);
-
-.label-hover-info {
-  margin-top: 10px;
-  max-width: min(36vw, 380px);
-}
-
-.info-label {
-  cursor: pointer;
-  font-style: italic;
-}
-
-.input-folder {
-  display:inline-block;
-  width: 40px;
-  font-size:1.38em;
-  cursor: pointer;
-  transition: all 0.25s;
-}
-
-.input-folder:hover {
-  transform: scale(1.1);
-}
 
 .customize-note {
   padding: 10px 10px 0;
