@@ -1,8 +1,9 @@
 <template>
-  <div>
+  <div class="caption-toolbar">
     <div class="caption-title">
-      <span style="margin-right: 30px;">{{ $t('log.title') }}</span>
+      <span>{{ $t('log.title') }}</span>
     </div>
+    <div class="caption-actions">
     <a-popover :title="$t('log.baseTime')">
       <template #content>
         <div class="base-time">
@@ -44,7 +45,6 @@
       </template>
       <a-button
         type="primary"
-        style="margin-right: 20px;"
         @click="changeBaseTime"
         :disabled="captionData.length === 0"
       >{{ $t('log.changeTime') }}</a-button>
@@ -68,7 +68,6 @@
         </div>
       </template>
       <a-button
-        style="margin-right: 20px;"
         @click="exportCaptions"
         :disabled="captionData.length === 0"
       >{{ $t('log.export') }}</a-button>
@@ -100,7 +99,6 @@
         </div>
       </template>
       <a-button
-        style="margin-right: 20px;"
         @click="copyCaptions"
       >{{ $t('log.copy') }}</a-button>
     </a-popover>
@@ -108,13 +106,15 @@
       danger
       @click="clearCaptions"
     >{{ $t('log.clear') }}</a-button>
+    </div>
   </div>
 
   <a-table
     :columns="columns"
     :data-source="captionData"
     v-model:pagination="pagination"
-    style="margin-top: 10px;"
+    :scroll="{ x: 560 }"
+    class="caption-table"
   >
     <template #bodyCell="{ column, record }">
       <template v-if="column.key === 'index'">
@@ -303,12 +303,34 @@ function clearCaptions() {
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
 }
 
+.caption-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px 20px;
+}
+
+.caption-actions {
+  min-width: 0;
+  display: flex;
+  flex: 1 1 420px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
 .caption-title {
   color: var(--icon-color);
   display: inline-block;
   font-size: 24px;
   font-weight: bold;
   margin: 10px 0;
+}
+
+.caption-table {
+  min-width: 0;
+  margin-top: 10px;
 }
 
 .base-time {

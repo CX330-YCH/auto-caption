@@ -1,7 +1,7 @@
 <template>
-  <div>
+  <div class="log-toolbar">
     <div class="log-title">
-      <span style="margin-right: 30px;">{{ $t('log.title2') }}</span>
+      <span>{{ $t('log.title2') }}</span>
     </div>
     <a-button
       danger
@@ -12,7 +12,8 @@
     :columns="columns"
     :data-source="softwareLogs"
     v-model:pagination="pagination"
-    style="margin-top: 10px;"
+    :scroll="{ x: 640 }"
+    class="software-log-table"
   >
     <template #bodyCell="{ column, record }">
       <template v-if="column.key === 'index'">
@@ -95,12 +96,25 @@ const columns = [
 </script>
 
 <style scoped>
+.log-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px 20px;
+}
+
 .log-title {
   color: var(--icon-color);
   display: inline-block;
   font-size: 24px;
   font-weight: bold;
   margin: 10px 0;
+}
+
+.software-log-table {
+  min-width: 0;
+  margin-top: 10px;
 }
 
 .WARN {

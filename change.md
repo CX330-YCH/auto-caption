@@ -1710,3 +1710,202 @@
 
 - 本地 `package.json` 与 `electron-builder.yml`：确认 macOS 产物版本来自 npm 包版本，macOS/Linux 引擎资源复制目标是 `Resources/engine/main`。
 - 根目录 `AGENTS.md`：遵循修改前检查、三语文档同步、构建产物记录、验证记录、系统环境与依赖边界、`change.md` 追加记录要求。
+
+## 2026-08-13 - 控制窗口响应式布局与字幕预览停靠修复
+
+### 授权与目标
+
+- 用户先要求技术评估，随后明确授权“完整修复这个问题”，允许在有成熟实现时添加依赖，并最终确认按“控制窗口响应式布局完整修复”计划实施；实现完成阶段又明确要求将“打开字幕窗口”所在按钮行放在日志区域上方。
+- 变更类型：修复、重构、配置、测试、文档。
+- 目标：消除控制窗口缩窄时设置表单、状态项、操作按钮、日志工具栏、表格和字幕预览之间的堆叠、挤压与页面级横向溢出；在不复制设置草稿状态的前提下提供可靠的窄屏设置浮层；将字幕预览停靠在右侧底部并限制高度；把引擎控制按钮作为日志区域正上方的独立布局行。
+- 明确非目标：不修改配置 schema、`leftBarWidth` 持久化语义、Electron IPC、Python CLI、NDJSON/TCP 协议、字幕数据结构、识别/翻译/热词逻辑；不升级 Ant Design Vue、Vue、Electron 或其他既有依赖；不构建安装包、不调用真实云服务、不改远端资源。
+
+### 修改文件与原因
+
+- `package.json`、`package-lock.json`
+  - 新增唯一直接依赖 `@vueuse/core@^14.4.0`，并同步锁定其传递包；用于设置浮层的点击外部、Esc、焦点范围和监听器生命周期管理。
+  - npm 重新解析锁文件时同步了部分既有 peer 标记；没有主动升级其他直接依赖。
+- `src/main/ControlWindow.ts`
+  - 控制窗口最小尺寸由 `750×500` 提高为 `900×600`；初始 `1200×800` 保持不变。
+- `src/renderer/src/views/ControlPage.vue`
+  - 使用既有 Ant Design Vue `Layout.Sider`，设置 `breakpoint="xl"` 与 `collapsed-width="56"`；宽屏继续按保存的 `leftBarWidth` 百分比显示常驻设置栏，窄屏使用同一设置面板 DOM 作为 360px 浮层。
+  - 使用 VueUse `onClickOutside`、`onKeyStroke`、`useFocusWithin` 实现点击锁定、再次点击关闭、点击外部关闭、Esc 关闭、键盘焦点临时展开和监听器自动清理；跨回宽屏清除锁定，窄屏不写入 `leftBarWidth`。
+  - 新增带 Tooltip、`aria-expanded`、`aria-pressed` 的设置按钮，并保留悬停/指针进入临时展开；关闭时释放栏内焦点，避免 Esc 后因焦点残留立即重开。
+  - 右侧改为明确的四段纵向布局：状态指标、引擎控制按钮、弹性可滚动日志、底部字幕预览；日志占用剩余空间，预览关闭后不产生额外轨道或间距。
+  - 补齐 `min-width: 0`、`min-height: 0`、滚动边界、容器查询和页面级溢出控制。
+- `src/renderer/src/components/CaptionStyle.vue`
+  - 使用 Vue 3.5 延迟 Teleport 将原预览 DOM 投放到右侧专用宿主，删除旧的绝对定位和 `left/bottom/60%` 偏移；字体、颜色、透明度、阴影、翻译和多行草稿状态不变。
+  - 设置开关区域允许换行，避免窄设置面板中标签与开关互相挤压。
+- `src/renderer/src/components/EngineStatus.vue`
+  - 状态区改为 `auto-fit/minmax` 网格；引擎控制按钮改为 `flex-wrap + gap`，取消固定按钮外边距。
+  - 控制按钮行去掉自身大块上下 margin，由控制页纵向布局作为独立一行放在日志区正上方。
+- `src/renderer/src/components/CaptionLog.vue`、`src/renderer/src/components/SoftwareLog.vue`
+  - 标题操作区和工具栏改为可换行 flex/gap；移除依赖固定 margin 的按钮布局。
+  - Ant Design 表格启用组件内横向滚动，字幕表最小滚动宽度 560px、软件日志表 640px，避免撑宽整个页面。
+- `src/renderer/src/assets/input.css`、`src/renderer/src/assets/main.css`
+  - 通用表单行允许换行，标签、输入区和值显示具有明确收缩/换行边界；单选组允许换行。
+  - `html/body/#app` 补齐高度和 `box-sizing`，body 禁止成为额外滚动容器。
+- `src/renderer/src/components/GeneralSetting.vue`、`src/renderer/src/components/engine/EngineFieldRenderer.vue`、`src/renderer/src/components/engine/HotwordManager.vue`
+  - 为文本输入、目录选择、热词目标和操作工具栏补齐 flex 收缩、换行、宽度上限与 `min-width: 0`，消除 360px 设置面板内的截断和横向撑开。
+- `src/renderer/src/i18n/lang/zh.ts`、`src/renderer/src/i18n/lang/en.ts`、`src/renderer/src/i18n/lang/ja.ts`
+  - 同步新增“设置 / Settings / 設定”键，供折叠栏按钮、Tooltip 和无障碍名称使用。
+- `tests/node/i18nParity.test.mjs`、`docs/testing.md`
+  - 新增递归比较中英日完整 i18n 对象键结构的 Node 测试，并记录覆盖范围；以后任一语言漏键都会失败。
+- `docs/user-manual/zh.md`、`docs/user-manual/en.md`、`docs/user-manual/ja.md`
+  - 同步说明 900×600 最小窗口、1200px 响应式设置栏、悬停/焦点/点击/Esc 交互、草稿保持和底部 35% 预览边界。
+- `change.md`
+  - 追加本批次授权、依赖决策、修改范围、兼容性、真实验证、风险与回滚记录。
+
+### 修改前后行为
+
+- 修改前：控制页由固定横向 flex 和多个固定 margin/宽度组成；窗口缩窄时左栏持续占用百分比宽度，状态、按钮和工具栏无法系统换行，表格会撑宽页面；字幕预览绝对定位并可能覆盖记录区；控制窗口仍可缩至 750×500。
+- 修改后：1200px 及以上设置栏常驻；低于 1200px 时 Sider 折叠为 56px，设置表单以同一份 360px 浮层 DOM 展开，未应用草稿不会因组件重建丢失。设置浮层支持指针进入、键盘焦点、点击锁定、再次点击、点击外部和 Esc。
+- 右侧状态、按钮、日志和预览按独立纵向段排列；“打开字幕窗口 / 启动字幕引擎 / 关闭字幕引擎”按钮行固定在日志区上方并可换行。日志区弹性占用剩余空间并自行滚动；表格只在组件内部横向滚动。
+- 字幕预览停靠右侧底部，关闭时宿主不占空间，开启时最大高度为内容窗口 35%，超出部分只在预览宿主内部滚动，不覆盖日志区。
+- 窗口不能缩到 900×600 以下；初始尺寸仍为 1200×800。
+
+### 依赖、配置、接口、兼容性与回滚
+
+- 新增 `@vueuse/core@^14.4.0` 的必要性：它集中提供跨组件验证过的点击外部、键盘、焦点与生命周期清理组合式工具，避免项目自行维护易泄漏或边界不完整的全局 DOM 监听；包支持 tree-shaking，MIT 许可证，Vue peer 要求 `^3.5.0`，与项目 Vue 3.5.13 匹配。
+- 继续使用既有 Ant Design Vue `Layout.Sider` 和 `xl` 断点，不引入新的布局/抽屉组件库。未采用 Drawer，因为设置表单包含未应用的本地草稿；常驻栏与 Drawer 切换容易重建组件或要求复制状态，而 Sider 加同一份浮层 DOM 可直接保持草稿。
+- `schemaVersion`、`leftBarWidth` 字段与 6–12 合法范围均不变，不需要配置迁移；窄屏开合不持久化覆盖用户的左栏宽度。
+- Electron IPC、Python CLI、子进程协议、字幕/日志数据结构和远端服务行为均无变化；没有新增密钥字段或日志输出。
+- CSS、Vue 和 Electron 主进程窗口约束是跨 Windows/macOS/Linux 的公共实现；自动化与生产渲染回归在 macOS arm64 开发机完成，未声称其他平台实机 GUI 已验证。
+- 精确回滚：恢复本条“修改文件与原因”列出的文件，移除 `@vueuse/core` 并重新生成锁文件；将窗口最小值恢复为 `750×500`、控制页恢复旧 flex、字幕预览恢复旧绝对定位。回滚会重新引入窄窗口堆叠和覆盖问题，用户配置无需迁移或回退。
+
+### 验证记录
+
+- `npm install @vueuse/core@^14.4.0`：在网络访问获批后成功；新增 4 个包。npm audit 同时报告现有依赖树 33 个问题（2 low、2 moderate、28 high、1 critical），本批次未运行可能引入破坏性升级的 `npm audit fix`。
+- `npm run verify`：最终代码通过；TypeScript（Node/Web/Vue）、ESLint、Node 41/41 和 Python 49/49 全部成功。新增 i18n 测试递归确认中英日键结构一致。
+- `npm run build`：最终代码通过；Electron main、preload、renderer 生产构建分别转换 23、1、3258 个模块。
+- `git diff --check`：通过，无空白错误。
+- 生产 renderer 浏览器回归：在 1400×800、1200×800、1199×600、900×600 视口检查；1200px 保持常驻设置栏，1199px 在 Ant Sider 过渡完成后折叠为 56px，900px 同样折叠，四种尺寸均无 body 横向或纵向溢出。
+- 浮层交互回归：设置按钮锁定后面板为 360px；Esc 将 `aria-expanded/aria-pressed` 置为 false 并把焦点释放到 body；点击日志内容区关闭；跨到 1200px 后清除锁定；键盘焦点可临时保持展开。
+- 草稿保持回归：将未应用字体草稿改为 `ResponsiveDraft`，Esc 关闭并重新打开后值仍存在；测试结束前恢复为 `sans-serif`，未点击应用且未写入持久配置。
+- 预览压力回归：在 900×600 下将原字幕字号调到 72px并开启翻译预览；宿主高度限制为 210px（600px 的 35%），内容 `scrollHeight` 为 327px、`overflow-y: auto`，日志底部 354px、预览顶部 370px，无重叠且 body 无溢出。
+- 本地 Electron 开发进程成功启动并加载变更；macOS ScreenCaptureKit 在自动截图时返回系统捕获错误，因此最终尺寸与交互断言改用同一生产 renderer 的受控浏览器视口完成。测试用本地服务器和开发进程均已停止，临时测试文件位于 `/private/tmp`，没有进入仓库。
+- 验证过程保留仓库既有 npm mirror 配置弃用警告和 `MODULE_TYPELESS_PACKAGE_JSON` 性能警告；这些警告未导致命令失败，本批次未扩大范围修改 npm 配置或包模块类型。
+
+### 未执行、风险与后续事项
+
+- 未在 Windows/Linux 实机运行控制窗口，也未执行 Electron Builder 打包；跨平台公共代码已通过类型检查和生产构建，但平台窗口管理器的视觉差异仍需发布前实机回归。
+- macOS 自动化无法通过 ScreenCaptureKit直接截取 Electron 原生窗口；受控生产 renderer 已覆盖目标尺寸和交互，但不能等同于安装包级 GUI 自动化。
+- 未测试真实麦克风、系统音频、识别引擎或付费 API；本次不触及这些路径。
+- npm audit 报告的 33 个依赖问题是独立的依赖治理事项；为避免无授权的大范围升级，本批次只记录，不自动修复。
+
+### 关键技术决策来源
+
+- VueUse `packages/core/package.json`：`@vueuse/core` 14.4.0、Vue peer `^3.5.0` 与 tree-shaking 包结构，`https://raw.githubusercontent.com/vueuse/vueuse/main/packages/core/package.json`。
+- VueUse MIT 许可证：`https://raw.githubusercontent.com/vueuse/vueuse/main/LICENSE`。
+- Ant Design Vue 官方仓库与现有项目依赖：继续使用 Vue 3/Electron 可用的 `Layout.Sider` 和内置 `xl` 断点，`https://github.com/vueComponent/ant-design-vue`。
+- Vue 3.5 延迟 Teleport：项目已使用 Vue 3.5，采用 `defer` 让目标宿主在同一挂载阶段稍后出现，同时保持预览组件状态与 DOM 行为。
+- 根目录 `AGENTS.md`：遵循最小依赖、三语同步、配置/协议兼容、真实验证和 `change.md` 追加记录要求。
+
+## 2026-08-13 - V2.4.0 小版本、依赖更新与 macOS arm64 构建
+
+### 授权与目标
+
+- 用户要求“编译一下Mac版本 并更新小版本号”，并补充“如果依赖有更新记得检查并使用新依赖”。
+- 变更类型：构建、配置、文档、测试。
+- 目标：在不修改系统环境的前提下，将 V2 小版本从 `2.3.0` 提升到 `2.4.0`，检查并应用当前约束允许的新依赖，生成 macOS arm64 构建产物。
+- 明确非目标：不做破坏性 git 操作，不创建提交、分支、PR 或 Release；不修改系统 Python、全局 npm、shell 配置或系统环境变量；不做 Windows、Linux、macOS x64/universal 构建；不调用真实麦克风、识别云服务、翻译云服务或远端热词资源。
+- 修改前工作区已有未提交变更；本批次只在当前工作区基础上增量处理版本、依赖、文档版本标识和构建产物，未回退或覆盖既有未提交改动。
+
+### 修改文件与原因
+
+- `package.json`
+  - 通过 `npm version minor --no-git-tag-version` 将应用版本更新为 `2.4.0`；未创建 git tag。
+- `package-lock.json`
+  - 同步根包版本到 `2.4.0`。
+  - 执行 `npm update` 后，锁文件采用当前 semver 约束允许的新解析版本；直接依赖/开发依赖解析版本包括 `electron@35.7.5`、`@types/node@22.20.1`、`eslint@9.39.5`、`eslint-plugin-vue@10.10.0`、`pinia@3.0.4`、`prettier@3.9.6`、`typescript@5.9.3`、`vite@6.4.3`、`vue@3.5.41`、`vue-eslint-parser@10.4.1`、`vue-i18n@11.4.8`、`vue-router@4.6.4`、`vue-tsc@2.2.12` 等。
+  - 未采用需要修改依赖范围或大版本迁移的 latest 版本，例如 `electron@43`、`vite@8`、`electron-vite@5`、`electron-builder@26`、`vue-tsc@3` 等。
+- `engine/requirements.txt`
+  - 将 `dashscope==1.26.6` 更新为 `dashscope==1.26.7`，显式锁定当前可用补丁版本。
+  - Python 虚拟环境 `engine/.venv` 中按 requirements 升级了解析依赖；实际可见更新包括 `pyinstaller@6.22.0`、`sherpa_onnx@1.13.5`、`sherpa-onnx-core@1.13.5`、`openai@3.0.0`，并新增/更新其传递依赖 `httpx2@2.10.0`、`httpcore2@2.10.0`、`truststore@0.10.4`。
+- `README.md`、`README_en.md`、`README_ja.md`
+  - 同步版本徽章、发布说明和 macOS 产物说明到 `v2.4.0`，说明本次包含依赖更新与 macOS arm64 构建。
+- `docs/user-manual/zh.md`、`docs/user-manual/en.md`、`docs/user-manual/ja.md`
+  - 同步用户手册版本标识到 `v2.4.0`。
+- `docs/engine-manual/zh.md`、`docs/engine-manual/en.md`、`docs/engine-manual/ja.md`
+  - 同步引擎手册版本标识到 `v2.4.0`。
+- `src/renderer/index.html`
+  - 同步浏览器标题中的可见版本到 `Auto Caption v2.4.0`。
+- `src/renderer/src/components/EngineStatus.vue`
+  - 同步关于信息中的可见版本到 `v2.4.0`。
+- `docs/CHANGELOG.md`
+  - 新增 `v2.4.0` 条目，记录依赖更新、版本同步与 macOS arm64 构建。
+- `dist/latest-mac.yml`
+  - 在生成目录中同步最终签名后 zip 和 DMG 的 `2.4.0` 路径、大小、sha512 与 releaseDate，供 macOS 更新元数据使用。
+- `change.md`
+  - 追加本批次授权、文件清单、依赖决策、行为变化、验证、风险与回滚记录。
+- 生成产物：
+  - `engine/dist/main`：PyInstaller 生成的 macOS arm64 Python 引擎可执行文件。
+  - `dist/mac-arm64/Auto Caption.app`：Electron Builder 生成并经本地 ad-hoc 签名的 macOS arm64 应用。
+  - `dist/Auto Caption-2.4.0-arm64-mac.zip` 与 `.blockmap`：签名后 `.app` 重新封装的 zip 和 blockmap。
+  - `dist/auto-caption-2.4.0.dmg` 与 `.blockmap`：包含签名后 `.app` 的 APFS UDZO DMG 及构建期生成的 blockmap。
+
+### 修改前后行为
+
+- 修改前：应用、README、手册、关于窗口、浏览器标题和 macOS 构建元数据仍指向 `2.3.0`；本地依赖解析停留在旧锁文件和旧 Python 虚拟环境状态。
+- 修改后：应用版本源、可见版本文本、README、用户手册、引擎手册、CHANGELOG 与本次 macOS arm64 产物统一为 `2.4.0`。
+- 本批次没有新增或删除用户配置字段，没有修改配置迁移、IPC、Python stdout/TCP 协议、命令行参数、字幕数据结构、热词语义或远端资源操作。
+- 未修改系统环境；npm 依赖只更新项目 `node_modules` 与 `package-lock.json`，Python 依赖只更新项目内 `engine/.venv` 与 `engine/requirements.txt`。
+
+### 依赖决策、兼容性与回滚
+
+- npm 依赖策略：先执行 `npm outdated --long` 检查，再使用 `npm update` 采用当前 `package.json` semver 范围内的新版本；未自动扩大到需要迁移的大版本，以免把 Mac 编译请求扩大为 Electron/Vite/ESLint 大版本迁移。
+- Python 依赖策略：先执行 `engine/.venv/bin/python3 -m pip list --outdated` 检查，再在项目虚拟环境内执行 `pip install --upgrade -r requirements.txt`；只将已显式锁定的 `dashscope` 从 `1.26.6` 调整到 `1.26.7`，其余未锁定包按解析器在虚拟环境内升级。
+- 仍有未采用的更新：
+  - npm latest 中存在多个大版本更新，如 `electron@43`、`electron-builder@26`、`electron-vite@5`、`vite@8`、`typescript@7`、`vue-router@5`、`vue-tsc@3` 等，需要单独迁移验证后再采用。
+  - Python 仍报告 `numpy`、`numba`、`llvmlite` 等存在更新，但这些包受二进制兼容、Python 版本和上游约束影响；本批次没有强制改约束。
+- `openai` 因 requirements 未固定上限，在虚拟环境中解析到 `3.0.0`；自动化测试和 PyInstaller 构建通过，但未使用真实 OpenAI 兼容翻译服务做运行时调用，后续发布前建议补真实或 mock API 回归。
+- macOS 产物为 arm64；未验证 Intel x64 或 universal 包。
+- 本次 `.app` 使用本地 ad-hoc 签名，没有 Developer ID 证书签名和 notarization；普通用户首次打开仍可能看到 macOS Gatekeeper 安全提示。
+- 精确回滚：恢复 `package.json`/`package-lock.json` 到 `2.3.0` 与旧解析版本；恢复 `engine/requirements.txt` 的 `dashscope==1.26.6`；恢复本条列出的 README、文档、标题、关于窗口、CHANGELOG 与 `dist/latest-mac.yml` 版本/元数据；删除或忽略 `dist/` 与 `engine/dist/` 中本次生成的 `2.4.0` 产物，并按旧版本重建需要的包。
+
+### 验证记录
+
+- `git status --short --branch`：已执行；确认当前在 `main...origin/main`，且工作区在本批次开始前已有未提交修改，需要保留并绕开。
+- `npm outdated --long`：沙盒内首次因 `registry.npmjs.org` DNS 失败；经用户授权的沙盒外重试成功，确认当前约束内和 latest 中均有更新。
+- `engine/.venv/bin/python3 -m pip list --outdated --format=columns`：沙盒外成功，确认 Python 虚拟环境内有可更新包。
+- `npm update`：成功；新增 31 个包、移除 32 个包、变更 192 个包；npm audit 报告仍存在 13 个问题（12 high、1 critical），本批次未运行可能破坏兼容性的 `npm audit fix --force`。
+- `engine/.venv/bin/python3 -m pip install --upgrade -r requirements.txt`：成功；只更新项目虚拟环境，未安装全局 Python 包。
+- `engine/.venv/bin/python3 -m pip check`：通过，输出 `No broken requirements found.`；保留 pip cache 目录不可写警告，未影响依赖一致性。
+- `npm ls --depth=0`：通过，确认直接依赖解析版本；保留既有 npm mirror 配置弃用警告。
+- `npm version minor --no-git-tag-version`：通过；版本提升到 `2.4.0`，没有创建 git tag。
+- `npm run verify`：通过；TypeScript、ESLint、Node 41/41 和 Python 49/49 全部成功。
+- `npm run build`：通过；Electron main、preload、renderer 生产构建成功，renderer 由 Vite 6.4.3 转换 3259 个模块。
+- `PYINSTALLER_CONFIG_DIR=/private/tmp/auto-caption-pyinstaller-config engine/.venv/bin/pyinstaller --clean --noconfirm ./main.spec`：通过，生成 `engine/dist/main`；保留既有 `pycparser` 可选隐藏导入警告和 `@rpath/libomp.dylib` 解析警告。
+- `engine/dist/main --help`：沙盒内首次因 PyInstaller sync semaphore 权限失败；经用户授权在沙盒外运行后通过，CLI help 正常输出。
+- `./node_modules/.bin/electron-builder --mac`：沙盒内首次因下载 Electron 35.7.5 的 `npmmirror.com` DNS 失败；经用户授权沙盒外重试后通过，生成 `.app`、zip、DMG 和 blockmap。
+- `file dist/mac-arm64/Auto Caption.app/Contents/MacOS/Auto Caption dist/mac-arm64/Auto Caption.app/Contents/Resources/engine/main`：二者均为 Mach-O 64-bit executable arm64。
+- `plutil -p dist/mac-arm64/Auto Caption.app/Contents/Info.plist | rg 'CFBundleShortVersionString|CFBundleVersion'`：通过，两个版本字段均为 `2.4.0`。
+- `codesign --force --deep --sign - dist/mac-arm64/Auto Caption.app`：通过，本地 ad-hoc 签名完成。
+- `codesign --verify --deep --strict --verbose=2 dist/mac-arm64/Auto Caption.app`：通过，`.app` valid on disk 且 satisfies its Designated Requirement。
+- `ditto -c -k --sequesterRsrc --keepParent ...`：通过，重新封装签名后的 `Auto Caption-2.4.0-arm64-mac.zip`。
+- `node_modules/app-builder-bin/mac/app-builder_arm64 blockmap --input ... --output ...`：通过，最终 zip blockmap 输出 size `210472878`、sha512 `YMKvMKAH1nzXi26NAaxtvZgLOnK37Tm8MCctB1CVY4QgWzodhZoP2hqduOa96mzLyXgkL48cSaYhyIFcYotmZg==`。
+- `hdiutil create -volname 'Auto Caption' -fs APFS -format UDZO -srcfolder ... -ov dist/auto-caption-2.4.0.dmg`：通过，重新生成包含签名后 `.app` 的 DMG；hdiutil 提示该 create 用法已弃用，未影响产物生成。
+- `hdiutil verify dist/auto-caption-2.4.0.dmg`：通过，checksum VALID。
+- `unzip -tq dist/Auto Caption-2.4.0-arm64-mac.zip`：通过，无压缩数据错误。
+- `shasum -a 256 dist/auto-caption-2.4.0.dmg dist/Auto Caption-2.4.0-arm64-mac.zip`：
+  - DMG：`67e8277abd9c73c4ebb30d787a365a05d09462d682968ee1023839d2b0f6cd22`
+  - ZIP：`c303781b31162df5fa7c0b1c6a02d956f3d0d70394cea2f6ae165803a8eb9d65`
+- `npm run typecheck`：通过；Node 与 Web 类型检查均成功。
+- `npm run lint`：通过；ESLint 成功。
+- `git diff --check`：通过，无空白错误。
+
+### 未执行、风险与后续事项
+
+- 未启动安装后的真实 Electron GUI，也未测试麦克风、系统音频权限、真实识别、真实翻译 API 或热词远端资源；本批次验证到自动化测试、生产构建、引擎可执行文件 help、签名和安装包完整性。
+- 未做 Apple Developer ID 签名和 notarization；若面向外部分发，建议用正式证书重新签名、公证并再次生成/校验 DMG 与 zip。
+- 未执行 Windows、Linux、macOS x64 或 universal 构建；不能声明这些平台的 `2.4.0` 包已验证。
+- npm audit 仍报告 13 个漏洞；其中可能需要 Electron/Electron Builder/Vite 等大版本迁移，建议作为单独依赖治理任务处理。
+- `openai@3.0.0` 已进入项目虚拟环境但未做真实服务调用；如果 OpenAI 兼容翻译路径用于发布，建议补充针对该 SDK 版本的 mock 或实机回归。
+
+### 关键外部文档或技术决策来源
+
+- 本地 `package.json`、`package-lock.json` 与 `npm outdated --long`：确定 npm 更新范围，优先采用当前 semver 约束允许的新依赖。
+- 本地 `engine/requirements.txt`、`pip list --outdated` 与 `pip check`：确定 Python 虚拟环境更新范围和依赖一致性。
+- 本地 `electron-builder.yml`：确认 macOS arm64 打包入口、产物命名和引擎资源复制位置。
+- macOS 本机 `codesign`、`hdiutil`、`ditto` 与 Electron Builder 输出：确认最终 `.app`、zip、DMG 的签名、镜像和压缩包完整性。
+- 根目录 `AGENTS.md`：遵循依赖边界、系统环境不修改、三语文档同步、构建产物记录和 `change.md` 追加记录要求。

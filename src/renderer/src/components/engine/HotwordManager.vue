@@ -365,6 +365,14 @@ function showModelMismatch(): void {
 </script>
 
 <style scoped>
+.input-item {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 10px;
+  margin: 10px 0;
+}
+
 .remote-card {
   margin-top: 10px;
 }
@@ -376,18 +384,18 @@ function showModelMismatch(): void {
 
 .hotword-label,
 .editor-label {
-  display: inline-block;
-  width: 110px;
+  flex: 0 0 110px;
+  min-width: 0;
   text-align: right;
-  margin-right: 10px;
 }
 
 .hotword-input {
-  width: calc(100% - 130px);
+  flex: 1 1 120px;
+  width: auto;
+  min-width: 0;
 }
 
 .context-row {
-  display: flex;
   align-items: flex-start;
 }
 
@@ -396,6 +404,15 @@ function showModelMismatch(): void {
 .resource-list,
 .pagination-row {
   margin-top: 12px;
+}
+
+.manager-toolbar {
+  width: 100%;
+}
+
+.manager-toolbar :deep(.ant-space-item:first-child) {
+  min-width: 120px;
+  flex: 1 1 160px;
 }
 
 .danger-action {

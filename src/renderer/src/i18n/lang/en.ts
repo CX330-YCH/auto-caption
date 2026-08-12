@@ -44,6 +44,7 @@ export default {
   },
   general: {
     "title": "General Settings",
+    "settings": "Settings",
     "uiLanguage": "Language",
     "barWidth": "Width",
     "note": "General Settings take effect immediately. Please note that changes to the Caption Engine Settings and Caption Style Settings will only take effect after clicking Apply.",

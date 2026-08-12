@@ -6,15 +6,15 @@
       <a @click="resetStyle">{{ $t('style.resetStyle') }}</a>
     </template>
 
-      <div class="input-item">
-        <span class="input-label">{{ $t('style.lineNumber') }}</span>
-        <a-radio-group v-model:value="currentLineNumber">
-          <a-radio-button :value="1">1</a-radio-button>
-          <a-radio-button :value="2">2</a-radio-button>
-          <a-radio-button :value="3">3</a-radio-button>
-          <a-radio-button :value="4">4</a-radio-button>
-        </a-radio-group>
-      </div>
+    <div class="input-item">
+      <span class="input-label">{{ $t('style.lineNumber') }}</span>
+      <a-radio-group v-model:value="currentLineNumber">
+        <a-radio-button :value="1">1</a-radio-button>
+        <a-radio-button :value="2">2</a-radio-button>
+        <a-radio-button :value="3">3</a-radio-button>
+        <a-radio-button :value="4">4</a-radio-button>
+      </a-radio-group>
+    </div>
 
     <div class="input-item">
       <span class="input-label">{{ $t('style.longCaption') }}</span>
@@ -83,13 +83,11 @@
     <div class="input-item">
       <span class="input-label">{{ $t('style.preview') }}</span>
       <a-switch v-model:checked="currentPreview" />
-      <span style="display:inline-block;width:10px;"></span>
-      <div style="display: inline-block;">
+      <div class="switch-option">
         <span class="switch-label">{{ $t('style.translation') }}</span>
         <a-switch v-model:checked="currentTransDisplay" />
       </div>
-      <span style="display:inline-block;width:10px;"></span>
-      <div style="display: inline-block;">
+      <div class="switch-option">
         <span class="switch-label">{{ $t('style.textShadow') }}</span>
         <a-switch v-model:checked="currentTextShadow" />
       </div>
@@ -179,7 +177,7 @@
     </div>
   </a-card>
 
-  <Teleport to="body">
+  <Teleport defer to="#caption-preview-host">
     <div
       v-if="currentPreview"
       class="preview-container"
@@ -377,15 +375,20 @@ watch(changeSignal, (val) => {
   font-weight: bold;
 }
 
+.switch-option {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .preview-container {
-  width: 60%;
+  box-sizing: border-box;
+  width: 100%;
   text-align: center;
-  position: absolute;
   padding: 10px;
   border-radius: 10px;
-  left: 64%;
-  transform: translateX(-50%);
-  bottom: 20px;
+  overflow-wrap: anywhere;
 }
 
 .preview-container p {

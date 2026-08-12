@@ -1,6 +1,6 @@
 # Auto Caption User Manual
 
-Corresponding Version: v2.3.0
+Corresponding Version: v2.4.0
 
 **Note: Due to limited personal resources, the English and Japanese documentation files for this project (except for the README document) will no longer be maintained. The content of this document may not be consistent with the latest version of the project. If you are willing to help with translation, please submit relevant Pull Requests.**
 
@@ -117,6 +117,8 @@ sudo yum install pulseaudio pavucontrol
 ### Modifying Settings
 
 Caption settings can be divided into three categories: general settings, caption engine settings, and caption style settings. Note that changes to general settings take effect immediately. For the other two categories, after making changes, you need to click the "Apply" option in the upper right corner of the corresponding settings module for the changes to take effect. If you click "Cancel Changes," the current modifications will not be saved and will revert to the previous state.
+
+The minimum caption control window size is 900×600. When its content area is narrower than 1200px, the settings panel collapses into a Settings rail on the left. Hover over or focus the rail with the keyboard to open it temporarily, or click it to keep it open. Click it again, click outside the settings area, or press Esc to close it. Unapplied caption engine and caption style drafts remain intact while the panel opens, closes, or crosses the responsive breakpoint. The caption style preview is docked at the bottom of the right pane and uses at most 35% of the content height; excess preview content scrolls inside that area instead of covering caption records.
 
 The current version uses a layered configuration file with `schemaVersion: 3`. Complete V2 configuration is migrated automatically, including conversion of the old custom engine into a named entry. Unversioned configuration still falls back to defaults.
 

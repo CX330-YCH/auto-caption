@@ -100,8 +100,9 @@ watch(uiTheme, (val) => {
 @import url(../assets/input.css);
 
 .span-input {
-  display: inline-block;
-  width: 100px;
+  flex: 1 1 120px;
+  width: auto;
+  min-width: 0;
   margin: 0;
 }
 

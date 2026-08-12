@@ -1,12 +1,12 @@
 <template>
   <div class="caption-stat">
-    <a-row>
-      <a-col :span="5">
+    <div class="status-grid">
+      <div class="status-item">
         <a-statistic
           :title="$t('status.engine')"
           :value="engine"
         />
-      </a-col>
+      </div>
       <a-popover :title="$t('status.engineStatus')">
         <template #content>
           <a-row class="engine-status">
@@ -36,7 +36,7 @@
             </a-col>
           </a-row>
         </template>
-        <a-col :span="5" @mouseenter="getEngineInfo" style="cursor: pointer;">
+        <div class="status-item status-item-interactive" @mouseenter="getEngineInfo">
           <a-statistic
             :title="$t('status.status')"
             :value="engineEnabled?$t('status.started'):$t('status.stopped')"
@@ -45,19 +45,19 @@
               <InfoCircleOutlined style="font-size:18px;color:#1677ff"/>
             </template>
           </a-statistic>
-        </a-col>
+        </div>
       </a-popover>
-      <a-col :span="5">
+      <div class="status-item">
         <a-statistic :title="$t('status.logNumber')" :value="captionData.length" />
-      </a-col>
-      <a-col :span="5">
+      </div>
+      <div class="status-item">
         <a-statistic :title="$t('status.logNumber2')" :value="softwareLogs.length" />
-      </a-col>
-      <a-col :span="4">
+      </div>
+      <div class="status-item">
         <div class="about-tag">{{ $t('status.aboutProj') }}</div>
-          <GithubOutlined class="proj-info" @click="showAbout = true"/>
-      </a-col>
-    </a-row>
+        <GithubOutlined class="proj-info" @click="showAbout = true"/>
+      </div>
+    </div>
   </div>
 
   <div class="caption-control">
@@ -101,7 +101,7 @@
       <p class="about-desc">{{ $t('status.about.desc') }}</p>
       <a-divider />
       <div class="about-info">
-        <p><b>{{ $t('status.about.version') }}</b><a-tag color="green">v2.3.0</a-tag></p>
+        <p><b>{{ $t('status.about.version') }}</b><a-tag color="green">v2.4.0</a-tag></p>
         <p>
           <b>{{ $t('status.about.author') }}</b>
           <a
@@ -243,6 +243,20 @@ watch(errorSignal, () => {
   color: var(--tag-color);
 }
 
+.status-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 16px;
+}
+
+.status-item {
+  min-width: 0;
+}
+
+.status-item-interactive {
+  cursor: pointer;
+}
+
 .about-tag {
   color: var(--tag-color);
   margin-bottom: 16px;
@@ -293,12 +307,12 @@ watch(errorSignal, () => {
   display: flex;
   flex-wrap: wrap;
   justify-content: center;
-  margin: 30px;
+  gap: 16px;
+  margin: 0;
 }
 
 .control-button {
   height: 40px;
-  margin: 20px;
   font-size: 16px;
 }
 </style>

@@ -44,6 +44,7 @@ export default {
   },
   general: {
     "title": "通用设置",
+    "settings": "设置",
     "uiLanguage": "界面语言",
     "barWidth": "左侧宽度",
     "note": "通用设置修改后立即生效。注意字幕引擎设置和字幕样式的设置修改后需要点击应用后才会生效。",

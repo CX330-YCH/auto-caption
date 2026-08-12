@@ -106,7 +106,7 @@ const localizedOptions = computed(
 }
 
 .input-folder {
-  display: inline-block;
+  flex: 0 0 40px;
   width: 40px;
   font-size: 1.38em;
   cursor: pointer;
@@ -118,6 +118,8 @@ const localizedOptions = computed(
 }
 
 .input-area-with-folder {
-  width: calc(100% - 140px);
+  flex: 1 1 100px;
+  width: auto;
+  min-width: 0;
 }
 </style>
