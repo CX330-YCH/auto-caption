@@ -36,7 +36,11 @@ export default {
     "funAsrEndpointInvalid": "Fun-ASR Endpoint Mismatch",
     "funAsrEndpointInvalidNote": "Use an official China (Beijing) or Singapore workspace endpoint whose hostname WorkspaceId exactly matches the configuration.",
     "funAsrHotwordModelMismatch": "Hotword Model Mismatch",
-    "funAsrHotwordModelMismatchNote": "The precompiled vocabulary target model must exactly match the active Fun-ASR recognition model or it will have no effect."
+    "funAsrHotwordModelMismatchNote": "The precompiled vocabulary target model must exactly match the active Fun-ASR recognition model or it will have no effect.",
+    "customExecutableMissing": "Custom Engine Path Missing",
+    "customExecutableMissingNote": "Enter an executable path before starting the custom caption engine.",
+    "customEngineMissing": "Custom Engine Missing",
+    "customEngineMissingNote": "The selected custom engine no longer exists. Select another engine."
   },
   general: {
     "title": "General Settings",
@@ -65,6 +69,8 @@ export default {
     "systemOutput": "System Audio Output (Speaker)",
     "systemInput": "System Audio Input (Microphone)",
     "enableTranslation": "Translation",
+    "configureTranslation": "Configure Translation Engine",
+    "translationSettings": "Translation Engine Settings",
     "enableRecording": "Enable Recording",
     "showMore": "More Settings",
     "apikey": "API KEY",
@@ -194,7 +200,15 @@ export default {
       "attention": "Attention",
       "note": "Note: Allows users to provide captions using a custom engine. The provided engine should be able to start via the command line and can specify parameters through command-line instructions. The engine needs to communicate with the node.js backend using standard output. For more information, refer to the project's documentation.",
       "app": "Engine Path",
-      "command": "Command"
+      "command": "Command",
+      "add": "Add Custom Engine…",
+      "namePrompt": "Name Custom Engine",
+      "namePlaceholder": "Enter the name shown in the engine menu",
+      "nameRequired": "A name is required.",
+      "nameDuplicate": "A custom engine with this name already exists.",
+      "create": "Create",
+      "delete": "Delete",
+      "deleteConfirm": "Remove “{name}”? The deletion is saved only after applying changes."
     }
   },
   style: {

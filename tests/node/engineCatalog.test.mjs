@@ -25,7 +25,7 @@ function hasMessageKey(messages, key) {
   return key.split('.').reduce((current, segment) => current?.[segment], messages) !== undefined
 }
 
-test('registers each V2 provider once with capability and field metadata', () => {
+test('registers each V3 provider once with capability and field metadata', () => {
   const providerIds = engineDefinitions.map((definition) => definition.id)
 
   assert.deepEqual(providerIds, ['gummy', 'vosk', 'sosv', 'glm', 'fun_asr'])
@@ -39,7 +39,6 @@ test('registers each V2 provider once with capability and field metadata', () =>
     assert.ok(definition.languages.some((language) => language.roles.includes('source')))
     assert.ok(definition.languages.some((language) => language.roles.includes('target')))
     assert.equal(new Set(fieldIds).size, fieldIds.length)
-    assert.ok(fields.some((field) => field.path === 'provider'))
     assert.ok(fields.some((field) => field.path === 'common.audioSource'))
   }
 })
@@ -70,6 +69,10 @@ test('reads, writes, clones, and evaluates nested form fields without provider b
   assert.equal(config.common.translation.model, 'qwen2.5:0.5b')
   assert.equal(isEngineFieldVisible(clone, modelField), true)
 
+  clone.common.translation.enabled = false
+  assert.equal(isEngineFieldVisible(clone, modelField), false)
+  clone.common.translation.enabled = true
+
   clone.common.translation.provider = 'google'
   assert.equal(isEngineFieldVisible(clone, modelField), false)
 })
@@ -86,23 +89,23 @@ test('clones Vue reactive engine config without retaining proxy state', () => {
 test('validates start requirements from the selected provider definition', () => {
   const config = createDefaultConfig('/recordings').engine
 
-  config.provider = 'vosk'
+  config.activeEngineId = 'vosk'
   assert.equal(validateEngineConfig(config, 'start')?.fieldId, 'vosk-model-path')
   config.providers.vosk.modelPath = '/models/vosk'
   assert.equal(validateEngineConfig(config, 'start'), null)
 
-  config.provider = 'sosv'
+  config.activeEngineId = 'sosv'
   assert.equal(validateEngineConfig(config, 'start')?.fieldId, 'sosv-model-path')
   config.providers.sosv.modelPath = '/models/sosv'
   assert.equal(validateEngineConfig(config, 'start'), null)
 
-  config.provider = 'glm'
+  config.activeEngineId = 'glm'
   assert.equal(validateEngineConfig(config, 'start'), null)
 })
 
 test('validates external translation and normalizes provider defaults from metadata', () => {
   const config = createDefaultConfig('/recordings').engine
-  config.provider = 'glm'
+  config.activeEngineId = 'glm'
   config.common.translation.model = '  '
 
   assert.equal(validateEngineConfig(config, 'apply')?.fieldId, 'translation-model')
@@ -149,10 +152,26 @@ test('describes Fun-ASR connection and segmentation fields through capabilities'
   assert.equal(definition.capabilities.hotwords, 'manager')
 
   const config = createDefaultConfig('/recordings').engine
-  config.provider = 'fun_asr'
+  config.activeEngineId = 'fun_asr'
   config.providers.funAsr.hotwords.vocabularyId = 'vocab-project-1'
   config.providers.funAsr.model = 'fun-asr-realtime-2025-11-07'
   assert.equal(validateEngineConfig(config, 'apply')?.fieldId, 'fun-asr-hotwords')
+})
+
+test('validates only the selected custom engine and skips builtin requirements', () => {
+  const config = createDefaultConfig('/recordings').engine
+  config.providers.vosk.modelPath = ''
+  config.customEngines.push({
+    id: 'custom-live',
+    name: 'Live Engine',
+    executable: '',
+    command: '--mode live'
+  })
+  config.activeEngineId = 'custom-live'
+
+  assert.equal(validateEngineConfig(config, 'start')?.fieldId, 'custom-executable')
+  config.customEngines[0].executable = '/engines/live'
+  assert.equal(validateEngineConfig(config, 'start'), null)
 })
 
 test('resolves every catalog label and help key in all supported UI languages', () => {

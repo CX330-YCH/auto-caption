@@ -6,5 +6,6 @@ export default {
   "engine.output.parse.error": "Unable to parse caption engine output as a JSON object: ",
   "engine.error": "Caption engine error: ",
   "engine.shutdown.error": "Failed to shut down the caption engine process: ",
-  "engine.start.timeout": "Caption engine startup timeout, automatically force stopped"
+  "engine.start.timeout": "Caption engine startup timeout, automatically force stopped",
+  "engine.selection.invalid": "The selected caption engine does not exist. Please configure it again."
 }

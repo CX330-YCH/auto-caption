@@ -1200,6 +1200,106 @@
 - 本地 `package.json` 与 `electron-builder.yml`：确认 macOS 产物版本来自 npm 包版本，DMG artifact 使用 `${name}-${version}.${ext}`。
 - 根目录 `AGENTS.md`：遵循修改前检查、三语文档同步、构建产物记录、验证记录、系统环境与依赖边界、`change.md` 追加记录要求。
 
+## 2026-08-12 - 翻译配置折叠与命名自定义引擎
+
+### 授权与目标
+
+- 用户明确授权执行修改：关闭翻译时不再展示无效的翻译服务字段；启用翻译后增加“配置翻译引擎”开关，打开时才展开外部翻译 Provider、模型、Base URL 和 API Key。
+- 用户同时要求把自定义引擎放入字幕引擎下拉菜单：选择添加入口时提示命名，创建后以该名称长期显示，并在自定义条目右侧提供删除按钮。
+- 非目标：不修改 Python Provider、字幕 stdout/TCP 协议、远端热词资源、依赖版本、发布版本或安装包。
+- 修改前已存在用户未提交改动；本批次保留这些改动，并在相关文件中只追加本功能所需差异。`src/renderer/src/engines/form.ts` 的 Vue Proxy 克隆修复不是本批次产生的修改。
+
+### 变更类型
+
+- 功能：翻译配置折叠；命名、多条目的自定义字幕引擎选择与删除。
+- 修复：关闭翻译后不再向 Python 子进程传递翻译模型、URL 或翻译凭据；自定义引擎不再被残留内置 Provider 校验阻止。
+- 配置：配置 schema 从 V2 升级至 V3，并提供 V2→V3 显式迁移。
+- 测试：补充迁移、显隐、命令参数隔离和自定义引擎校验覆盖。
+- 文档：同步 README、三语用户手册、配置/API、架构、测试和 CHANGELOG。
+
+### 修改文件与原因
+
+- `src/shared/config/schema.ts`、`validation.ts`、`document.ts`、`src/shared/types.ts`
+  - 将单一 `provider + custom.enabled` 双状态改为 `activeEngineId + customEngines[]`；增加活动内置/自定义引擎解析、命名条目校验和 V2→V3 迁移。
+- `src/main/engine/config/EngineCommandBuilder.ts`
+  - 由已解析的内置 Provider 或自定义条目构建参数；翻译关闭时不生成 `-tm`、`-omn`、`-ourl`、`-okey`。
+- `src/main/utils/CaptionEngine.ts`、`AllConfig.ts`
+  - 按唯一活动引擎启动进程，处理不存在的选择，并使用 V3 配置读写及安全日志。
+- `src/main/i18n/lang/zh.ts`、`en.ts`、`ja.ts`
+  - 增加活动引擎失效的三语主进程错误文本。
+- `src/renderer/src/engines/catalog.ts`、`types.ts`
+  - 将外部翻译字段划分为独立 section，显隐同时受“启用翻译”和翻译 Provider 控制；统一跳过自定义引擎的内置 Provider 校验，并校验自定义可执行路径。
+- `src/renderer/src/components/engine/EngineSelector.vue`
+  - 新增统一下拉选择器，显示五个内置 Provider、命名自定义条目、“添加自定义引擎…”入口和条目右侧确认删除按钮。
+- `src/renderer/src/components/EngineControl.vue`
+  - 增加命名弹窗、重复/空名称检查、翻译配置展开开关、自定义条目编辑和删除后的安全回退；折叠状态只属于当前界面，不持久化。
+- `src/renderer/src/components/EngineStatus.vue`、`src/renderer/src/stores/engineControl.ts`
+  - 状态与启动通知显示活动内置 Provider 或用户命名的自定义引擎。
+- `src/renderer/src/i18n/lang/zh.ts`、`en.ts`、`ja.ts`
+  - 补齐翻译配置、自定义命名、删除确认和校验文本。
+- `tests/node/configDocument.test.mjs`
+  - 验证 V3 默认值、完整 V2 自定义配置迁移、未来/无版本拒绝和活动引擎校验。
+- `tests/node/engineCatalog.test.mjs`
+  - 验证翻译关闭后的字段不可见，以及自定义引擎只校验自身可执行路径、不执行残留 Vosk 等内置要求；保留此前已有的 Vue reactive clone 测试。
+- `tests/node/engineCommandBuilder.test.mjs`
+  - 验证 V3 内置/自定义启动参数，并确认翻译关闭后目标为 `none` 且不再传翻译服务参数。
+- `docs/api-docs/config-v2.md` → `docs/api-docs/config-v3.md`
+  - 更新配置示例、字段约束、迁移和兼容说明。
+- `docs/api-docs/electron-ipc.md`、`docs/engine-manual/architecture.md`、`docs/testing.md`
+  - 同步 V3 数据结构、Renderer 组件职责、IPC 数据类型和验证范围。
+- `README.md`、`README_en.md`、`README_ja.md`、`docs/user-manual/zh.md`、`en.md`、`ja.md`、`docs/CHANGELOG.md`
+  - 中英日同步用户可见交互和未发布变更说明。
+- `change.md`
+  - 追加本批次的授权、行为、兼容性、验证和风险记录。
+
+### 修改前后行为
+
+- 修改前：关闭翻译仍显示目标语言和外部翻译服务字段；启动 Vosk、SOSV、GLM、Fun-ASR 时仍把翻译模型、URL 和 API Key 传给子进程。
+- 修改后：关闭翻译时隐藏目标语言和翻译配置入口，启动参数只使用 `-t none`；开启后显示“配置翻译引擎”，用户打开后才展示外部翻译字段。字段值在折叠或关闭期间保留。
+- 修改前：自定义引擎通过 `custom.enabled` 覆盖仍被选中的内置 Provider，只能保存一项，并可能触发背后内置 Provider 的启动校验。
+- 修改后：下拉菜单是唯一活动引擎选择源；可创建多个命名自定义条目、确认删除并保留未选择条目的配置。选择自定义条目只校验其可执行路径。
+- 删除在草稿中立即反映；删除当前条目时草稿回退到 Gummy。点击“应用更改”才持久化，点击“取消更改”可恢复已应用状态。
+
+### 配置、IPC、协议、命令行与数据结构
+
+- 配置 schemaVersion 从 `2` 升级为 `3`。
+- `engine.provider` 与 `engine.custom` 替换为 `engine.activeEngineId` 和 `engine.customEngines[]`；自定义条目包含 `id`、`name`、`executable`、`command`。
+- 完整 V2 配置显式迁移：旧自定义开关开启时创建并选中 `Custom Engine`；关闭但已填写路径/命令时创建未选中条目；旧字段不会继续写入 V3。
+- Electron 内部配置 IPC 通道名称不变，但传递的数据结构升级为 V3；主进程继续重新校验完整 engine 层。
+- Python stdout/TCP 字幕协议没有变化；自定义引擎仍通过原协议通信，端口参数行为不变。
+- 内置 Python CLI 参数名称没有变化；翻译关闭时不再传递本就无效的外部翻译服务参数。
+
+### 兼容性、迁移与回滚
+
+- V2→V3 迁移有单元测试；无版本、V1、结构不完整或未来版本仍按既有安全策略拒绝并使用 V3 默认值。
+- 自定义字幕引擎进程协议保持兼容；旧单条自定义配置迁移后默认名称为 `Custom Engine`，用户可在后续新建自定义条目时使用其他名称。
+- Windows、macOS、Linux 使用相同 JSON 结构与 `spawn(executable, args)` 路径；本批次未执行三平台真实 GUI/进程启动回归，不能声称跨平台运行已实测。
+- 精确回滚需要恢复本批次列出的源码、测试和文档，并把配置解析恢复到 V2；已经由应用写出的 V3 `config.json` 无法被旧版直接读取，回滚前应备份并手工转换或使用旧备份。
+
+### 验证记录
+
+- `npm run lint`：通过，无 ESLint 错误。
+- `npm run typecheck`：通过，Node TypeScript 与 Vue TypeScript 均无错误。
+- `npm test`：通过；Node 39/39、Python 49/49。
+- `npm run build`：通过；Electron main、preload、renderer 生产构建成功，分别转换 22、1、3256 个模块。
+- `git diff --check`：通过，无空白错误。
+- 验证过程中的真实修正：首次 lint 发现测试未使用变量，已删除；首次完整类型检查发现迁移临时对象推断过窄，已声明为 `Record<string, unknown>`，随后完整验证通过。
+- npm/Node 保留既有 mirror 配置弃用警告与无 `type: module` 的性能警告；不影响本次命令成功，未通过无关依赖或包类型调整扩大范围。
+
+### 未执行、风险与后续事项
+
+- 未执行真实 Electron GUI 点击回归：尝试按 Browser 技能连接本地界面，但当前会话未提供该技能要求的浏览器控制工具。下拉菜单弹窗、右侧删除按钮和动态显隐由 Vue 类型检查、构建与纯逻辑测试覆盖，但仍建议在桌面应用中人工确认 Ant Design Select 弹层内删除按钮的点击区域和三语布局。
+- 未使用真实麦克风、扬声器、字幕引擎可执行文件或付费 API；不会产生费用，也不会修改远端资源。
+- 未执行 Windows/Linux/macOS 安装包构建或真实自定义进程启动。
+- 自定义命令仍沿用既有空格切分语义；包含引号或参数内部空格的复杂命令不是本次授权范围，后续应独立设计跨平台参数解析。
+- 配置中凭据仍沿用既有明文存储行为；本次只确保关闭翻译时不再把翻译凭据传给子进程，没有扩大凭据暴露面。
+
+### 参考与决策依据
+
+- 用户确认的交互：以“启用翻译”决定业务行为，以“配置翻译引擎”控制外部翻译字段展开；自定义引擎作为可命名、可删除的下拉条目。
+- 项目现有 Provider capability registry、V2 配置解析、Electron `spawn` 启动路径和 Ant Design Vue 表单组件。
+- 根目录 `AGENTS.md`：配置变化必须显式迁移、三语同步、主进程校验、凭据不泄漏、测试与 `change.md` 完整记录要求。
+
 ## 2026-08-12 - 修复声明式引擎设置卡片初始化崩溃
 
 ### 授权与目标

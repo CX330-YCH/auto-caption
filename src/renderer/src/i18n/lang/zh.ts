@@ -36,7 +36,11 @@ export default {
     "funAsrEndpointInvalid": "Fun-ASR 地址不匹配",
     "funAsrEndpointInvalidNote": "WebSocket 地址必须是华北2（北京）或新加坡的官方专属地址，并且地址中的 WorkspaceId 必须与配置完全一致。",
     "funAsrHotwordModelMismatch": "热词表模型不匹配",
-    "funAsrHotwordModelMismatchNote": "预编译热词表的目标模型必须与当前 Fun-ASR 识别模型完全一致，否则热词不会生效。"
+    "funAsrHotwordModelMismatchNote": "预编译热词表的目标模型必须与当前 Fun-ASR 识别模型完全一致，否则热词不会生效。",
+    "customExecutableMissing": "自定义引擎路径为空",
+    "customExecutableMissingNote": "启动自定义字幕引擎前必须填写可执行文件路径。",
+    "customEngineMissing": "自定义引擎不存在",
+    "customEngineMissingNote": "所选自定义引擎已不存在，请重新选择。"
   },
   general: {
     "title": "通用设置",
@@ -65,6 +69,8 @@ export default {
     "systemOutput": "系统音频输出（扬声器）",
     "systemInput": "系统音频输入（麦克风）",
     "enableTranslation": "启用翻译",
+    "configureTranslation": "配置翻译引擎",
+    "translationSettings": "翻译引擎设置",
     "enableRecording": "启用录制",
     "showMore": "更多设置",
     "apikey": "API KEY",
@@ -194,7 +200,15 @@ export default {
       "attention": "注意事项",
       "note": "说明：允许用户使用自定义引擎提供字幕。提供的引擎要能通过命令行启动，且可以提供命令行指令来指定参数。引擎需要使用标准输出与软件 node.js 后端进行通信。详细信息参考项目文档。",
       "app": "引擎路径",
-      "command": "引擎指令"
+      "command": "引擎指令",
+      "add": "添加自定义引擎…",
+      "namePrompt": "命名自定义引擎",
+      "namePlaceholder": "请输入显示在下拉菜单中的名称",
+      "nameRequired": "名称不能为空。",
+      "nameDuplicate": "已有同名的自定义引擎。",
+      "create": "创建",
+      "delete": "删除",
+      "deleteConfirm": "确定移除“{name}”吗？点击“应用更改”后删除才会保存。"
     }
   },
   style: {

@@ -1,9 +1,14 @@
 import type { Styles, UILanguage, UITheme } from '../types'
 
-export const CONFIG_SCHEMA_VERSION = 2 as const
+export const CONFIG_SCHEMA_VERSION = 3 as const
 
 export type KnownProviderName = 'gummy' | 'vosk' | 'sosv' | 'glm' | 'fun_asr'
 export type AudioSourceType = 0 | 1
+
+export function isKnownProviderName(value: unknown): value is KnownProviderName {
+  return value === 'gummy' || value === 'vosk' || value === 'sosv' ||
+    value === 'glm' || value === 'fun_asr'
+}
 
 export interface TranslationConfig {
   [key: string]: unknown
@@ -82,17 +87,26 @@ export interface ProviderConfigs {
 
 export interface CustomEngineConfig {
   [key: string]: unknown
-  enabled: boolean
+  id: string
+  name: string
   executable: string
   command: string
 }
 
 export interface EngineConfig {
   [key: string]: unknown
-  provider: KnownProviderName
+  activeEngineId: string
   common: EngineCommonConfig
   providers: ProviderConfigs
-  custom: CustomEngineConfig
+  customEngines: CustomEngineConfig[]
+}
+
+export function getActiveBuiltinProvider(config: EngineConfig): KnownProviderName | null {
+  return isKnownProviderName(config.activeEngineId) ? config.activeEngineId : null
+}
+
+export function getActiveCustomEngine(config: EngineConfig): CustomEngineConfig | null {
+  return config.customEngines.find((engine) => engine.id === config.activeEngineId) ?? null
 }
 
 export interface ApplicationLayoutConfig {
@@ -114,7 +128,7 @@ export interface CaptionConfig {
   styles: Styles
 }
 
-export interface ConfigDocumentV2 {
+export interface ConfigDocumentV3 {
   [key: string]: unknown
   schemaVersion: typeof CONFIG_SCHEMA_VERSION
   application: ApplicationConfig
@@ -160,7 +174,7 @@ export function createDefaultStyles(): Styles {
   }
 }
 
-export function createDefaultConfig(recordingPath: string): ConfigDocumentV2 {
+export function createDefaultConfig(recordingPath: string): ConfigDocumentV3 {
   return {
     schemaVersion: CONFIG_SCHEMA_VERSION,
     application: {
@@ -173,7 +187,7 @@ export function createDefaultConfig(recordingPath: string): ConfigDocumentV2 {
       }
     },
     engine: {
-      provider: 'gummy',
+      activeEngineId: 'gummy',
       common: {
         sourceLanguage: 'en',
         targetLanguage: 'zh',
@@ -215,11 +229,7 @@ export function createDefaultConfig(recordingPath: string): ConfigDocumentV2 {
           }
         }
       },
-      custom: {
-        enabled: false,
-        executable: '',
-        command: ''
-      }
+      customEngines: []
     },
     caption: {
       styles: createDefaultStyles()

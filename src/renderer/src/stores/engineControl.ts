@@ -9,6 +9,10 @@ import { useI18n } from 'vue-i18n'
 import type { EngineConfig } from '../../../shared/config/schema'
 import { createDefaultConfig } from '../../../shared/config/schema'
 import type { EngineValidationIssue } from '@renderer/engines/types.ts'
+import {
+  getActiveBuiltinProvider,
+  getActiveCustomEngine
+} from '../../../shared/config/schema.ts'
 
 export const useEngineControlStore = defineStore('engineControl', () => {
   const { t } = useI18n()
@@ -47,16 +51,20 @@ export const useEngineControlStore = defineStore('engineControl', () => {
   window.electron.ipcRenderer.on('control.engine.started', (_, args) => {
     const config = engineConfig.value
     const common = config.common
+    const provider = getActiveBuiltinProvider(config)
+    const customEngine = getActiveCustomEngine(config)
     const str0 =
       `${t('noti.sLang')}${common.sourceLanguage}${t('noti.trans')}${common.translation.enabled?'yes':'no'}` +
-      `${t('noti.engine')}${config.provider}${t('noti.audio')}${common.audioSource?t('noti.sysin'):t('noti.sysout')}` +
+      `${t('noti.engine')}${provider}${t('noti.audio')}${common.audioSource?t('noti.sysin'):t('noti.sysout')}` +
       (common.translation.enabled ? `${t('noti.tLang')}${common.targetLanguage}` : '')
-    const str1 = `${t('noti.custom')}${config.custom.executable}${t('noti.args')}${config.custom.command}`
+    const str1 = customEngine
+      ? `${t('noti.custom')}${customEngine.name} (${customEngine.executable})${t('noti.args')}${customEngine.command}`
+      : ''
     notification.open({
       placement: 'topLeft',
       message: t('noti.started'),
       description:
-        (config.custom.enabled ? str1 : str0) +
+        (customEngine ? str1 : str0) +
         `${t('noti.pidInfo')}${args}`
     })
   })

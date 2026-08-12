@@ -76,6 +76,8 @@ After downloading the software, you need to select the corresponding model accor
 
 If you choose a model other than Gummy, you also need to configure your own translation model.
 
+When translation is disabled, translation-service fields are hidden and are not passed to the caption engine. Enable translation and expand “Configure Translation Engine” to edit the model, Base URL, and API key. Named custom engines can be created from “Add Custom Engine…” in the engine menu, and each custom entry has a delete action.
+
 ### Configuring Translation Models
 
 ![](./assets/media/engine_en.png)

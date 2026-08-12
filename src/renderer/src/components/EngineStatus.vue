@@ -4,7 +4,7 @@
       <a-col :span="5">
         <a-statistic
           :title="$t('status.engine')"
-          :value="customized?$t('status.customized'):engine"
+          :value="engine"
         />
       </a-col>
       <a-popover :title="$t('status.engineStatus')">
@@ -142,7 +142,7 @@
 </template>
 
 <script setup lang="ts">
-import { EngineInfo } from '@renderer/types'
+import type { EngineInfo } from '@renderer/types'
 import { computed, ref, watch, h } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useCaptionLogStore } from '@renderer/stores/captionLog'
@@ -150,6 +150,10 @@ import { useSoftwareLogStore } from '@renderer/stores/softwareLog'
 import { useEngineControlStore } from '@renderer/stores/engineControl'
 import { GithubOutlined, InfoCircleOutlined, LoadingOutlined } from '@ant-design/icons-vue'
 import { validateEngineConfig } from '@renderer/engines/catalog.ts'
+import {
+  getActiveBuiltinProvider,
+  getActiveCustomEngine
+} from '../../../shared/config/schema.ts'
 
 const showAbout = ref(false)
 const pending = ref(false)
@@ -161,8 +165,10 @@ const softwareLog = useSoftwareLogStore()
 const { softwareLogs } = storeToRefs(softwareLog)
 const engineControl = useEngineControlStore()
 const { engineEnabled, engineConfig, errorSignal } = storeToRefs(engineControl)
-const engine = computed(() => engineConfig.value.provider)
-const customized = computed(() => engineConfig.value.custom.enabled)
+const engine = computed(() => {
+  return getActiveCustomEngine(engineConfig.value)?.name ??
+    getActiveBuiltinProvider(engineConfig.value) ?? ''
+})
 
 const pid = ref(0)
 const ppid = ref(0)

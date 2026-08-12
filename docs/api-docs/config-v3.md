@@ -1,6 +1,6 @@
-# 配置文件 V2
+# 配置文件 V3
 
-Auto Caption 的持久化配置位于 Electron `userData/config.json`。当前只接受 `schemaVersion: 2`，磁盘、主进程、IPC 和渲染进程共享同一套分层类型。
+Auto Caption 的持久化配置位于 Electron `userData/config.json`。当前只接受 `schemaVersion: 3`，磁盘、主进程、IPC 和渲染进程共享同一套分层类型。
 
 ## 文档结构
 
@@ -8,7 +8,7 @@ Auto Caption 的持久化配置位于 Electron `userData/config.json`。当前�
 
 ```json
 {
-  "schemaVersion": 2,
+  "schemaVersion": 3,
   "application": {
     "language": "zh",
     "theme": "system",
@@ -19,7 +19,7 @@ Auto Caption 的持久化配置位于 Electron `userData/config.json`。当前�
     }
   },
   "engine": {
-    "provider": "gummy",
+    "activeEngineId": "gummy",
     "common": {
       "sourceLanguage": "en",
       "targetLanguage": "zh",
@@ -61,11 +61,14 @@ Auto Caption 的持久化配置位于 Electron `userData/config.json`。当前�
         }
       }
     },
-    "custom": {
-      "enabled": false,
-      "executable": "",
-      "command": ""
-    }
+    "customEngines": [
+      {
+        "id": "custom-example",
+        "name": "My Caption Engine",
+        "executable": "<path-to-executable>",
+        "command": "--model example"
+      }
+    ]
   },
   "caption": {
     "styles": {}
@@ -73,16 +76,16 @@ Auto Caption 的持久化配置位于 Electron `userData/config.json`。当前�
 }
 ```
 
-`application` 只保存应用外观和窗口布局；`engine.common` 保存所有 Provider 共用的音频、语言、翻译、录音和超时配置；`engine.providers` 保存供应商专属字段；`engine.custom` 保存自定义进程配置；`caption` 保存字幕显示配置。
+`application` 只保存应用外观和窗口布局；`engine.common` 保存所有 Provider 共用的音频、语言、翻译、录音和超时配置；`engine.providers` 保存供应商专属字段；`engine.customEngines` 保存用户命名的自定义进程配置；`activeEngineId` 指向内置 Provider ID 或某个自定义引擎 ID；`caption` 保存字幕显示配置。
 
 `engineEnabled`、字幕记录、软件日志、进程 PID 和端口属于运行状态，不写入配置文件。
 
 ## 校验
 
-- `schemaVersion` 必须严格等于 `2`。
+- `schemaVersion` 必须严格等于 `3`；读取完整 V2 时会先执行显式迁移。
 - `language` 只能为 `zh`、`en` 或 `ja`；`theme` 只能为 `light`、`dark` 或 `system`。
 - 颜色必须是六位十六进制颜色；边栏宽度为 6–12；字幕窗口宽度为 480–10000。
-- `provider` 只能为 `gummy`、`vosk`、`sosv`、`glm` 或 `fun_asr`；音频源只能为 `0` 或 `1`；启动超时为 10–120 秒。
+- `activeEngineId` 必须是 `gummy`、`vosk`、`sosv`、`glm`、`fun_asr` 或 `customEngines` 中存在的唯一 ID；自定义引擎名称去除首尾空白后不得为空且不允许重名；音频源只能为 `0` 或 `1`；启动超时为 10–120 秒。
 - 翻译和 GLM URL 只能为空（仅允许翻译 URL）或使用 HTTP/HTTPS。
 - Fun-ASR 模型只能为 `fun-asr-realtime` 或 `fun-asr-realtime-2025-11-07`；最大句间静音范围为 200–6000 ms。
 - Fun-ASR 启动时必须同时提供 Workspace ID 和专属 WebSocket 地址。地址必须使用 WSS、路径必须为 `/api-ws/v1/inference`，并且只能是 `<WorkspaceId>.cn-beijing.maas.aliyuncs.com` 或 `<WorkspaceId>.ap-southeast-1.maas.aliyuncs.com`；主机中的 Workspace ID 必须与配置字段一致。
@@ -91,11 +94,11 @@ Auto Caption 的持久化配置位于 Electron `userData/config.json`。当前�
 - 字幕样式数值按当前 UI 的滑块范围校验。
 - 来自渲染进程的 application、engine 和 caption 配置在主进程重新校验；拒绝日志只记录配置分类和异常类型，不输出字段值或密钥。
 
-V2 对象中的未知扩展字段会在解析和同层更新时保留，便于后续 V2 增量扩展；已知字段始终按上述类型与范围校验。
+V3 对象中的未知扩展字段会在解析和同层更新时保留，便于后续 V3 增量扩展；已知字段始终按上述类型与范围校验。
 
 ## 旧配置行为
 
-本项目按既定决策不提供 V1、无版本配置或已安装版本兼容迁移。`engine.providers.funAsr` 及其 `hotwords` 子层都是 V2 的必需已知层；此前生成但缺少任一层的 V2 文件会按非法配置整体拒绝，本次运行使用最新 V2 默认配置，应用退出时写回。旧配置值不会自动复制、备份或恢复。
+V2 会迁移为 V3：`custom.enabled=true` 时创建名为 `Custom Engine` 的条目并选中；关闭时保留原内置 Provider，如果旧自定义路径或命令非空，仍创建未选中的迁移条目。无版本、V1、结构不完整和未来版本配置继续被拒绝，本次运行使用 V3 默认配置。
 
 ## 凭据
 

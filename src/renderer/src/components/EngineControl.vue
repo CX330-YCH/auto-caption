@@ -6,22 +6,47 @@
       <a @click="cancelChange">{{ $t('engine.cancelChange') }}</a>
     </template>
 
-    <EngineFieldRenderer
-      v-for="field in primaryFields"
-      :key="field.id"
-      :field="field"
-      :model-value="fieldValue(field)"
-      :accent-color="uiColor"
-      @update:model-value="updateField(field, $event)"
-      @browse="selectFolderPath(field)"
+    <EngineSelector
+      v-model="draft.activeEngineId"
+      :builtin-options="builtinEngineOptions"
+      :custom-engines="draft.customEngines"
+      @add="openCustomEngineDialog"
+      @delete="deleteCustomEngine"
     />
 
-    <div class="input-item">
-      <span class="input-label">{{ $t('engine.showMore') }}</span>
-      <a-switch v-model:checked="showMore" />
-    </div>
+    <template v-if="activeBuiltinProvider">
+      <EngineFieldRenderer
+        v-for="field in primaryFields"
+        :key="field.id"
+        :field="field"
+        :model-value="fieldValue(field)"
+        :accent-color="uiColor"
+        @update:model-value="updateField(field, $event)"
+        @browse="selectFolderPath(field)"
+      />
 
-    <a-card size="small" :title="$t('engine.custom.title')" v-show="draft.custom.enabled">
+      <div v-if="translationSettingsAvailable" class="input-item">
+        <span class="input-label">{{ $t('engine.configureTranslation') }}</span>
+        <a-switch v-model:checked="showTranslationSettings" />
+      </div>
+
+      <a-card
+        v-show="translationSettingsAvailable && showTranslationSettings"
+        size="small"
+        :title="$t('engine.translationSettings')"
+      >
+        <EngineFieldRenderer
+          v-for="field in translationFields"
+          :key="field.id"
+          :field="field"
+          :model-value="fieldValue(field)"
+          :accent-color="uiColor"
+          @update:model-value="updateField(field, $event)"
+        />
+      </a-card>
+    </template>
+
+    <a-card v-else-if="activeCustomEngine" size="small" :title="activeCustomEngine.name">
       <template #extra>
         <a-popover>
           <template #content>
@@ -30,16 +55,20 @@
           <a><InfoCircleOutlined />{{ $t('engine.custom.attention') }}</a>
         </a-popover>
       </template>
-      <EngineFieldRenderer
-        v-for="field in customFields"
-        :key="field.id"
-        :field="field"
-        :model-value="fieldValue(field)"
-        :accent-color="uiColor"
-        @update:model-value="updateField(field, $event)"
-        @browse="selectFolderPath(field)"
-      />
+      <div class="input-item">
+        <span class="input-label">{{ $t('engine.custom.app') }}</span>
+        <a-input v-model:value="activeCustomEngine.executable" class="input-area" />
+      </div>
+      <div class="input-item">
+        <span class="input-label">{{ $t('engine.custom.command') }}</span>
+        <a-input v-model:value="activeCustomEngine.command" class="input-area" />
+      </div>
     </a-card>
+
+    <div class="input-item">
+      <span class="input-label">{{ $t('engine.showMore') }}</span>
+      <a-switch v-model:checked="showMore" />
+    </div>
 
     <a-card size="small" :title="$t('engine.showMore')" v-show="showMore" style="margin-top: 10px">
       <EngineFieldRenderer
@@ -51,6 +80,17 @@
         @update:model-value="updateField(field, $event)"
         @browse="selectFolderPath(field)"
       />
+      <div v-if="activeCustomEngine" class="input-item">
+        <span class="input-label">{{ $t('engine.startTimeout') }}</span>
+        <a-input-number
+          v-model:value="draft.common.startTimeoutSeconds"
+          class="input-area"
+          :min="10"
+          :max="120"
+          :step="5"
+          :addon-after="$t('engine.seconds')"
+        />
+      </div>
       <HotwordManager
         v-if="hotwordManagerEnabled"
         id="fun-asr-hotwords"
@@ -62,6 +102,21 @@
       />
     </a-card>
   </a-card>
+  <a-modal
+    v-model:open="customEngineDialogOpen"
+    :title="$t('engine.custom.namePrompt')"
+    :ok-text="$t('engine.custom.create')"
+    :cancel-text="$t('engine.cancelChange')"
+    @ok="createCustomEngine"
+  >
+    <a-input
+      v-model:value="customEngineName"
+      :maxlength="64"
+      :placeholder="$t('engine.custom.namePlaceholder')"
+      @press-enter="createCustomEngine"
+    />
+    <p v-if="customEngineNameError" class="name-error">{{ customEngineNameError }}</p>
+  </a-modal>
   <div style="height: 20px"></div>
 </template>
 
@@ -72,11 +127,13 @@ import { notification } from 'ant-design-vue'
 import { ExclamationCircleOutlined, InfoCircleOutlined } from '@ant-design/icons-vue'
 import { useI18n } from 'vue-i18n'
 import EngineFieldRenderer from '@renderer/components/engine/EngineFieldRenderer.vue'
+import EngineSelector from '@renderer/components/engine/EngineSelector.vue'
 import HotwordManager from '@renderer/components/engine/HotwordManager.vue'
 import {
   applyEngineLanguageDefaults,
   getEngineDefinition,
   getEngineFields,
+  getEngineOptions,
   normalizeEngineConfig,
   validateEngineConfig
 } from '@renderer/engines/catalog.ts'
@@ -87,11 +144,19 @@ import {
   setEngineConfigValue
 } from '@renderer/engines/form.ts'
 import type { EngineFieldDescriptor } from '@renderer/engines/types.ts'
+import {
+  getActiveBuiltinProvider,
+  getActiveCustomEngine
+} from '../../../shared/config/schema.ts'
 import { useGeneralSettingStore } from '@renderer/stores/generalSetting'
 import { useEngineControlStore } from '@renderer/stores/engineControl'
 
 const { t } = useI18n()
 const showMore = ref(false)
+const showTranslationSettings = ref(false)
+const customEngineDialogOpen = ref(false)
+const customEngineName = ref('')
+const customEngineNameError = ref('')
 const engineControl = useEngineControlStore()
 const { changeSignal } = storeToRefs(engineControl)
 const generalSetting = useGeneralSettingStore()
@@ -99,23 +164,31 @@ const { uiColor, uiLanguage } = storeToRefs(generalSetting)
 const draft = ref(cloneEngineConfig(engineControl.engineConfig))
 let resettingDraft = false
 
-const visibleFields = computed(() =>
-  getEngineFields(draft.value.provider).filter((field) => {
+const builtinEngineOptions = getEngineOptions()
+const activeBuiltinProvider = computed(() => getActiveBuiltinProvider(draft.value))
+const activeCustomEngine = computed(() => getActiveCustomEngine(draft.value))
+const visibleFields = computed(() => {
+  if (!activeBuiltinProvider.value) return []
+  return getEngineFields(activeBuiltinProvider.value).filter((field) => {
     return isEngineFieldVisible(draft.value, field)
   })
-)
+})
 const primaryFields = computed(() =>
   visibleFields.value.filter((field) => field.section === 'primary')
 )
 const advancedFields = computed(() =>
   visibleFields.value.filter((field) => field.section === 'advanced')
 )
-const customFields = computed(() =>
-  visibleFields.value.filter((field) => field.section === 'custom')
+const translationFields = computed(() =>
+  visibleFields.value.filter((field) => field.section === 'translation')
 )
+const translationSettingsAvailable = computed(() => {
+  if (!activeBuiltinProvider.value || !draft.value.common.translation.enabled) return false
+  return getEngineDefinition(activeBuiltinProvider.value).capabilities.translation === 'external'
+})
 const hotwordManagerEnabled = computed(() => {
-  return getEngineDefinition(draft.value.provider).capabilities.hotwords ===
-    'manager'
+  return activeBuiltinProvider.value !== null &&
+    getEngineDefinition(activeBuiltinProvider.value).capabilities.hotwords === 'manager'
 })
 
 function fieldValue(field: EngineFieldDescriptor): unknown {
@@ -130,6 +203,9 @@ function applyChange(): void {
   normalizeEngineConfig(draft.value)
   const validationIssue = validateEngineConfig(draft.value, 'apply')
   if (validationIssue) {
+    if (validationIssue.fieldId.startsWith('translation-')) {
+      showTranslationSettings.value = true
+    }
     notification.open({
       message: t(validationIssue.titleKey),
       description: t(validationIssue.descriptionKey),
@@ -146,6 +222,33 @@ function applyChange(): void {
     message: t('noti.engineChange'),
     description: t('noti.changeInfo')
   })
+}
+
+function openCustomEngineDialog(): void {
+  customEngineName.value = ''
+  customEngineNameError.value = ''
+  customEngineDialogOpen.value = true
+}
+
+function createCustomEngine(): void {
+  const name = customEngineName.value.trim()
+  if (!name) {
+    customEngineNameError.value = t('engine.custom.nameRequired')
+    return
+  }
+  if (draft.value.customEngines.some((engine) => engine.name.toLocaleLowerCase() === name.toLocaleLowerCase())) {
+    customEngineNameError.value = t('engine.custom.nameDuplicate')
+    return
+  }
+  const id = `custom-${crypto.randomUUID()}`
+  draft.value.customEngines.push({ id, name, executable: '', command: '' })
+  draft.value.activeEngineId = id
+  customEngineDialogOpen.value = false
+}
+
+function deleteCustomEngine(id: string): void {
+  draft.value.customEngines = draft.value.customEngines.filter((engine) => engine.id !== id)
+  if (draft.value.activeEngineId === id) draft.value.activeEngineId = 'gummy'
 }
 
 function cancelChange(): void {
@@ -168,10 +271,12 @@ watch(changeSignal, (changed) => {
 })
 
 watch(
-  () => draft.value.provider,
-  (provider) => {
+  () => draft.value.activeEngineId,
+  () => {
     if (resettingDraft) return
-    applyEngineLanguageDefaults(draft.value, provider, uiLanguage.value)
+    showTranslationSettings.value = false
+    const provider = getActiveBuiltinProvider(draft.value)
+    if (provider) applyEngineLanguageDefaults(draft.value, provider, uiLanguage.value)
   },
   { flush: 'sync' }
 )
@@ -183,5 +288,10 @@ watch(
 .customize-note {
   padding: 10px 10px 0;
   max-width: min(40vw, 480px);
+}
+
+.name-error {
+  margin-top: 8px;
+  color: #ff4d4f;
 }
 </style>

@@ -36,7 +36,11 @@ export default {
     "funAsrEndpointInvalid": "Fun-ASR エンドポイントが一致しません",
     "funAsrEndpointInvalidNote": "中国（北京）またはシンガポールの公式専用 URL を使用し、ホスト名の WorkspaceId を設定値と完全に一致させてください。",
     "funAsrHotwordModelMismatch": "ホットワードのモデルが一致しません",
-    "funAsrHotwordModelMismatchNote": "事前コンパイル済み語彙のターゲットモデルは、現在の Fun-ASR 認識モデルと完全に一致する必要があります。"
+    "funAsrHotwordModelMismatchNote": "事前コンパイル済み語彙のターゲットモデルは、現在の Fun-ASR 認識モデルと完全に一致する必要があります。",
+    "customExecutableMissing": "カスタムエンジンのパスが未入力です",
+    "customExecutableMissingNote": "カスタム字幕エンジンを起動する前に実行ファイルのパスを入力してください。",
+    "customEngineMissing": "カスタムエンジンが存在しません",
+    "customEngineMissingNote": "選択したカスタムエンジンは存在しません。別のエンジンを選択してください。"
   },
   general: {
     "title": "一般設定",
@@ -65,6 +69,8 @@ export default {
     "systemOutput": "システムオーディオ出力（スピーカー）",
     "systemInput": "システムオーディオ入力（マイク）",
     "enableTranslation": "翻訳",
+    "configureTranslation": "翻訳エンジンを設定",
+    "translationSettings": "翻訳エンジン設定",
     "enableRecording": "録音",
     "showMore": "詳細設定",
     "apikey": "API KEY",
@@ -194,7 +200,15 @@ export default {
       "attention": "注意事項",
       "note": "注意：ユーザーがカスタムエンジンを使用して字幕を提供できるようにします。提供するエンジンは、コマンドラインから起動でき、パラメータをコマンドラインの指示で指定できる必要があります。エンジンは、標準出力を使用して node.js バックエンドと通信する必要があります。詳細については、プロジェクトドキュメントを参照してください。",
       "app": "パス",
-      "command": "コマンド"
+      "command": "コマンド",
+      "add": "カスタムエンジンを追加…",
+      "namePrompt": "カスタムエンジンに名前を付ける",
+      "namePlaceholder": "エンジンメニューに表示する名前を入力",
+      "nameRequired": "名前を入力してください。",
+      "nameDuplicate": "同じ名前のカスタムエンジンが既にあります。",
+      "create": "作成",
+      "delete": "削除",
+      "deleteConfirm": "「{name}」を削除しますか？削除は「変更を適用」後に保存されます。"
     }
   },
   style: {

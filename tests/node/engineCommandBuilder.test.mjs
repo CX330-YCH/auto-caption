@@ -13,7 +13,7 @@ function valueAfter(args, flag) {
   return args[index + 1]
 }
 
-test('builds common and Provider-specific arguments from V2 config', () => {
+test('builds common and Provider-specific arguments from V3 config', () => {
   const engine = createDefaultConfig('/recordings').engine
   engine.common.audioSource = 1
   engine.common.recording.enabled = true
@@ -29,8 +29,7 @@ test('builds common and Provider-specific arguments from V2 config', () => {
   engine.providers.funAsr.hotwords.contextTerms = ['Auto Caption', '阿里云百炼']
 
   for (const provider of ['gummy', 'vosk', 'sosv', 'glm', 'fun_asr']) {
-    engine.provider = provider
-    const args = buildBundledEngineArguments(engine, 2345)
+    const args = buildBundledEngineArguments(engine, provider, 2345)
 
     assert.equal(valueAfter(args, '-a'), '1')
     assert.equal(valueAfter(args, '-p'), '2345')
@@ -38,31 +37,26 @@ test('builds common and Provider-specific arguments from V2 config', () => {
     assert.equal(valueAfter(args, '-e'), provider)
   }
 
-  engine.provider = 'gummy'
   assert.equal(
-    valueAfter(buildBundledEngineArguments(engine, 2345), '-k'),
+    valueAfter(buildBundledEngineArguments(engine, 'gummy', 2345), '-k'),
     'gummy-secret'
   )
 
-  engine.provider = 'vosk'
   assert.equal(
-    valueAfter(buildBundledEngineArguments(engine, 2345), '-vosk'),
+    valueAfter(buildBundledEngineArguments(engine, 'vosk', 2345), '-vosk'),
     '"/models/vosk"'
   )
 
-  engine.provider = 'sosv'
   assert.equal(
-    valueAfter(buildBundledEngineArguments(engine, 2345), '-sosv'),
+    valueAfter(buildBundledEngineArguments(engine, 'sosv', 2345), '-sosv'),
     '"/models/sosv"'
   )
 
-  engine.provider = 'glm'
-  const glmArgs = buildBundledEngineArguments(engine, 2345)
+  const glmArgs = buildBundledEngineArguments(engine, 'glm', 2345)
   assert.equal(valueAfter(glmArgs, '-gkey'), 'glm-secret')
   assert.equal(valueAfter(glmArgs, '-okey'), 'translation-secret')
 
-  engine.provider = 'fun_asr'
-  const funAsrArgs = buildBundledEngineArguments(engine, 2345)
+  const funAsrArgs = buildBundledEngineArguments(engine, 'fun_asr', 2345)
   assert.equal(valueAfter(funAsrArgs, '-fmodel'), 'fun-asr-realtime')
   assert.equal(valueAfter(funAsrArgs, '-fworkspace'), 'workspace-1')
   assert.equal(valueAfter(funAsrArgs, '-fkey'), 'fun-asr-secret')
@@ -82,18 +76,25 @@ test('uses none target when translation is disabled', () => {
   engine.common.translation.enabled = false
 
   assert.equal(
-    valueAfter(buildBundledEngineArguments(engine, 3456), '-t'),
+    valueAfter(buildBundledEngineArguments(engine, 'vosk', 3456), '-t'),
     'none'
   )
+  const args = buildBundledEngineArguments(engine, 'vosk', 3456)
+  for (const flag of ['-tm', '-omn', '-ourl', '-okey']) {
+    assert.equal(args.includes(flag), false)
+  }
 })
 
 test('builds custom engine arguments without bundled Provider fields', () => {
-  const engine = createDefaultConfig('').engine
-  engine.custom.enabled = true
-  engine.custom.command = '--mode live'
+  const customEngine = {
+    id: 'custom-live',
+    name: 'Live Engine',
+    executable: '/engines/live',
+    command: '--mode live'
+  }
 
   assert.deepEqual(
-    buildCustomEngineArguments(engine, 4567),
+    buildCustomEngineArguments(customEngine, 4567),
     ['--mode', 'live', '-p', '4567']
   )
 })

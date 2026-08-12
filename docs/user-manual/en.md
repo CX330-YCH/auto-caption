@@ -118,9 +118,9 @@ sudo yum install pulseaudio pavucontrol
 
 Caption settings can be divided into three categories: general settings, caption engine settings, and caption style settings. Note that changes to general settings take effect immediately. For the other two categories, after making changes, you need to click the "Apply" option in the upper right corner of the corresponding settings module for the changes to take effect. If you click "Cancel Changes," the current modifications will not be saved and will revert to the previous state.
 
-The current version uses a layered configuration file with `schemaVersion: 2` and does not read the previous unversioned format. The first launch with an old configuration uses defaults and writes a new V2 file when the application exits; old settings are not migrated automatically.
+The current version uses a layered configuration file with `schemaVersion: 3`. Complete V2 configuration is migrated automatically, including conversion of the old custom engine into a named entry. Unversioned configuration still falls back to defaults.
 
-Caption engine settings now show the supported languages, translation options, and provider-specific fields for the selected engine. "More Settings" shows only the selected engine's API key or local model path, plus the shared recording path and startup timeout. Switching engines does not delete provider-specific settings already saved for other engines. Changes are still saved only after clicking "Apply Changes."
+Caption engine settings show the languages and provider fields for the selected engine. Disabling translation hides and omits translation-service parameters; after enabling it, "Configure Translation Engine" expands the provider, model, Base URL, and API key fields. "More Settings" shows the selected engine's credentials or local model path plus shared settings. Switching engines preserves saved settings, and changes are saved only after clicking "Apply Changes."
 
 ### Starting and Stopping Captions
 
@@ -140,7 +140,7 @@ In the caption control window, you can see the records of all collected captions
 
 The so-called caption engine is essentially a subprogram that captures real-time streaming data from system audio input (recording) or output (playback), and invokes speech-to-text models to generate corresponding captions. The generated captions are converted into JSON-formatted strings and passed to the main program through standard output. The main program reads the caption data, processes it, and displays it in the window.
 
-The software provides five built-in caption engines. If you need other caption engines, you can invoke them by enabling the custom engine option (other engines need to be specifically developed for this software). The engine path refers to the location of the custom caption engine on your computer, while the engine command represents the runtime parameters of the custom caption engine, which should be configured according to the rules of that particular caption engine.
+The software provides five built-in caption engines. Choose "Add Custom Engine…" in the engine menu, enter a display name, and the new entry is selected and retained in that menu. A delete button appears on the right of each custom entry. The engine path is the custom executable location, while the command contains its runtime arguments.
 
 ![](../img/02_en.png)
 

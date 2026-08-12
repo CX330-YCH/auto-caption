@@ -4,7 +4,7 @@ import type {
 } from '../../../shared/config/schema.ts'
 
 export type EngineConfigPath =
-  | 'provider'
+  | 'activeEngineId'
   | 'common.sourceLanguage'
   | 'common.targetLanguage'
   | 'common.audioSource'
@@ -32,13 +32,10 @@ export type EngineConfigPath =
   | 'providers.funAsr.hotwords.vocabularyId'
   | 'providers.funAsr.hotwords.targetModel'
   | 'providers.funAsr.hotwords.contextTerms'
-  | 'custom.enabled'
-  | 'custom.executable'
-  | 'custom.command'
 
 export type EngineFieldControl = 'select' | 'text' | 'password' | 'number' | 'switch' | 'directory'
 
-export type EngineFieldSection = 'primary' | 'advanced' | 'custom'
+export type EngineFieldSection = 'primary' | 'translation' | 'advanced'
 export type EngineValidationPhase = 'apply' | 'start'
 
 export interface EngineFieldOption {

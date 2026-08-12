@@ -6,5 +6,6 @@ export default {
   "engine.output.parse.error": "字幕引擎输出内容无法解析为 JSON 对象：",
   "engine.error": "字幕引擎错误：",
   "engine.shutdown.error": "字幕引擎进程关闭失败：",
-  "engine.start.timeout": "字幕引擎启动超时，已自动强制停止"
+  "engine.start.timeout": "字幕引擎启动超时，已自动强制停止",
+  "engine.selection.invalid": "选择的字幕引擎不存在，请重新配置。"
 }

@@ -1,6 +1,6 @@
 import type { KnownProviderName } from './schema.ts'
 import type { UILanguage, UITheme } from '../types'
-import { InvalidConfigError } from './schema.ts'
+import { InvalidConfigError, isKnownProviderName } from './schema.ts'
 
 export function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -58,10 +58,7 @@ export function requireTheme(value: unknown): UITheme {
 }
 
 export function requireProvider(value: unknown): KnownProviderName {
-  if (
-    value !== 'gummy' && value !== 'vosk' &&
-    value !== 'sosv' && value !== 'glm' && value !== 'fun_asr'
-  ) {
+  if (!isKnownProviderName(value)) {
     throw new InvalidConfigError('Invalid Provider')
   }
   return value

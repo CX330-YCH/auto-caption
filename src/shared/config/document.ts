@@ -3,8 +3,9 @@ import {
   CONFIG_SCHEMA_VERSION,
   InvalidConfigError,
   UnsupportedConfigVersionError,
+  isKnownProviderName,
   type ApplicationConfig,
-  type ConfigDocumentV2,
+  type ConfigDocumentV3,
   type EngineConfig,
   type ProviderConfigs
 } from './schema.ts'
@@ -26,9 +27,12 @@ import {
   validateFunAsrEndpoint
 } from './validation.ts'
 
-export function parseConfigDocumentV2(value: unknown): ConfigDocumentV2 {
+export function parseConfigDocumentV3(value: unknown): ConfigDocumentV3 {
   if (!isRecord(value)) {
     throw new InvalidConfigError('Config root must be an object')
+  }
+  if (value.schemaVersion === 2) {
+    return parseConfigDocumentV3(migrateConfigDocumentV2ToV3(value))
   }
   if (value.schemaVersion !== CONFIG_SCHEMA_VERSION) {
     if (
@@ -96,8 +100,8 @@ export function parseEngineConfig(value: unknown): EngineConfig {
   if (!isRecord(value.providers)) {
     throw new InvalidConfigError('Provider configs must be an object')
   }
-  if (!isRecord(value.custom)) {
-    throw new InvalidConfigError('Custom engine config must be an object')
+  if (!Array.isArray(value.customEngines)) {
+    throw new InvalidConfigError('Custom engines config must be an array')
   }
   const audioSource = requireNumber(
     value.common.audioSource,
@@ -105,9 +109,17 @@ export function parseEngineConfig(value: unknown): EngineConfig {
     0,
     1
   )
+  const customEngines = parseCustomEngines(value.customEngines)
+  const activeEngineId = requireString(value.activeEngineId, 'activeEngineId', 128, false)
+  if (
+    !isKnownProviderName(activeEngineId) &&
+    !customEngines.some((engine) => engine.id === activeEngineId)
+  ) {
+    throw new InvalidConfigError('Active engine does not exist')
+  }
   return {
     ...value,
-    provider: requireProvider(value.provider),
+    activeEngineId,
     common: {
       ...value.common,
       sourceLanguage: requireString(
@@ -169,19 +181,69 @@ export function parseEngineConfig(value: unknown): EngineConfig {
       )
     },
     providers: parseProviderConfigs(value.providers),
-    custom: {
-      ...value.custom,
-      enabled: requireBoolean(value.custom.enabled, 'custom.enabled'),
-      executable: requireString(
-        value.custom.executable,
-        'custom.executable'
-      ),
-      command: requireString(
-        value.custom.command,
-        'custom.command',
-        16384
-      )
+    customEngines
+  }
+}
+
+function parseCustomEngines(value: unknown[]): EngineConfig['customEngines'] {
+  const engines = value.map((item, index) => {
+    const engine = requireRecord(item, `customEngines[${index}]`)
+    const id = requireString(engine.id, `customEngines[${index}].id`, 128, false)
+    const name = requireString(engine.name, `customEngines[${index}].name`, 64, false).trim()
+    if (isKnownProviderName(id) || !/^[a-zA-Z0-9_-]+$/.test(id)) {
+      throw new InvalidConfigError(`Invalid customEngines[${index}].id`)
     }
+    if (!name) {
+      throw new InvalidConfigError(`Invalid customEngines[${index}].name`)
+    }
+    return {
+      ...engine,
+      id,
+      name,
+      executable: requireString(engine.executable, `customEngines[${index}].executable`),
+      command: requireString(engine.command, `customEngines[${index}].command`, 16384)
+    }
+  })
+  if (new Set(engines.map(({ id }) => id)).size !== engines.length) {
+    throw new InvalidConfigError('Duplicate custom engine id')
+  }
+  if (new Set(engines.map(({ name }) => name.toLocaleLowerCase())).size !== engines.length) {
+    throw new InvalidConfigError('Duplicate custom engine name')
+  }
+  return engines
+}
+
+function migrateConfigDocumentV2ToV3(value: Record<string, unknown>): Record<string, unknown> {
+  const engine = requireRecord(value.engine, 'engine')
+  const provider = requireProvider(engine.provider)
+  const custom = requireRecord(engine.custom, 'custom')
+  const customEnabled = requireBoolean(custom.enabled, 'custom.enabled')
+  const executable = requireString(custom.executable, 'custom.executable')
+  const command = requireString(custom.command, 'custom.command', 16384)
+  const migratedCustomEngine: Record<string, unknown> = {
+    ...custom,
+    id: 'custom-migrated',
+    name: 'Custom Engine',
+    executable,
+    command
+  }
+  delete migratedCustomEngine.enabled
+  const hasCustomExtension = Object.keys(custom).some((key) => {
+    return key !== 'enabled' && key !== 'executable' && key !== 'command'
+  })
+  const migratedEngine: Record<string, unknown> = {
+    ...engine,
+    activeEngineId: customEnabled ? migratedCustomEngine.id : provider,
+    customEngines: customEnabled || executable || command || hasCustomExtension
+      ? [migratedCustomEngine]
+      : []
+  }
+  delete migratedEngine.provider
+  delete migratedEngine.custom
+  return {
+    ...value,
+    schemaVersion: CONFIG_SCHEMA_VERSION,
+    engine: migratedEngine
   }
 }
 
@@ -300,7 +362,7 @@ function parseProviderConfigs(value: Record<string, unknown>): ProviderConfigs {
 
 export function parseCaptionConfig(
   value: unknown
-): ConfigDocumentV2['caption'] {
+): ConfigDocumentV3['caption'] {
   if (!isRecord(value)) {
     throw new InvalidConfigError('Caption config must be an object')
   }

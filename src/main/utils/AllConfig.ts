@@ -7,7 +7,7 @@ import type {
 } from '../types'
 import type {
   ApplicationConfig,
-  ConfigDocumentV2,
+  ConfigDocumentV3,
   EngineConfig
 } from '../../shared/config/schema'
 import {
@@ -18,7 +18,7 @@ import {
 import {
   parseApplicationConfig,
   parseCaptionConfig,
-  parseConfigDocumentV2,
+  parseConfigDocumentV3,
   parseEngineConfig
 } from '../../shared/config/document'
 import { Log } from './Log'
@@ -37,13 +37,13 @@ function getDesktopPath(): string {
 }
 
 class AllConfig {
-  private document: ConfigDocumentV2 = createDefaultConfig(getDesktopPath())
+  private document: ConfigDocumentV3 = createDefaultConfig(getDesktopPath())
 
   public engineEnabled: boolean = false
   public lastLogIndex: number = -1
   public captionLog: CaptionItem[] = []
 
-  public get config(): ConfigDocumentV2 {
+  public get config(): ConfigDocumentV3 {
     return this.document
   }
 
@@ -72,7 +72,7 @@ class AllConfig {
     if (!fs.existsSync(configPath)) return
     try {
       const raw: unknown = JSON.parse(fs.readFileSync(configPath, 'utf-8'))
-      this.document = parseConfigDocumentV2(raw)
+      this.document = parseConfigDocumentV3(raw)
       Log.info(
         `Read config schema v${CONFIG_SCHEMA_VERSION} from:`,
         configPath
@@ -81,7 +81,7 @@ class AllConfig {
     catch (error) {
       this.document = createDefaultConfig(getDesktopPath())
       Log.error(
-        `Config rejected; V2 defaults will be used (${errorName(error)})`
+        `Config rejected; V3 defaults will be used (${errorName(error)})`
       )
     }
   }
@@ -144,7 +144,7 @@ class AllConfig {
   public setEngine(value: unknown): void {
     const engine = parseEngineConfig(value)
     this.document = { ...this.document, engine }
-    Log.info('Set engine config for Provider:', engine.provider)
+    Log.info('Set active caption engine:', engine.activeEngineId)
   }
 
   public setEngineEnabled(enabled: boolean): void {

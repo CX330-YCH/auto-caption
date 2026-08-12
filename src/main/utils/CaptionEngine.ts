@@ -20,6 +20,10 @@ import {
   buildCustomEngineArguments
 } from '../engine/config/EngineCommandBuilder'
 import { resolveBundledEngineCommand } from '../engine/EngineExecutable'
+import {
+  getActiveBuiltinProvider,
+  getActiveCustomEngine
+} from '../../shared/config/schema.ts'
 
 export class CaptionEngine {
   appPath: string = ''
@@ -35,19 +39,21 @@ export class CaptionEngine {
   private getApp(): boolean {
     const engineConfig = allConfig.engine
     this.port = Math.floor(Math.random() * (65535 - 1024 + 1)) + 1024
-    if (engineConfig.custom.enabled) {
+    const customEngine = getActiveCustomEngine(engineConfig)
+    const provider = getActiveBuiltinProvider(engineConfig)
+    if (customEngine) {
       Log.info('Using customized caption engine')
-      this.appPath = engineConfig.custom.executable
-      this.command = buildCustomEngineArguments(engineConfig, this.port)
+      this.appPath = customEngine.executable
+      this.command = buildCustomEngineArguments(customEngine, this.port)
     }
-    else {
-      if(engineConfig.provider === 'gummy' &&
+    else if (provider) {
+      if(provider === 'gummy' &&
         !engineConfig.providers.gummy.apiKey && !process.env.DASHSCOPE_API_KEY
       ) {
         controlWindow.sendErrorMessage(i18n('gummy.key.missing'))
         return false
       }
-      if(engineConfig.provider === 'fun_asr' &&
+      if(provider === 'fun_asr' &&
         !engineConfig.providers.funAsr.apiKey && !process.env.DASHSCOPE_API_KEY
       ) {
         controlWindow.sendErrorMessage(i18n('fun_asr.key.missing'))
@@ -58,8 +64,13 @@ export class CaptionEngine {
       this.command = [...engineCommand.prefixArguments]
       this.command.push(...buildBundledEngineArguments(
         engineConfig,
+        provider,
         this.port
       ))
+    }
+    else {
+      controlWindow.sendErrorMessage(i18n('engine.selection.invalid'))
+      return false
     }
     Log.info('Engine Path:', this.appPath)
     Log.info('Engine Command:', passwordMaskingForList(this.command))

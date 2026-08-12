@@ -1,4 +1,9 @@
-import type { EngineConfig, KnownProviderName } from '../../../shared/config/schema.ts'
+import {
+  getActiveBuiltinProvider,
+  getActiveCustomEngine,
+  type EngineConfig,
+  type KnownProviderName
+} from '../../../shared/config/schema.ts'
 import type { UILanguage } from '../../../shared/types.ts'
 import {
   conditionsMatch,
@@ -64,23 +69,6 @@ const commonAdvancedFields: readonly EngineFieldDescriptor[] = [
   }
 ]
 
-const customFields: readonly EngineFieldDescriptor[] = [
-  {
-    id: 'custom-executable',
-    path: 'custom.executable',
-    control: 'text',
-    section: 'custom',
-    labelKey: 'engine.custom.app'
-  },
-  {
-    id: 'custom-command',
-    path: 'custom.command',
-    control: 'text',
-    section: 'custom',
-    labelKey: 'engine.custom.command'
-  }
-]
-
 export function getEngineDefinition(provider: KnownProviderName): EngineDefinition {
   const definition = engineDefinitionsById.get(provider)
   if (!definition) throw new Error(`Unknown caption engine: ${provider}`)
@@ -103,14 +91,6 @@ function languageOptions(
 function commonPrimaryFields(definition: EngineDefinition): EngineFieldDescriptor[] {
   const fields: EngineFieldDescriptor[] = [
     {
-      id: 'provider',
-      path: 'provider',
-      control: 'select',
-      section: 'primary',
-      labelKey: 'engine.captionEngine',
-      options: getEngineOptions()
-    },
-    {
       id: 'source-language',
       path: 'common.sourceLanguage',
       control: 'select',
@@ -119,14 +99,6 @@ function commonPrimaryFields(definition: EngineDefinition): EngineFieldDescripto
       options: languageOptions(definition, 'source'),
       disabled: definition.capabilities.sourceLanguage === 'model-defined'
     },
-    {
-      id: 'target-language',
-      path: 'common.targetLanguage',
-      control: 'select',
-      section: 'primary',
-      labelKey: 'engine.transLang',
-      options: languageOptions(definition, 'target')
-    }
   ]
 
   if (definition.capabilities.translation === 'external') {
@@ -135,18 +107,22 @@ function commonPrimaryFields(definition: EngineDefinition): EngineFieldDescripto
         id: 'translation-provider',
         path: 'common.translation.provider',
         control: 'select',
-        section: 'primary',
+        section: 'translation',
         labelKey: 'engine.transModel',
-        options: translationOptions
+        options: translationOptions,
+        visibleWhen: [{ path: 'common.translation.enabled', equals: true }]
       },
       {
         id: 'translation-model',
         path: 'common.translation.model',
         control: 'text',
-        section: 'primary',
+        section: 'translation',
         labelKey: 'engine.modelName',
         helpKey: 'engine.modelNameNote',
-        visibleWhen: [{ path: 'common.translation.provider', equals: 'ollama' }],
+        visibleWhen: [
+          { path: 'common.translation.enabled', equals: true },
+          { path: 'common.translation.provider', equals: 'ollama' }
+        ],
         required: {
           phase: 'apply',
           titleKey: 'noti.ollamaNameNull',
@@ -161,20 +137,26 @@ function commonPrimaryFields(definition: EngineDefinition): EngineFieldDescripto
         id: 'translation-url',
         path: 'common.translation.url',
         control: 'text',
-        section: 'primary',
+        section: 'translation',
         labelKey: 'engine.fields.baseUrl',
         helpKey: 'engine.baseURL',
         placeholder: 'http://localhost:11434',
-        visibleWhen: [{ path: 'common.translation.provider', equals: 'ollama' }]
+        visibleWhen: [
+          { path: 'common.translation.enabled', equals: true },
+          { path: 'common.translation.provider', equals: 'ollama' }
+        ]
       },
       {
         id: 'translation-api-key',
         path: 'common.translation.apiKey',
         control: 'password',
-        section: 'primary',
+        section: 'translation',
         labelKey: 'engine.fields.translationApiKey',
         helpKey: 'engine.apiKey',
-        visibleWhen: [{ path: 'common.translation.provider', equals: 'ollama' }]
+        visibleWhen: [
+          { path: 'common.translation.enabled', equals: true },
+          { path: 'common.translation.provider', equals: 'ollama' }
+        ]
       }
     )
   }
@@ -195,6 +177,15 @@ function commonPrimaryFields(definition: EngineDefinition): EngineFieldDescripto
       control: 'switch',
       section: 'primary',
       labelKey: 'engine.enableTranslation'
+    },
+    {
+      id: 'target-language',
+      path: 'common.targetLanguage',
+      control: 'select',
+      section: 'primary',
+      labelKey: 'engine.transLang',
+      options: languageOptions(definition, 'target'),
+      visibleWhen: [{ path: 'common.translation.enabled', equals: true }]
     }
   )
 
@@ -208,13 +199,6 @@ function commonPrimaryFields(definition: EngineDefinition): EngineFieldDescripto
     })
   }
 
-  fields.push({
-    id: 'custom-enabled',
-    path: 'custom.enabled',
-    control: 'switch',
-    section: 'primary',
-    labelKey: 'engine.customEngine'
-  })
   return fields
 }
 
@@ -223,13 +207,14 @@ export function getEngineFields(provider: KnownProviderName): readonly EngineFie
   return [
     ...commonPrimaryFields(definition),
     ...definition.providerFields.filter((field) => field.section === 'advanced'),
-    ...(definition.capabilities.recording ? commonAdvancedFields : []),
-    ...customFields
+    ...(definition.capabilities.recording ? commonAdvancedFields : [])
   ]
 }
 
 export function normalizeEngineConfig(config: EngineConfig): void {
-  for (const field of getEngineFields(config.provider)) {
+  const provider = getActiveBuiltinProvider(config)
+  if (!provider) return
+  for (const field of getEngineFields(provider)) {
     if (
       field.defaultWhenEmpty &&
       isEmptyEngineFieldValue(getEngineConfigValue(config, field.path))
@@ -243,7 +228,26 @@ export function validateEngineConfig(
   config: EngineConfig,
   phase: EngineValidationPhase
 ): EngineValidationIssue | null {
-  for (const field of getEngineFields(config.provider)) {
+  const customEngine = getActiveCustomEngine(config)
+  if (customEngine) {
+    if (phase === 'start' && !customEngine.executable.trim()) {
+      return {
+        fieldId: 'custom-executable',
+        titleKey: 'noti.customExecutableMissing',
+        descriptionKey: 'noti.customExecutableMissingNote'
+      }
+    }
+    return null
+  }
+  const provider = getActiveBuiltinProvider(config)
+  if (!provider) {
+    return {
+      fieldId: 'active-engine',
+      titleKey: 'noti.customEngineMissing',
+      descriptionKey: 'noti.customEngineMissingNote'
+    }
+  }
+  for (const field of getEngineFields(provider)) {
     const validation = field.required
     if (
       validation?.phase === phase &&
@@ -257,7 +261,7 @@ export function validateEngineConfig(
       }
     }
   }
-  return getEngineDefinition(config.provider).validate?.(config, phase) ?? null
+  return getEngineDefinition(provider).validate?.(config, phase) ?? null
 }
 
 export function applyEngineLanguageDefaults(

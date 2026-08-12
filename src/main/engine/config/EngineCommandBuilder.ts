@@ -1,4 +1,5 @@
 import type {
+  CustomEngineConfig,
   EngineConfig,
   KnownProviderName
 } from '../../../shared/config/schema.ts'
@@ -70,6 +71,7 @@ const providerArgumentBuilders: Record<
 
 export function buildBundledEngineArguments(
   config: EngineConfig,
+  provider: KnownProviderName,
   port: number
 ): string[] {
   const args = [
@@ -86,22 +88,23 @@ export function buildBundledEngineArguments(
       ? config.common.targetLanguage
       : 'none'
   )
-  args.push(...providerArgumentBuilders[config.provider](config))
+  args.push(...providerArgumentBuilders[provider](config))
   return args
 }
 
 export function buildCustomEngineArguments(
-  config: EngineConfig,
+  customEngine: CustomEngineConfig,
   port: number
 ): string[] {
   return [
-    ...config.custom.command.split(' '),
+    ...customEngine.command.split(' ').filter(Boolean),
     '-p',
     port.toString()
   ]
 }
 
 function translationArguments(config: EngineConfig): string[] {
+  if (!config.common.translation.enabled) return []
   const translation = config.common.translation
   const args = [
     '-tm', translation.provider,
