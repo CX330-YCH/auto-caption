@@ -116,6 +116,12 @@ export class CaptionEngine {
 
     this.protocol.reset()
     this.process = spawn(this.appPath, this.command)
+    this.process.once('error', (error: Error) => {
+      Log.error('Caption engine process failed to start:', error)
+      controlWindow.sendErrorMessage(
+        `${i18n('engine.start.error')}${error.message}`
+      )
+    })
     this.status = 'starting'
     Log.info('Caption Engine Starting, PID:', this.process.pid)
 

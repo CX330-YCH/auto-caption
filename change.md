@@ -1547,3 +1547,166 @@
 
 - 本地 `package.json` 与 `electron-builder.yml`：确认 macOS 产物版本来自 npm 包版本，DMG artifact 使用 `${name}-${version}.${ext}`。
 - 根目录 `AGENTS.md`：遵循修改前检查、三语文档同步、构建产物记录、验证记录、系统环境与依赖边界、`change.md` 追加记录要求。
+
+## 2026-08-12 - 修复 macOS/Linux 打包版字幕引擎启动报错
+
+### 授权与目标
+
+- 用户授权：在确认 Fun-ASR 启动时出现 `spawn ENOTDIR` 后，明确要求“修复启动报错问题”。
+- 变更类型：修复、测试。
+- 目标：让 macOS/Linux 正式打包版从 Electron Builder 实际复制的位置启动单文件 Python 字幕引擎，并在子进程无法启动时将错误交给应用处理，避免 Electron 主进程未捕获异常弹窗。
+- 明确非目标：不修改 Fun-ASR API Key、Workspace、WebSocket、模型或热词逻辑；不修改 Python Provider、配置 schema、IPC、stdout/TCP 协议、依赖、版本号或远端资源；不生成或覆盖安装包。
+
+### 修改文件与原因
+
+- `src/main/engine/PackagedEnginePath.ts`
+  - 新增不依赖 Electron 运行时的打包引擎路径解析函数，使关键的跨平台文件布局可以直接单元测试。
+  - Windows 解析为 `Resources/engine/main.exe`；macOS/Linux 解析为 `Resources/engine/main`，与 `electron-builder.yml` 的 `extraResources` 目标一致。
+- `src/main/engine/EngineExecutable.ts`
+  - 正式环境改用统一路径解析函数，删除 macOS/Linux 错误的额外 `/main` 路径层级。
+  - 开发环境仍使用仓库内 `.venv` Python 和 `engine/main.py`，行为不变。
+- `src/main/utils/CaptionEngine.ts`
+  - 为 `spawn` 返回的子进程注册一次性 `error` 监听器。
+  - 启动路径不存在、路径类型错误、无执行权限等操作系统启动错误现在写入日志并通过既有三语 `engine.start.error` 消息通知控制窗口，不再成为未捕获的 Electron 主进程异常。
+- `tests/node/packagedEnginePath.test.mjs`
+  - 新增 Windows、macOS、Linux 正式包路径回归测试，固定单文件 PyInstaller 产物与 Electron Builder 复制布局的契约。
+- `change.md`
+  - 追加本批次授权、修改范围、兼容性、验证结果、风险和回滚说明。
+
+### 修改前后行为
+
+- 修改前：PyInstaller `onefile=True` 生成单个 `engine/dist/main`，Electron Builder 将其复制为 `Resources/engine/main`；macOS/Linux 正式版却尝试执行 `Resources/engine/main/main`。由于第一个 `main` 实际是文件而不是目录，Node 返回 `ENOTDIR`，且没有子进程 `error` 监听器，最终弹出 JavaScript 主进程未捕获异常。
+- 修改后：macOS/Linux 正式版直接执行 `Resources/engine/main`，与实际包布局一致；Windows 仍执行 `Resources/engine/main.exe`。如果以后仍发生启动级操作系统错误，应用会显示可诊断错误并保持主进程存活。
+- 修复发生在 Python/Fun-ASR 进程启动之前，不改变云端鉴权、请求、字幕 partial/final、翻译或热词行为。
+
+### 配置、接口、兼容性与回滚
+
+- 配置 `schemaVersion`、持久化字段、默认值和迁移均无变化。
+- Electron IPC、Python CLI 参数、子进程 NDJSON/stdout 与本地 TCP 协议、数据结构均无变化。
+- 没有新增或升级依赖；没有新增用户可见文本，复用已存在的中英日 `engine.start.error` 翻译，因此无需新增 i18n 键。
+- Windows 的生产路径和所有平台的开发路径保持不变。Linux 采用与其 Electron Builder 单文件复制规则一致的修复，但本批次只在 macOS arm64 开发机执行自动化验证。
+- 精确回滚：恢复 `EngineExecutable.ts` 的旧生产路径，删除 `PackagedEnginePath.ts` 和对应测试，并移除 `CaptionEngine.ts` 的 `error` 监听器；该回滚会重新引入 macOS/Linux `ENOTDIR` 和启动失败导致主进程异常的问题。
+
+### 验证记录
+
+- `npm run test:node`：通过，Node 40/40；新增测试确认 darwin/linux 为 `/app/resources/engine/main`，win32 为 `/app/resources/engine/main.exe`。
+- `npm run typecheck`：通过，Node TypeScript 与 Vue TypeScript 均无错误。
+- `npm run lint`：通过，无 ESLint 错误。
+- `npm run test:python`：通过，Python 49/49，包括 Fun-ASR Provider、CLI、热词和协议既有测试。
+- `npm run build`：通过；Electron main、preload、renderer 生产构建分别转换 23、1、3256 个模块。
+- `rg` 检查生产构建并用 `test` 核对已安装应用：通过；`out/main/index.js` 使用 `engine/main` 且包含进程 `error` 处理，已安装的 `Resources/engine/main` 可执行，旧的嵌套 `engine/main/main` 不存在。
+- 上述 npm/Node 命令保留仓库既有 mirror 配置弃用警告和 `MODULE_TYPELESS_PACKAGE_JSON` 性能警告；不影响命令成功，本次没有通过依赖或包类型调整扩大范围。
+
+### 未执行、风险与后续事项
+
+- 未重新运行 PyInstaller、Electron Builder macOS 打包、DMG/ZIP 生成或安装覆盖；已安装的旧版 `.app` 不会因源码修改自动更新，必须在后续发布构建中包含本修复。
+- 未启动真实 Electron GUI，也未执行麦克风/系统音频授权和真实 Fun-ASR 云端识别；本批次验证了错误根因对应的路径契约、静态类型、完整现有测试和生产代码构建，但不能声称安装包端到端启动已实测。
+- 未在 Windows 和 Linux 实机执行字幕进程启动；Windows 路径未改变，Linux 修复由跨平台纯逻辑测试覆盖。
+- 子进程启动错误消息可能包含本地可执行文件路径，这是诊断所需信息；不会包含命令参数或 API Key，日志仍不输出未脱敏凭据。
+
+### 关键技术决策来源
+
+- 本地 `engine/main.spec`：`onefile=True`，确认 macOS 构建产物是单个可执行文件而非 `main/main` 目录结构。
+- 本地 `electron-builder.yml`：macOS/Linux 将 `engine/dist/main` 复制到 `Resources/engine/main`。
+- 已安装应用只读核对：`/Applications/Auto Caption.app/Contents/Resources/engine/main` 是 Mach-O arm64 文件，且不存在下一级 `main`。
+- Node `child_process.spawn` 的项目既有启动边界和已存在的三语 `engine.start.error` 文案。
+- 根目录 `AGENTS.md`：遵循最小修改、跨平台兼容、凭据保护、真实验证与 `change.md` 完整记录要求。
+
+## 2026-08-12 - V2.3.0 小版本号更新与 macOS arm64 构建
+
+### 授权与目标
+
+- 用户授权：要求“编译一下Mac版本 并更新小版本号”。
+- 本批次将“小版本号”按语义化版本从 `2.2.0` 提升为 `2.3.0`，同步应用元数据、可见版本标识和发布文档，并重新生成 macOS Apple Silicon arm64 安装产物。
+- 本批次构建包含上一条记录中的 macOS/Linux 打包版字幕引擎路径修复，目标是让 macOS 正式包内的 Electron 主进程执行 `Resources/engine/main`。
+- 明确非目标：不修改系统 Python、Node、shell 环境或全局依赖；不升级依赖；不改配置 schema、IPC、字幕进程协议、Provider 行为或远端资源。
+
+### 变更类型
+
+- 配置：更新 npm 应用版本号和锁文件根版本。
+- 文档：同步 README、CHANGELOG 与中英日用户/引擎文档版本标识。
+- 构建：重新生成 Python 引擎与 macOS arm64 桌面包。
+
+### 修改文件与原因
+
+- `package.json`
+  - 将应用版本从 `2.2.0` 更新为 `2.3.0`，供 Electron builder、Info.plist 和产物命名使用。
+- `package-lock.json`
+  - 同步根包版本从 `2.2.0` 到 `2.3.0`；没有新增、删除或升级依赖。
+- `src/renderer/index.html`
+  - 将窗口标题版本从 `v2.2.0` 更新为 `v2.3.0`。
+- `src/renderer/src/components/EngineStatus.vue`
+  - 将关于窗口显示版本从 `v2.2.0` 更新为 `v2.3.0`。
+- `README.md`、`README_en.md`、`README_ja.md`
+  - 将 release badge、首页发布提示和平台说明更新为 `v2.3.0`，并说明本小版本包含打包路径修复与 macOS arm64 构建。
+- `docs/user-manual/zh.md`、`docs/user-manual/en.md`、`docs/user-manual/ja.md`
+  - 将对应版本更新为 `v2.3.0`。
+- `docs/engine-manual/zh.md`、`docs/engine-manual/en.md`、`docs/engine-manual/ja.md`
+  - 将对应版本更新为 `v2.3.0`。
+- `docs/CHANGELOG.md`
+  - 追加 `v2.3.0` 修复与构建记录。
+- `change.md`
+  - 追加本批次授权、变更范围、验证、风险与回滚记录。
+
+### 构建产物
+
+- `engine/dist/main`
+  - 使用 `engine/.venv` 内 PyInstaller 重新生成的 macOS arm64 Python 引擎。
+- `dist/mac-arm64/Auto Caption.app`
+  - Electron builder 生成的 macOS arm64 应用目录，Info.plist 中 `CFBundleShortVersionString` 和 `CFBundleVersion` 均为 `2.3.0`。
+  - 已确认内嵌引擎位于 `Contents/Resources/engine/main`，且为可执行 Mach-O arm64 文件。
+- `dist/Auto Caption-2.3.0-arm64-mac.zip`
+  - 对本地 ad-hoc 签名后的 `.app` 重新封装生成。
+- `dist/Auto Caption-2.3.0-arm64-mac.zip.blockmap`
+  - 使用 app-builder 对重封后的 zip 重新生成。
+- `dist/auto-caption-2.3.0.dmg`
+  - 使用本机 `hdiutil create` 从签名后的 `.app` 生成。
+- `dist/latest-mac.yml`
+  - 更新为 `2.3.0` zip 的路径、大小、sha512 和 releaseDate；这是生成目录中的更新元数据。
+
+### 修改前后行为
+
+- 修改前：应用版本源、标题、关于窗口、README、手册和上次 Mac 构建产物为 `2.2.0` / `v2.2.0`。
+- 修改后：应用元数据、运行界面可见版本、README、手册、CHANGELOG 与本次 macOS 构建产物统一为 `2.3.0` / `v2.3.0`。
+- 本批次没有新增配置字段、IPC 字段、Python stdout/TCP 协议字段或命令行参数。
+- 没有新增依赖，没有安装全局包，没有修改系统环境变量或 shell 配置。
+
+### 兼容性、迁移与回滚
+
+- 本批次只更新应用发布版本，不涉及用户配置迁移；当前仓库自动化测试覆盖的是既有 V3 配置行为。
+- macOS 产物为 arm64；未生成 x64 或 universal 包。
+- 由于没有 Developer ID 证书，本次只做本地 ad-hoc 签名，未做 Apple Developer ID 签名或 notarization。首次打开可能仍需用户通过 macOS 安全提示手动允许。
+- 精确回滚：恢复本批次列出的版本/文档文件；删除或忽略 `dist/` 与 `engine/dist/` 中本次生成的 `2.3.0` 构建产物；如需恢复旧包，使用此前的 `2.2.0` 产物或重新按旧版本号构建。
+
+### 验证记录
+
+- `npm version minor --no-git-tag-version`：通过；版本提升到 `v2.3.0`，同时输出既有 npm mirror 配置弃用警告。
+- `npm run verify`：通过；Node/Web/Vue TypeScript、ESLint、Node 40/40 和 Python 49/49 全部通过。
+- `npm run build`：通过；Electron main、preload、renderer 生产构建分别转换 23、1、3256 个模块。
+- `PYINSTALLER_CONFIG_DIR=... engine/.venv/bin/pyinstaller --clean --noconfirm ./main.spec`：通过，生成 `engine/dist/main`；保留既有 `pycparser` 可选隐藏导入警告和 `@rpath/libomp.dylib` 解析警告。
+- `engine/dist/main --help`：沙盒内首次因 PyInstaller sync semaphore 权限失败；经用户批准在沙盒外运行后通过，CLI help 正常输出。
+- `./node_modules/.bin/electron-builder --mac`：`.app` 和 zip 构建完成；DMG 阶段因 `hdiutil create` 失败退出码 1。该失败未忽略，随后用本机 `hdiutil create` 单独生成最终 DMG。
+- `test -x dist/mac-arm64/Auto Caption.app/Contents/Resources/engine/main`：通过；验证路径修复对应的 macOS 包内引擎文件存在且可执行。
+- `codesign --force --deep --sign - dist/mac-arm64/Auto Caption.app`：通过，本地 ad-hoc 签名完成。
+- `codesign --verify --deep --strict --verbose=2 dist/mac-arm64/Auto Caption.app`：通过。
+- `ditto -c -k --sequesterRsrc --keepParent ...`：通过，重封签名后的 zip。
+- `node_modules/app-builder-bin/mac/app-builder_arm64 blockmap --input ... --output ...`：通过，生成 `2.3.0` zip blockmap。
+- `hdiutil create -volname 'Auto Caption' -fs APFS -format UDZO -srcfolder ... -ov dist/auto-caption-2.3.0.dmg`：通过；hdiutil 提示该 create 用法已弃用，未影响产物生成。
+- `hdiutil verify dist/auto-caption-2.3.0.dmg`：通过，checksum VALID。
+- `unzip -tq dist/Auto Caption-2.3.0-arm64-mac.zip`：通过，无压缩数据错误。
+- `file dist/mac-arm64/Auto Caption.app/Contents/MacOS/Auto Caption dist/mac-arm64/Auto Caption.app/Contents/Resources/engine/main`：二者均为 Mach-O 64-bit executable arm64。
+- `shasum -a 256 dist/auto-caption-2.3.0.dmg dist/Auto Caption-2.3.0-arm64-mac.zip`：
+  - DMG：`09c3d183f5042f37d6a70515ef3e36005183e6a072dd48b45d22f5af87972348`
+  - ZIP：`5643706d398b4c55f8cf8a9a0a9027cb5375b9c00e685cd701522bf96656a939`
+
+### 未执行、风险与后续事项
+
+- 未启动真实 Electron GUI 做窗口交互、麦克风/系统音频授权或真实识别流程；本批次验证到构建、测试、签名和安装包完整性，并静态确认 macOS 包内引擎路径。
+- 未做 Windows、Linux、macOS x64 或 universal 构建；不能声称这些平台的 V2.3.0 安装包已由本批次验证。
+- 未使用真实 API Key、Workspace 或云服务，不产生费用，也不修改远端热词资源。
+- Electron builder 仍提示缺少 Developer ID signing identity；发布到普通用户机器前建议使用正式证书签名并 notarize。
+
+### 参考与决策依据
+
+- 本地 `package.json` 与 `electron-builder.yml`：确认 macOS 产物版本来自 npm 包版本，macOS/Linux 引擎资源复制目标是 `Resources/engine/main`。
+- 根目录 `AGENTS.md`：遵循修改前检查、三语文档同步、构建产物记录、验证记录、系统环境与依赖边界、`change.md` 追加记录要求。

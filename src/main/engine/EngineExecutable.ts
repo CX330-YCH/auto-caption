@@ -1,6 +1,7 @@
 import { app } from 'electron'
 import { is } from '@electron-toolkit/utils'
 import * as path from 'path'
+import { resolvePackagedEnginePath } from './PackagedEnginePath'
 
 export interface EngineCommand {
   appPath: string
@@ -18,9 +19,7 @@ export function resolveBundledEngineCommand(): EngineCommand {
     }
   }
   return {
-    appPath: process.platform === 'win32'
-      ? path.join(process.resourcesPath, 'engine', 'main.exe')
-      : path.join(process.resourcesPath, 'engine', 'main', 'main'),
+    appPath: resolvePackagedEnginePath(process.platform, process.resourcesPath),
     prefixArguments: []
   }
 }

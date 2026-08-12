@@ -3,7 +3,7 @@
     <h1 align="center">auto-caption</h1>
     <p>Auto Caption はクロスプラットフォームのリアルタイム字幕表示ソフトウェアです。</p>
     <p>
-      <a href="https://github.com/HiMeditator/auto-caption/releases"><img src="https://img.shields.io/badge/release-2.2.0-blue"></a>
+      <a href="https://github.com/HiMeditator/auto-caption/releases"><img src="https://img.shields.io/badge/release-2.3.0-blue"></a>
       <a href="https://github.com/HiMeditator/auto-caption/issues"><img src="https://img.shields.io/github/issues/HiMeditator/auto-caption?color=orange"></a>
       <img src="https://img.shields.io/github/languages/top/HiMeditator/auto-caption?color=royalblue">
       <img src="https://img.shields.io/github/repo-size/HiMeditator/auto-caption?color=green">
@@ -14,7 +14,7 @@
         | <a href="./README_en.md">English</a>
         | <b>日本語</b> |
     </p>
-    <p><i>v2.2.0 がリリースされました。最新の修正と macOS arm64 ビルドを含みます...</i></p>
+    <p><i>v2.3.0 がリリースされました。パッケージ内パスの修正と macOS arm64 ビルドを含みます...</i></p>
 </div>
 
 ![](./assets/media/main_ja.png)
@@ -51,7 +51,7 @@ https://github.com/user-attachments/assets/9c188d78-9520-4397-bacf-4c8fdcc54874
 
 ## 📖 基本使い方
 
-> ⚠️ 注意：現在の v2.2.0 は Windows と macOS arm64 ビルドを提供しています。Linux はソースまたは既存のビルド手順での検証が必要です。
+> ⚠️ 注意：現在の v2.3.0 は Windows と macOS arm64 ビルドを提供しています。Linux はソースまたは既存のビルド手順での検証が必要です。
 
 このソフトウェアは Windows、macOS、Linux プラットフォームに対応しています。テスト済みのプラットフォーム情報は以下の通りです：
 
