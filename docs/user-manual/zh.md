@@ -47,7 +47,9 @@ Auto Caption 是一个跨平台的字幕显示软件，能够实时获取系统�
 
 先在阿里云百炼同一个 Workspace 中准备 API Key、Workspace ID 和专属 WebSocket 地址。地址必须是官方北京或新加坡地域的 `wss://<WorkspaceId>.<region>.maas.aliyuncs.com/api-ws/v1/inference`，其中的 Workspace ID 必须与设置字段一致，三者也必须属于同一地域。该云端服务会产生费用，使用前请查看[官方 WebSocket API 文档](https://help.aliyun.com/zh/model-studio/fun-asr-realtime-websocket-api)和当前计费规则。
 
-设置页可选择模型、语义断句、最大句间静音（200–6000 ms）和心跳。Fun-ASR 的最终句使用现有外部翻译配置；当前版本尚不支持 Fun-ASR 热词。
+设置页可选择模型、语义断句、最大句间静音（200–6000 ms）和心跳。Fun-ASR 的最终句使用现有外部翻译配置。
+
+“更多设置”中的热词分两级：一级可直接填写已有热词表 ID 和目标模型，并逐行填写上下文术语；上下文合计最多 400 字符、没有权重，可与热词表同时使用。修改一级配置后必须点击“应用更改”，下次识别任务才会使用。二级管理器使用已经应用的 API Key 所属账号、Workspace、地域和模型，可刷新、创建、完整替换、删除远端热词表；远端写操作立即生效，不受本地“取消更改”影响。删除会显示全部目标信息并再次确认。热词表模型必须与当前识别模型一致；阿里云当前说明新加坡子业务空间不支持热词。
 
 ## Vosk 引擎使用前准备
 
@@ -250,13 +252,17 @@ Fun-ASR 支持 `auto`，以及中文、英语、日语、韩语、德语、法�
 - `-fsemantic, --fun_asr_semantic_punctuation`：语义断句，`0` 关闭（默认），`1` 开启。
 - `-fsilence, --fun_asr_max_sentence_silence`：最大句间静音毫秒数，默认 `1300`，范围 200–6000。
 - `-fheartbeat, --fun_asr_heartbeat`：心跳，`1` 开启（默认），`0` 关闭。
+- `-fvocabulary, --fun_asr_vocabulary_id`：已有预编译热词表 ID；留空表示不使用。
+- `-fvmodel, --fun_asr_vocabulary_model`：热词表目标模型，必须与 `-fmodel` 相同。
+- `-fcontext, --fun_asr_context_term`：上下文术语，可重复传入，总计最多 400 字符；不带权重。
 
 独立运行示例：
 
 ```bash
 python main.py -e fun_asr -fworkspace <workspace-id> \
   -furl wss://<workspace-id>.cn-beijing.maas.aliyuncs.com/api-ws/v1/inference \
-  -fkey <dashscope-api-key> -s zh -t none -d 1
+  -fkey <dashscope-api-key> -fvocabulary <vocabulary-id> \
+  -fcontext "Auto Caption" -fcontext "阿里云百炼" -s zh -t none -d 1
 ```
 
 #### `-tm, --translation_model`

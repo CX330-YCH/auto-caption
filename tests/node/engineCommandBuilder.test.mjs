@@ -25,6 +25,8 @@ test('builds common and Provider-specific arguments from V2 config', () => {
   engine.providers.funAsr.workspaceId = 'workspace-1'
   engine.providers.funAsr.websocketUrl = 'wss://workspace-1.cn-beijing.maas.aliyuncs.com/api-ws/v1/inference'
   engine.providers.funAsr.apiKey = 'fun-asr-secret'
+  engine.providers.funAsr.hotwords.vocabularyId = 'vocab-project-1'
+  engine.providers.funAsr.hotwords.contextTerms = ['Auto Caption', '阿里云百炼']
 
   for (const provider of ['gummy', 'vosk', 'sosv', 'glm', 'fun_asr']) {
     engine.provider = provider
@@ -67,6 +69,12 @@ test('builds common and Provider-specific arguments from V2 config', () => {
   assert.equal(valueAfter(funAsrArgs, '-fsemantic'), '0')
   assert.equal(valueAfter(funAsrArgs, '-fsilence'), '1300')
   assert.equal(valueAfter(funAsrArgs, '-fheartbeat'), '1')
+  assert.equal(valueAfter(funAsrArgs, '-fvocabulary'), 'vocab-project-1')
+  assert.equal(valueAfter(funAsrArgs, '-fvmodel'), 'fun-asr-realtime')
+  assert.deepEqual(
+    funAsrArgs.filter((value, index) => funAsrArgs[index - 1] === '-fcontext'),
+    ['Auto Caption', '阿里云百炼']
+  )
 })
 
 test('uses none target when translation is disabled', () => {

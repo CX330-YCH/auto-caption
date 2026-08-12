@@ -30,7 +30,9 @@ class FakeClient:
         self.sent = []
         self.stopped = False
 
-    def start(self):
+    def start(self, phrase_id=None, **kwargs):
+        self.phrase_id = phrase_id
+        self.start_kwargs = kwargs
         self.callback.on_open()
 
     def send_audio_frame(self, data):
@@ -154,6 +156,51 @@ class FunAsrProviderTests(unittest.TestCase):
             'text': '重复结果',
         }))
         self.assertEqual(provider.drain_events(), [])
+
+    def test_passes_vocabulary_and_context_for_each_task(self):
+        from services.hotwords import HotwordRuntimeConfig
+
+        clients = []
+
+        def factory(client_options, callback):
+            self.assertEqual(
+                client_options.vocabulary_id,
+                'vocab-project-1',
+            )
+            client = FakeClient(callback)
+            clients.append(client)
+            return client
+
+        provider = FunAsrProvider(
+            options(),
+            client_factory=factory,
+            sleeper=lambda delay: None,
+            clock=lambda: datetime(2026, 8, 12, 12, 0, 0),
+            hotwords=HotwordRuntimeConfig(
+                vocabulary_id='vocab-project-1',
+                target_model='fun-asr-realtime',
+                context_terms=('Auto Caption', '阿里云百炼'),
+            ),
+        )
+        provider.start()
+        provider.drain_events()
+
+        self.assertIsNone(clients[0].phrase_id)
+        self.assertEqual(
+            clients[0].start_kwargs['raw_input']['context'][0]['content'][0],
+            {
+                'type': 'input_text',
+                'text': 'Auto Caption\n阿里云百炼',
+            },
+        )
+
+        clients[0].callback.on_error(FakeResult({}))
+        provider.drain_events()
+        self.assertIsNone(clients[1].phrase_id)
+        self.assertEqual(
+            clients[1].start_kwargs['raw_input'],
+            clients[0].start_kwargs['raw_input'],
+        )
 
     def test_reconnects_with_backoff_and_flushes_bounded_audio(self):
         clients = []

@@ -30,6 +30,9 @@ class CliOptions:
     fun_asr_semantic_punctuation: bool = False
     fun_asr_max_sentence_silence: int = 1300
     fun_asr_heartbeat: bool = True
+    fun_asr_vocabulary_id: str = ''
+    fun_asr_vocabulary_model: str = 'fun-asr-realtime'
+    fun_asr_context_terms: tuple[str, ...] = ()
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -138,6 +141,20 @@ def build_parser() -> argparse.ArgumentParser:
         type=int, choices=(0, 1), default=1,
         help='Enable Fun-ASR heartbeat events'
     )
+    parser.add_argument(
+        '-fvocabulary', '--fun_asr_vocabulary_id', default='',
+        help='Fun-ASR precompiled hotword vocabulary ID'
+    )
+    parser.add_argument(
+        '-fvmodel', '--fun_asr_vocabulary_model',
+        default='fun-asr-realtime',
+        help='Target model used to create the Fun-ASR vocabulary'
+    )
+    parser.add_argument(
+        '-fcontext', '--fun_asr_context_term',
+        action='append', default=[],
+        help='Fun-ASR context term; repeat for multiple terms'
+    )
     return parser
 
 
@@ -172,4 +189,7 @@ def parse_args(arguments: list[str] | None = None) -> CliOptions:
         ),
         fun_asr_max_sentence_silence=args.fun_asr_max_sentence_silence,
         fun_asr_heartbeat=bool(args.fun_asr_heartbeat),
+        fun_asr_vocabulary_id=args.fun_asr_vocabulary_id,
+        fun_asr_vocabulary_model=args.fun_asr_vocabulary_model,
+        fun_asr_context_terms=tuple(args.fun_asr_context_term),
     )

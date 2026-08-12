@@ -85,6 +85,36 @@ export function requireFunAsrModel(value: unknown): string {
   return value
 }
 
+export function requireVocabularyId(value: unknown): string {
+  const vocabularyId = requireString(value, 'funAsr.hotwords.vocabularyId', 256)
+  if (vocabularyId && !/^[a-zA-Z0-9_-]+$/.test(vocabularyId)) {
+    throw new InvalidConfigError('Invalid funAsr.hotwords.vocabularyId')
+  }
+  return vocabularyId
+}
+
+export function requireContextTerms(value: unknown): string[] {
+  if (!Array.isArray(value) || value.length > 100) {
+    throw new InvalidConfigError('Invalid funAsr.hotwords.contextTerms')
+  }
+  const terms = value.map((term) => {
+    const text = requireString(
+      term,
+      'funAsr.hotwords.contextTerms',
+      100,
+      false
+    ).trim()
+    if (!text) {
+      throw new InvalidConfigError('Invalid funAsr.hotwords.contextTerms')
+    }
+    return text
+  })
+  if (new Set(terms).size !== terms.length || terms.join('\n').length > 400) {
+    throw new InvalidConfigError('Invalid funAsr.hotwords.contextTerms')
+  }
+  return terms
+}
+
 export function requireWebSocketUrl(
   value: unknown,
   field: string,

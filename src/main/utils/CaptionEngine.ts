@@ -1,7 +1,4 @@
 import { exec, spawn } from 'child_process'
-import { app } from 'electron'
-import { is } from '@electron-toolkit/utils'
-import * as path from 'path'
 import * as net from 'net'
 import { controlWindow } from '../ControlWindow'
 import { allConfig } from './AllConfig'
@@ -22,6 +19,7 @@ import {
   buildBundledEngineArguments,
   buildCustomEngineArguments
 } from '../engine/config/EngineCommandBuilder'
+import { resolveBundledEngineCommand } from '../engine/EngineExecutable'
 
 export class CaptionEngine {
   appPath: string = ''
@@ -55,36 +53,9 @@ export class CaptionEngine {
         controlWindow.sendErrorMessage(i18n('fun_asr.key.missing'))
         return false
       }
-      this.command = []
-      if (is.dev) {
-        if(process.platform === "win32") {
-          this.appPath = path.join(
-            app.getAppPath(), 'engine',
-            '.venv', 'Scripts', 'python.exe'
-          )
-          this.command.push(path.join(
-            app.getAppPath(), 'engine', 'main.py'
-          ))
-          // this.appPath = path.join(app.getAppPath(), 'engine', 'dist', 'main.exe')
-        }
-        else {
-          this.appPath = path.join(
-            app.getAppPath(), 'engine',
-            '.venv', 'bin', 'python3'
-          )
-          this.command.push(path.join(
-            app.getAppPath(), 'engine', 'main.py'
-          ))
-        }
-      }
-      else {
-        if(process.platform === 'win32') {
-          this.appPath = path.join(process.resourcesPath, 'engine', 'main.exe')
-        }
-        else {
-          this.appPath = path.join(process.resourcesPath, 'engine', 'main', 'main')
-        }
-      }
+      const engineCommand = resolveBundledEngineCommand()
+      this.appPath = engineCommand.appPath
+      this.command = [...engineCommand.prefixArguments]
       this.command.push(...buildBundledEngineArguments(
         engineConfig,
         this.port

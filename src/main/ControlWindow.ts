@@ -8,6 +8,7 @@ import { captionWindow } from './CaptionWindow'
 import { allConfig } from './utils/AllConfig'
 import { captionEngine } from './utils/CaptionEngine'
 import { Log } from './utils/Log'
+import { hotwordService } from './services/HotwordService'
 
 class ControlWindow {
   mounted: boolean = false;
@@ -100,6 +101,10 @@ class ControlWindow {
       info.mem = stats.memory
       info.elapsed = stats.elapsed
       return info
+    })
+
+    ipcMain.handle('control.hotwords.execute', (_, request) => {
+      return hotwordService.execute(request)
     })
 
     ipcMain.on('control.application.change', (_, args) => {

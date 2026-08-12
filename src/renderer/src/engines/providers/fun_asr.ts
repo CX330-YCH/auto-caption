@@ -15,11 +15,21 @@ export const funAsrEngine: EngineDefinition = {
     sourceLanguage: 'selectable',
     translation: 'external',
     recording: true,
-    hotwords: 'unsupported'
+    hotwords: 'manager'
   },
   defaultSourceLanguage: 'auto',
   validate: (config) => {
     const funAsr = config.providers.funAsr
+    if (
+      funAsr.hotwords.vocabularyId &&
+      funAsr.hotwords.targetModel !== funAsr.model
+    ) {
+      return {
+        fieldId: 'fun-asr-hotwords',
+        titleKey: 'noti.funAsrHotwordModelMismatch',
+        descriptionKey: 'noti.funAsrHotwordModelMismatchNote'
+      }
+    }
     if (!funAsr.websocketUrl || !funAsr.workspaceId) return null
     try {
       validateFunAsrEndpoint(funAsr.websocketUrl, funAsr.workspaceId)

@@ -12,6 +12,7 @@ import {
   isRecord,
   requireBoolean,
   requireColor,
+  requireContextTerms,
   requireFunAsrModel,
   requireLanguage,
   requireNumber,
@@ -19,6 +20,7 @@ import {
   requireString,
   requireTheme,
   requireUrl,
+  requireVocabularyId,
   requireWebSocketUrl,
   requireWorkspaceId,
   validateFunAsrEndpoint
@@ -230,12 +232,22 @@ function parseProviderConfigs(value: Record<string, unknown>): ProviderConfigs {
   const sosv = requireRecord(value.sosv, 'providers.sosv')
   const glm = requireRecord(value.glm, 'providers.glm')
   const funAsr = requireRecord(value.funAsr, 'providers.funAsr')
+  const funAsrHotwords = requireRecord(
+    funAsr.hotwords,
+    'providers.funAsr.hotwords'
+  )
   const workspaceId = requireWorkspaceId(funAsr.workspaceId)
   const websocketUrl = requireWebSocketUrl(
     funAsr.websocketUrl,
     'funAsr.websocketUrl'
   )
   validateFunAsrEndpoint(websocketUrl, workspaceId)
+  const funAsrModel = requireFunAsrModel(funAsr.model)
+  const vocabularyId = requireVocabularyId(funAsrHotwords.vocabularyId)
+  const vocabularyTargetModel = requireFunAsrModel(funAsrHotwords.targetModel)
+  if (vocabularyId && vocabularyTargetModel !== funAsrModel) {
+    throw new InvalidConfigError('Fun-ASR hotword target model mismatch')
+  }
   return {
     ...value,
     gummy: {
@@ -258,7 +270,7 @@ function parseProviderConfigs(value: Record<string, unknown>): ProviderConfigs {
     },
     funAsr: {
       ...funAsr,
-      model: requireFunAsrModel(funAsr.model),
+      model: funAsrModel,
       websocketUrl,
       workspaceId,
       apiKey: requireString(funAsr.apiKey, 'funAsr.apiKey', 8192),
@@ -275,7 +287,13 @@ function parseProviderConfigs(value: Record<string, unknown>): ProviderConfigs {
       heartbeatEnabled: requireBoolean(
         funAsr.heartbeatEnabled,
         'funAsr.heartbeatEnabled'
-      )
+      ),
+      hotwords: {
+        ...funAsrHotwords,
+        vocabularyId,
+        targetModel: vocabularyTargetModel,
+        contextTerms: requireContextTerms(funAsrHotwords.contextTerms)
+      }
     }
   }
 }

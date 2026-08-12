@@ -53,8 +53,15 @@ const providerArgumentBuilders: Record<
       '-fworkspace', funAsr.workspaceId,
       '-fsemantic', funAsr.semanticPunctuationEnabled ? '1' : '0',
       '-fsilence', funAsr.maxSentenceSilenceMs.toString(),
-      '-fheartbeat', funAsr.heartbeatEnabled ? '1' : '0'
+      '-fheartbeat', funAsr.heartbeatEnabled ? '1' : '0',
+      '-fvmodel', funAsr.hotwords.targetModel
     ]
+    if (funAsr.hotwords.vocabularyId) {
+      args.push('-fvocabulary', funAsr.hotwords.vocabularyId)
+    }
+    for (const term of funAsr.hotwords.contextTerms) {
+      args.push('-fcontext', term)
+    }
     if (funAsr.apiKey) args.push('-fkey', funAsr.apiKey)
     args.push(...translationArguments(config))
     return args

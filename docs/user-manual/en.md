@@ -50,7 +50,9 @@ You need to obtain an API KEY first, refer to: [Quick Start](https://docs.bigmod
 
 Create or select an Alibaba Cloud Model Studio Workspace, then use an API key, Workspace ID, and dedicated WebSocket endpoint from that same Workspace and region. The endpoint must be an official Beijing or Singapore URL in the form `wss://<WorkspaceId>.<region>.maas.aliyuncs.com/api-ws/v1/inference`, and the embedded Workspace ID must match the configured value. This online service may incur charges; review the [official WebSocket API documentation](https://help.aliyun.com/zh/model-studio/fun-asr-realtime-websocket-api) and current pricing before use.
 
-The UI exposes the model, semantic punctuation, maximum sentence silence (200–6000 ms), and heartbeat settings. Final Fun-ASR sentences use the existing external translation configuration. Fun-ASR hotwords are not supported in this stage.
+The UI exposes the model, semantic punctuation, maximum sentence silence (200–6000 ms), and heartbeat settings. Final Fun-ASR sentences use the existing external translation configuration.
+
+Hotwords under More Settings have two levels. Level 1 accepts an existing vocabulary ID and its target model plus one context term per line. Context is unweighted, limited to 400 combined characters, and can be used with the vocabulary. Click Apply Changes before a recognition task uses this draft. Level 2 uses the applied API-key owner account, Workspace, region, and model to list, create, fully replace, or delete remote vocabularies. Remote writes take effect immediately and Cancel Changes cannot undo them. Delete shows the full target and requires confirmation. The vocabulary model must exactly match the recognition model; Alibaba Cloud currently states that Singapore sub-workspaces do not support hotwords.
 
 ## Preparation for Using Vosk Engine
 
@@ -253,13 +255,17 @@ Specifies the API URL required for the `glm` model. The default value is: `https
 - `-fsemantic, --fun_asr_semantic_punctuation`: semantic punctuation, `0` off (default), `1` on.
 - `-fsilence, --fun_asr_max_sentence_silence`: maximum sentence silence in milliseconds, default `1300`, range 200–6000.
 - `-fheartbeat, --fun_asr_heartbeat`: heartbeat, `1` on (default), `0` off.
+- `-fvocabulary, --fun_asr_vocabulary_id`: an existing precompiled vocabulary ID; empty disables it.
+- `-fvmodel, --fun_asr_vocabulary_model`: the vocabulary target model; it must match `-fmodel`.
+- `-fcontext, --fun_asr_context_term`: a repeatable, unweighted context term; all terms together are limited to 400 characters.
 
 Standalone example:
 
 ```bash
 python main.py -e fun_asr -fworkspace <workspace-id> \
   -furl wss://<workspace-id>.cn-beijing.maas.aliyuncs.com/api-ws/v1/inference \
-  -fkey <dashscope-api-key> -s en -t none -d 1
+  -fkey <dashscope-api-key> -fvocabulary <vocabulary-id> \
+  -fcontext "Auto Caption" -fcontext "Alibaba Cloud" -s en -t none -d 1
 ```
 
 #### `-tm, --translation_model`

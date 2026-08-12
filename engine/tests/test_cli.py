@@ -22,6 +22,8 @@ class CliTests(unittest.TestCase):
         self.assertEqual(options.fun_asr_model, 'fun-asr-realtime')
         self.assertEqual(options.fun_asr_max_sentence_silence, 1300)
         self.assertTrue(options.fun_asr_heartbeat)
+        self.assertEqual(options.fun_asr_vocabulary_id, '')
+        self.assertEqual(options.fun_asr_context_terms, ())
 
     def test_parses_existing_provider_arguments_and_hides_credentials_in_repr(self):
         options = parse_args([
@@ -52,6 +54,10 @@ class CliTests(unittest.TestCase):
             '-fsemantic', '1',
             '-fsilence', '800',
             '-fheartbeat', '0',
+            '-fvocabulary', 'vocab-project-1',
+            '-fvmodel', 'fun-asr-realtime',
+            '-fcontext', 'Auto Caption',
+            '-fcontext', '阿里云百炼',
         ])
 
         self.assertEqual(options.caption_engine, 'fun_asr')
@@ -59,6 +65,11 @@ class CliTests(unittest.TestCase):
         self.assertTrue(options.fun_asr_semantic_punctuation)
         self.assertEqual(options.fun_asr_max_sentence_silence, 800)
         self.assertFalse(options.fun_asr_heartbeat)
+        self.assertEqual(options.fun_asr_vocabulary_id, 'vocab-project-1')
+        self.assertEqual(
+            options.fun_asr_context_terms,
+            ('Auto Caption', '阿里云百炼'),
+        )
         self.assertNotIn('dummy-fun-asr-credential', repr(options))
 
 

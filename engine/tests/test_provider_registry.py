@@ -38,6 +38,9 @@ def config(name):
         fun_asr_semantic_punctuation=False,
         fun_asr_max_sentence_silence=1300,
         fun_asr_heartbeat=True,
+        fun_asr_vocabulary_id='',
+        fun_asr_vocabulary_model='fun-asr-realtime',
+        fun_asr_context_terms=(),
     )
 
 

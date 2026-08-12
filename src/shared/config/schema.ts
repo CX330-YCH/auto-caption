@@ -61,6 +61,14 @@ export interface FunAsrProviderConfig {
   semanticPunctuationEnabled: boolean
   maxSentenceSilenceMs: number
   heartbeatEnabled: boolean
+  hotwords: FunAsrHotwordConfig
+}
+
+export interface FunAsrHotwordConfig {
+  [key: string]: unknown
+  vocabularyId: string
+  targetModel: string
+  contextTerms: string[]
 }
 
 export interface ProviderConfigs {
@@ -199,7 +207,12 @@ export function createDefaultConfig(recordingPath: string): ConfigDocumentV2 {
           apiKey: '',
           semanticPunctuationEnabled: false,
           maxSentenceSilenceMs: 1300,
-          heartbeatEnabled: true
+          heartbeatEnabled: true,
+          hotwords: {
+            vocabularyId: '',
+            targetModel: 'fun-asr-realtime',
+            contextTerms: []
+          }
         }
       },
       custom: {

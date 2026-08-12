@@ -7,7 +7,11 @@ from core import (
     RecognitionProvider,
     TranslationService,
 )
-from services import NoTranslationService, build_legacy_translation_service
+from services import (
+    HotwordRuntimeConfig,
+    NoTranslationService,
+    build_legacy_translation_service,
+)
 
 from .glm import GlmProvider
 from .gummy import GummyProvider
@@ -38,6 +42,9 @@ class ProviderConfig:
     fun_asr_semantic_punctuation: bool
     fun_asr_max_sentence_silence: int
     fun_asr_heartbeat: bool
+    fun_asr_vocabulary_id: str
+    fun_asr_vocabulary_model: str
+    fun_asr_context_terms: tuple[str, ...]
 
 
 @dataclass(frozen=True)
@@ -162,20 +169,27 @@ def _build_fun_asr(
     warning_handler: Callable[[str], None],
 ) -> ProviderRuntime:
     return _build_mono_16k_runtime(
-        FunAsrProvider(FunAsrClientOptions(
-            model=config.fun_asr_model,
-            websocket_url=config.fun_asr_url,
-            workspace_id=config.fun_asr_workspace,
-            api_key=config.fun_asr_api_key,
-            source_language=config.source_language,
-            semantic_punctuation_enabled=(
-                config.fun_asr_semantic_punctuation
+        FunAsrProvider(
+            FunAsrClientOptions(
+                model=config.fun_asr_model,
+                websocket_url=config.fun_asr_url,
+                workspace_id=config.fun_asr_workspace,
+                api_key=config.fun_asr_api_key,
+                source_language=config.source_language,
+                semantic_punctuation_enabled=(
+                    config.fun_asr_semantic_punctuation
+                ),
+                max_sentence_silence_ms=(
+                    config.fun_asr_max_sentence_silence
+                ),
+                heartbeat_enabled=config.fun_asr_heartbeat,
             ),
-            max_sentence_silence_ms=(
-                config.fun_asr_max_sentence_silence
+            hotwords=HotwordRuntimeConfig(
+                vocabulary_id=config.fun_asr_vocabulary_id,
+                target_model=config.fun_asr_vocabulary_model,
+                context_terms=config.fun_asr_context_terms,
             ),
-            heartbeat_enabled=config.fun_asr_heartbeat,
-        )),
+        ),
         config,
         audio_source,
         warning_handler,

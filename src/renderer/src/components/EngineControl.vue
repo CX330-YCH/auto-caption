@@ -51,6 +51,15 @@
         @update:model-value="updateField(field, $event)"
         @browse="selectFolderPath(field)"
       />
+      <HotwordManager
+        v-if="hotwordManagerEnabled"
+        id="fun-asr-hotwords"
+        :model-value="draft.providers.funAsr.hotwords"
+        :applied-model="engineControl.engineConfig.providers.funAsr.model"
+        :applied-workspace-id="engineControl.engineConfig.providers.funAsr.workspaceId"
+        :applied-websocket-url="engineControl.engineConfig.providers.funAsr.websocketUrl"
+        @update:model-value="draft.providers.funAsr.hotwords = $event"
+      />
     </a-card>
   </a-card>
   <div style="height: 20px"></div>
@@ -63,8 +72,10 @@ import { notification } from 'ant-design-vue'
 import { ExclamationCircleOutlined, InfoCircleOutlined } from '@ant-design/icons-vue'
 import { useI18n } from 'vue-i18n'
 import EngineFieldRenderer from '@renderer/components/engine/EngineFieldRenderer.vue'
+import HotwordManager from '@renderer/components/engine/HotwordManager.vue'
 import {
   applyEngineLanguageDefaults,
+  getEngineDefinition,
   getEngineFields,
   normalizeEngineConfig,
   validateEngineConfig
@@ -102,6 +113,10 @@ const advancedFields = computed(() =>
 const customFields = computed(() =>
   visibleFields.value.filter((field) => field.section === 'custom')
 )
+const hotwordManagerEnabled = computed(() => {
+  return getEngineDefinition(draft.value.provider).capabilities.hotwords ===
+    'manager'
+})
 
 function fieldValue(field: EngineFieldDescriptor): unknown {
   return getEngineConfigValue(draft.value, field.path)

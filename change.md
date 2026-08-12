@@ -970,3 +970,134 @@
 - 阿里云官方 [服务端事件](https://help.aliyun.com/zh/model-studio/fun-asr-server-events)与[客户端事件](https://help.aliyun.com/zh/model-studio/fun-asr-client-events)：partial/final、时间戳、usage、task-finished/task-failed 和 finish-task 语义。
 - 根目录 `AGENTS.md` 的官方 SDK 优先、单声道音频、时间戳、心跳、Provider/Session、有限重试、停止冲刷、能力目录、三语、凭据脱敏、测试和变更记录约束。
 - 用户此前明确的第三至第五阶段架构路线，以及“V2 完整迁移、不考虑已安装版本兼容性”的配置决策。
+
+## 2026-08-12 - 第七阶段：两级 Fun-ASR 热词与独立 HotwordService/UI
+
+### 授权与范围
+
+- 用户授权：要求第七阶段分两级实现热词；第一级为“热词表 ID + 上下文术语”，第二级为完整热词管理器，并建立独立 `HotwordService` 和 UI。
+- 目标：在严格 V2 配置、能力驱动 Renderer、独立 Electron 进程组件、统一 Python Provider/Session 和第六阶段 Fun-ASR 接入之上，完成配置、运行时参数、远端资源管理边界、专用 UI、三语文本、测试与文档的完整纵向切片。
+- 明确非目标：不实现 Fun-ASR 不支持的即时加权热词；不把远端 CRUD 塞入 RecognitionProvider/Session；不修改公开字幕 stdout/TCP 协议；不发起任何真实阿里云 list/create/update/delete 或识别请求；不使用真实凭据；不提交或推送代码。
+
+### 官方能力与关键决策
+
+- 预编译热词是持久远端 `vocabulary_id`，词条带 1–5 权重；创建时的 `target_model` 必须与识别模型完全一致，否则可能不生效。管理与识别使用同一个 API Key 所属账号、地域和 Workspace。
+- 上下文通过 `start(raw_input={context: ...})` 传入。本项目把术语合并为一条 `user/input_text`，合计最多 400 字符；它没有权重，可以与预编译热词并用。
+- Fun-ASR 不支持 SDK 文档中的即时 `vocabulary` 热词；该能力只属于文档列出的 Qwen-Audio 流式模型，因此 UI 和配置没有伪造即时热词入口。
+- 项目锁定的 DashScope 1.26.6 虽保留 `Recognition.start(phrase_id=...)` 旧签名，但 Fun-ASR 官方请求字段是构造参数 `vocabulary_id`。最终实现为每个新 `Recognition` client 传 `vocabulary_id`、每次 `start()` 传 `raw_input.context`；重连同时重建两者，避免把新版词表 ID 错传为旧 `asr_phrase` 资源。
+- 远端管理使用官方 `VocabularyService` 的 create/list/query/update/delete；update 是完整替换。修改和删除前先 query 并校验远端 `target_model`，不允许用当前模型误改其他模型的词表。
+- 北京与新加坡 WSS Endpoint 派生对应 Workspace 专属 HTTP `/api/v1`；阿里云当前说明新加坡子业务空间不支持热词，UI 明确提示，不在客户端猜测主业务空间最终可用性。
+
+### 修改文件与职责
+
+- `src/shared/config/schema.ts`
+  - 在必需的 `engine.providers.funAsr` 中增加必需 `hotwords` 子层：`vocabularyId`、`targetModel`、`contextTerms`。
+  - 默认不使用热词表，上下文为空，目标模型为 `fun-asr-realtime`；`schemaVersion` 保持 2。
+- `src/shared/config/validation.ts`、`src/shared/config/document.ts`
+  - 校验词表 ID 字符与长度、上下文数组数量/去空/去重/单项长度/400 字符合计长度。
+  - 非空词表 ID 要求目标模型与当前 Fun-ASR 识别模型完全一致。
+- `src/shared/hotwords.ts`
+  - 新增 Renderer/Main 共享的 Hotword request/response/resource 类型和不可信输入解析器。
+  - 支持 list/query/create/update/delete；限制最多 2000 词、权重 1–5、Fun-ASR 语言 zh/en/ja、创建前缀、分页、ID、重复词和官方 ASCII/非 ASCII 长度。
+  - 提供专用编辑器的 `text | weight | lang` 逐行解析，不把自由文本直接传给 SDK。
+- `engine/services/hotwords.py`、`engine/services/__init__.py`
+  - 新增 `HotwordRuntimeConfig`，分别构造 Recognition client 的 `vocabulary_id` 和 `start()` 的 `raw_input.context`。
+  - 新增独立 `HotwordService` 与可注入 `VocabularyClient` 协议，规范化官方 SDK 的 snake_case 返回值。
+  - create 强制使用当前应用模型；update/delete 查询后校验远端目标模型；HTTP Endpoint 只能由已验证 WSS/Workspace 派生。
+  - 新增一次性 stdin/stdout worker，输入硬上限 1 MiB，只返回规范化数据或稳定错误码，不回显凭据、SDK 正文或远端异常。
+- `engine/providers/fun_asr.py`
+  - Provider 接收 `HotwordRuntimeConfig`；每次初连/重连创建 SDK client 时携带 `vocabulary_id`，每次任务 `start()` 携带上下文。
+  - 热词资源管理没有进入 Provider；现有 partial/final、时间戳、用量、翻译和关闭职责不变。
+- `engine/cli.py`、`engine/providers/registry.py`、`engine/main.py`
+  - 新增 `-fvocabulary/--fun_asr_vocabulary_id`、`-fvmodel/--fun_asr_vocabulary_model` 和可重复 `-fcontext/--fun_asr_context_term`，经 typed config/Registry 注入 Provider。
+  - `main.py --hotword-service` 是精确匹配的独立一次性入口；普通识别装配路径没有增加远端 CRUD 分支。
+- `src/main/engine/EngineExecutable.ts`、`src/main/utils/CaptionEngine.ts`
+  - 抽出开发环境/打包环境共用的 Python 或 bundled executable 解析器，字幕进程与热词 worker 使用同一平台路径规则；自定义字幕引擎行为不变。
+- `src/main/services/HotwordService.ts`
+  - 新增独立 Electron service，重新解析 Renderer 请求，从已应用 AllConfig/环境变量获取目标连接和 API Key。
+  - 同时最多一个远端操作；20 秒超时；stdout 最大 1 MiB；SDK stderr 不转发；child spawn/stdin/响应异常全部映射为脱敏错误码。
+  - API Key 仅写入子进程 stdin，不进入 Renderer IPC、argv、响应或操作日志；日志只记录 action、结果码和异常类型。
+- `src/main/ControlWindow.ts`
+  - 注册 `control.hotwords.execute` invoke handler，调用独立 service。
+- `src/main/engine/config/EngineCommandBuilder.ts`
+  - Fun-ASR 识别命令加入目标模型、可选词表 ID和重复上下文参数；继续使用参数数组，不经过 shell。
+- `src/renderer/src/engines/types.ts`、`src/renderer/src/engines/providers/fun_asr.ts`
+  - 补齐 V2 热词路径；Fun-ASR capability 从无热词改为 `manager`。
+  - 目录级校验热词目标模型与识别模型，专用 UI 仍通过 capability 挂载而非 Provider ID 条件分支。
+- `src/renderer/src/components/EngineControl.vue`
+  - 当能力为 `manager` 时挂载 `HotwordManager`，传入本地草稿与已应用远端目标；没有加入 Fun-ASR `v-if`。
+- `src/renderer/src/components/engine/HotwordManager.vue`
+  - 一级 UI：已有词表 ID、目标模型、逐行上下文；明确区分带权重远端词表与无权重上下文。
+  - 二级 UI：分页/前缀筛选、查询、创建、选用、完整替换、删除；创建成功仅写入本地草稿，识别仍需“应用更改”。
+  - 管理器始终显示已应用 API Key 的所属账号语义、Workspace、地域和模型；因 SDK 不返回账号 ID，界面明确不显示密钥或账号标识。
+  - 远端写入不受本地取消影响；删除前再次查询模型，并在确认框显示账号、Workspace、地域、模型、资源 ID 和不可撤销提示。
+- `src/renderer/src/i18n/lang/zh.ts`、`en.ts`、`ja.ts`
+  - 增加一级/二级 UI、格式说明、地域限制、确认、结果和全部稳定错误码的中英日文本。
+- `engine/tests/test_cli.py`、`test_provider_registry.py`、`test_fun_asr_provider.py`
+  - 覆盖新 CLI/Registry 字段、热词与上下文的首次任务和重连任务传递，以及现有 Provider 行为回归。
+- `engine/tests/test_hotword_service.py`
+  - 使用伪造 `VocabularyClient` 覆盖运行时模型/上下文约束、完整 CRUD、修改前模型拒绝和 worker 错误脱敏；不访问网络。
+- `tests/node/configDocument.test.mjs`、`engineCommandBuilder.test.mjs`、`engineCatalog.test.mjs`
+  - 覆盖 V2 默认值/解析/模型不匹配、识别参数生成、manager capability 和目录校验。
+- `tests/node/hotwords.test.mjs`
+  - 覆盖管理请求、词条编辑格式、官方长度/权重/语言限制和三语热词 UI 键结构。
+- `README.md`、`docs/api-docs/config-v2.md`、`electron-ipc.md`、`caption-engine.md`
+  - 记录两级使用方式、严格 V2 新层、独立 IPC/worker、凭据边界和公开字幕协议不变。
+- `docs/engine-manual/architecture.md`、`zh.md`、`en.md`、`ja.md`
+  - 更新服务树、运行时/远端职责分离、官方 SDK 字段、CLI 和扩展约束。
+- `docs/user-manual/zh.md`、`en.md`、`ja.md`
+  - 增加一级/二级操作、应用与立即远端生效的差异、删除确认、模型匹配和新加坡限制；中英 CLI 示例加入新参数。
+- `docs/testing.md`
+  - 记录新增自动化覆盖和真实 Electron/阿里云远端链路未执行范围。
+- `change.md`
+  - 追加本阶段授权、官方决策、完整文件范围、兼容性、安全、验证失败、限制与回滚记录。
+
+### 修改前后行为
+
+- 修改前：Fun-ASR 能识别但 capability 明确为无热词；V2、CLI、Provider 和 UI 都不能传热词表或上下文，也没有远端资源管理边界。
+- 修改后：用户可以先只填已有 `vocabularyId` 和上下文完成一级使用，也可以在独立二级管理器中管理远端词表，再把选中的 ID 写入草稿并显式应用。
+- 本地 Apply/Cancel 只管理 V2 识别配置；远端 create/update/delete 是独立、立即生效的用户操作，取消本地草稿不能回滚云资源。
+- Fun-ASR 识别 stdout/TCP command envelope 完全不变；热词不增加 caption 事件字段，最终句翻译仍只由 Session 触发一次。
+- 管理请求在 Renderer、Electron 和 Python 三层验证；凭据只存在于已应用配置、主进程内存和一次性 worker stdin。
+
+### 配置、接口、兼容性与依赖
+
+- `schemaVersion` 仍为 2，但 `engine.providers.funAsr.hotwords` 变成必需已知层。按用户此前“V2 完整迁移、不考虑已安装版本兼容性”的决策，不为缺少该层的已安装 V2 增加增量迁移；非法文档使用最新默认配置并在退出时写回。
+- 新增三个 Python CLI 参数；既有参数、Provider ID、自定义字幕命令和公开 stdout/TCP 协议不变。
+- 新增内部 IPC `control.hotwords.execute` 和私有 `--hotword-service` worker envelope；二者不是第三方公开扩展协议。
+- `package.json`、`package-lock.json`、`engine/requirements.txt` 和 `engine/main.spec` 无差异；复用第六阶段已锁定的官方 `dashscope==1.26.6`，没有安装或升级依赖。
+- 精确回滚：恢复本阶段前的共享 schema/validation/document、CLI/main/registry/Fun provider/services export、Electron ControlWindow/command builder/CaptionEngine、Renderer EngineControl/目录/types/i18n 和现有测试；删除 `engine/services/hotwords.py`、`engine/tests/test_hotword_service.py`、`src/shared/hotwords.ts`、`src/main/engine/EngineExecutable.ts`、`src/main/services/HotwordService.ts`、`src/renderer/src/components/engine/HotwordManager.vue`、`tests/node/hotwords.test.mjs`；恢复本文列出的 README/API/架构/测试/三语手册段落。远端资源本阶段从未修改，无需云端回滚；已经被新默认配置覆盖的旧 V2 文件不能由代码回滚恢复。
+
+### 验证记录
+
+- 首次 `npm run typecheck`：失败，`src/shared/hotwords.ts` 中经过值校验的 `lang` 仍被 TypeScript 推断为普通 `string`（TS2322）；收窄为 `HotwordLanguage` 后通过。该失败未被忽略。
+- 首次组合 Node/Python 测试：Node 36/36 通过；Python 48/49，新增 Fun-ASR 测试最初误插入到前一测试中，造成事件队列断言错位；恢复测试边界并清空启动事件后 Python 49/49。该失败未被忽略。
+- 首次 `npm run lint`：失败，ASCII 判断使用控制字符范围正则触发 `no-control-regex`；改为逐字符 `codePointAt(0) > 127` 后通过，没有新增 suppression。
+- 补充三语键测试后单独 `npm run test:node`：Node 37/37 通过；补充重连热词断言后 Python 49/49 通过。
+- `engine/.venv/bin/python3 engine/main.py --hotword-service` 离线入口检查：通过；输入缺少连接字段的请求后只输出 `{ok:false,errorCode:"invalid_request"}` 并以 1 退出，没有触网或回显输入。
+- 最终官方/本地 SDK 审计发现初稿把预编译 ID 传给 `start(phrase_id=...)`；根据当前官方 Python SDK 参数表、客户端事件和本地 DashScope 1.26.6 源码，改为 `Recognition(..., vocabulary_id=...)`，上下文仍通过 `start(raw_input=...)`，并重新执行全部验证。
+- `engine/.venv/bin/python3 -m compileall -q ...`：通过。
+- `engine/.venv/bin/python3 engine/main.py --help`：通过；三个热词参数出现在正式入口帮助中。
+- 最终 `npm run verify`：通过；Node/Web/Vue TypeScript、ESLint、Node 37/37、Python 49/49 全部通过。
+- 最终 `npm run build`：通过；Electron main、preload、renderer 生产构建分别转换 22、1、3253 个模块。
+- 最终 `git diff --check`：通过。
+- 验证仍输出仓库既有 npm Electron mirror 弃用警告和 Node `MODULE_TYPELESS_PACKAGE_JSON` 警告；未为消除提示扩大依赖或模块配置范围。
+
+### 未执行、风险与后续事项
+
+- 没有使用真实 API Key、Workspace 或 Endpoint，没有建立阿里云连接，没有执行 list/query/create/update/delete，没有产生费用或修改远端数据。CRUD 语义通过可注入伪客户端验证。
+- 没有运行真实 Electron GUI、浏览器组件交互/视觉/键盘测试、打包后的 Python worker、PyInstaller 或平台安装包。生产 bundle 通过不等于真实账号下的 UI 与远端链路已验收。
+- SDK 不提供当前 API Key 所属账号的可展示标识；界面只能准确声明“已应用 API Key 的所属账号”，并显示可验证的 Workspace、地域、模型和资源 ID。真实账号归属需用户在阿里云控制台核对。
+- 超时后远端最终状态未知，UI 明确要求刷新确认；客户端不会自动重试写操作，以免重复创建或重复修改。
+- update 是完整替换，用户必须在编辑器中保留所有需要的条目；删除不可恢复。模型不匹配的资源必须先把当前 Fun-ASR 模型配置为该资源的 `target_model` 并应用，才能修改或删除。
+- 新加坡子业务空间的限制由阿里云服务端决定；客户端只提示官方限制，不用 Workspace 名称猜测主/子空间。
+- 后续若增加 Paraformer、Qwen-ASR 或即时热词，必须为其能力与资源类型建立独立 Provider/service 适配，不能把 Fun-ASR 的 `vocabulary_id`、旧 `phrase_id` 和即时 `vocabulary` 混为同一字段。
+
+### 参考与决策依据
+
+- 阿里云官方 [提高语音识别准确率](https://help.aliyun.com/zh/model-studio/improve-asr-accuracy)：预编译热词、即时热词、上下文的区别，账号/模型匹配与上下文限制。
+- 阿里云官方 [Fun-ASR Realtime Python SDK](https://help.aliyun.com/zh/model-studio/fun-asr-realtime-python-sdk)：`vocabulary_id` 构造参数、`raw_input` start/call 参数、SDK 版本和上下文结构。
+- 阿里云官方 [Fun-ASR 客户端事件](https://help.aliyun.com/zh/model-studio/fun-asr-client-events)：run-task 中的 `vocabulary_id`、context 与即时热词支持范围。
+- 阿里云官方 [热词 Python SDK](https://help.aliyun.com/zh/model-studio/vocabulary-python-sdk)：VocabularyService CRUD、Workspace Endpoint、词条结构、update 完整替换和新加坡子业务空间限制。
+- 本地项目锁定 DashScope 1.26.6 的 `Recognition.start` 与任务构造源码，用于识别旧 `phrase_id` 签名和新版 `vocabulary_id` 构造参数的实际边界。
+- 根目录 `AGENTS.md` 的远端修改必须用户触发、目标信息/删除确认、官方 SDK、模型匹配、账号地域、凭据脱敏、有限进程、三语、测试、文档和完整 `change.md` 约束。

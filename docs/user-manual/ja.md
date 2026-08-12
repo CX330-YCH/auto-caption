@@ -49,7 +49,9 @@ macOS プラットフォームでオーディオ出力を取得するには追�
 
 Alibaba Cloud Model Studio の同じ Workspace とリージョンから、API Key、Workspace ID、専用 WebSocket Endpoint を用意してください。Endpoint は北京またはシンガポールの公式 `wss://<WorkspaceId>.<region>.maas.aliyuncs.com/api-ws/v1/inference` 形式で、ホスト内の Workspace ID と設定値が一致する必要があります。オンライン利用には料金が発生する可能性があるため、[公式 WebSocket API 文書](https://help.aliyun.com/zh/model-studio/fun-asr-realtime-websocket-api)と現在の料金を確認してください。
 
-画面ではモデル、意味句読点、最大文間無音（200–6000 ms）、ハートビートを設定できます。Fun-ASR の final 文は既存の外部翻訳設定を使用します。この段階では Fun-ASR のホットワードは未対応です。
+画面ではモデル、意味句読点、最大文間無音（200–6000 ms）、ハートビートを設定できます。Fun-ASR の final 文は既存の外部翻訳設定を使用します。
+
+「詳細設定」のホットワードは2段階です。レベル1では既存の語彙 ID と対象モデル、および1行1件のコンテキスト用語を指定します。コンテキストに重みはなく、合計400文字までで、語彙と併用できます。認識に使用するには「変更を適用」を押してください。レベル2は適用済み API Key の所有アカウント、Workspace、リージョン、モデルを使い、リモート語彙の一覧、作成、完全置換、削除を行います。リモート更新は即時反映され、「変更をキャンセル」では戻せません。削除時は対象情報を再表示して確認します。語彙モデルは認識モデルと完全に一致する必要があります。Alibaba Cloud の現行説明では、シンガポールのサブ Workspace はホットワード非対応です。
 
 ## Voskエンジン使用前の準備
 

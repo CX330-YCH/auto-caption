@@ -176,7 +176,7 @@ export interface CaptionItem {
 
 Custom caption engine settings provide command line parameter specification, so the caption engine parameters need to be set properly. Currently used parameters in this project are as follows:
 
-> `engine/cli.py` and `python main.py --help` are the authoritative complete parameter reference. Fun-ASR selects `-e fun_asr` and uses `-fmodel`, `-furl`, `-fworkspace`, `-fkey`, `-fsemantic`, `-fsilence`, and `-fheartbeat`; do not duplicate provider assembly in `main.py`.
+> `engine/cli.py` and `python main.py --help` are the authoritative complete parameter reference. Fun-ASR selects `-e fun_asr` and uses `-fmodel`, `-furl`, `-fworkspace`, `-fkey`, `-fsemantic`, `-fsilence`, `-fheartbeat`, `-fvocabulary`, `-fvmodel`, and repeatable `-fcontext`; do not duplicate provider assembly in `main.py`.
 
 ```python
 if __name__ == "__main__":
@@ -214,8 +214,11 @@ Fun-ASR example:
 python main.py -e fun_asr -s en -t zh -a 0 -c 10 \
   -fworkspace <workspace-id> \
   -furl wss://<workspace-id>.cn-beijing.maas.aliyuncs.com/api-ws/v1/inference \
-  -fkey <dashscope-api-key>
+  -fkey <dashscope-api-key> -fvocabulary <vocabulary-id> \
+  -fvmodel fun-asr-realtime -fcontext "Auto Caption" -fcontext "Alibaba Cloud"
 ```
+
+The Provider uses the official DashScope SDK and accepts 16 kHz mono PCM16. `HotwordRuntimeConfig` requires the vocabulary target model to match recognition and supplies the precompiled vocabulary ID plus at most 400 characters of unweighted context at every task start, including reconnects. Remote CRUD runs through the separate one-shot worker in `services/hotwords.py`; it is not part of the Provider or the public caption protocol.
 
 This Provider uses the official DashScope SDK and accepts 16 kHz mono PCM16. It only maps partial/final results, server timestamps, usage, and lifecycle callbacks into unified events; the Session and protocol layer retain translation, stdout, and shutdown responsibilities. Hotwords are not supported in this stage.
 

@@ -72,6 +72,20 @@
 - 发送：无数据
 - 接收：`EngineInfo`
 
+### `control.hotwords.execute`
+
+**介绍：** 对 Fun-ASR 远端预编译热词表执行一次用户发起的管理操作。
+
+**发起方：** 前端控制窗口
+
+**接收方：** 后端控制窗口实例
+
+**发送：** `HotwordRequest`，其 `action` 为 `list`、`query`、`create`、`update` 或 `delete`。创建和更新的词条为 `{ text, weight, lang? }`；更新是完整替换。请求中不包含 API Key、Workspace、Endpoint 或模型，这些目标信息由主进程从已应用配置取得并重新校验。
+
+**接收：** `HotwordResponse`：成功时 `{ ok: true, data }`；失败时 `{ ok: false, errorCode }`。错误只使用稳定的脱敏代码，不回传 SDK 原始异常。
+
+该通道不是字幕引擎长连接协议。主进程每次启动独立 Python 子进程，将凭据和已验证请求通过 stdin 发送，并只读取一条有 1 MiB 上限的 JSON 响应；同时最多执行一个操作，20 秒超时。创建、更新、删除必须由用户点击触发，其中删除由 UI 在显示 API Key 所属账号、Workspace、地域、模型和资源 ID 后二次确认。
+
 ## 前端 ==> 后端
 
 ### `control.application.change`

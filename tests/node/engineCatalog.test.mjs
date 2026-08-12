@@ -129,12 +129,20 @@ test('chooses provider-supported language defaults from the UI language', () => 
 
 test('describes Fun-ASR connection and segmentation fields through capabilities', () => {
   const fields = getEngineFields('fun_asr')
+  const definition = getEngineDefinition('fun_asr')
 
   assert.ok(fields.some((field) => field.path === 'providers.funAsr.model'))
   assert.ok(fields.some((field) => field.path === 'providers.funAsr.websocketUrl'))
   assert.ok(fields.some((field) => field.path === 'providers.funAsr.workspaceId'))
   assert.ok(fields.some((field) => field.path === 'providers.funAsr.heartbeatEnabled'))
   assert.ok(fields.some((field) => field.path === 'common.translation.provider'))
+  assert.equal(definition.capabilities.hotwords, 'manager')
+
+  const config = createDefaultConfig('/recordings').engine
+  config.provider = 'fun_asr'
+  config.providers.funAsr.hotwords.vocabularyId = 'vocab-project-1'
+  config.providers.funAsr.model = 'fun-asr-realtime-2025-11-07'
+  assert.equal(validateEngineConfig(config, 'apply')?.fieldId, 'fun-asr-hotwords')
 })
 
 test('resolves every catalog label and help key in all supported UI languages', () => {

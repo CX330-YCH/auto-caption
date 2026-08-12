@@ -1,4 +1,5 @@
 import threading
+import sys
 from queue import Queue
 
 from cli import CliOptions, parse_args
@@ -8,6 +9,7 @@ from protocol.server import start_server
 from providers import ProviderConfig, build_provider_registry
 from utils import change_caption_display, shared_data, stdout, stdout_cmd
 from sysaudio import AudioStream
+from services import run_hotword_worker
 
 
 def run(options: CliOptions) -> None:
@@ -88,8 +90,13 @@ def _provider_config(options: CliOptions) -> ProviderConfig:
             options.fun_asr_max_sentence_silence
         ),
         fun_asr_heartbeat=options.fun_asr_heartbeat,
+        fun_asr_vocabulary_id=options.fun_asr_vocabulary_id,
+        fun_asr_vocabulary_model=options.fun_asr_vocabulary_model,
+        fun_asr_context_terms=options.fun_asr_context_terms,
     )
 
 
 if __name__ == '__main__':
+    if sys.argv[1:] == ['--hotword-service']:
+        raise SystemExit(run_hotword_worker(sys.stdin, sys.stdout))
     run(parse_args())

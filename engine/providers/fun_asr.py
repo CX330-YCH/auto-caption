@@ -2,11 +2,13 @@ import re
 import time
 from collections import deque
 from collections.abc import Callable
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import datetime, timedelta
 from threading import RLock
 from typing import Any, Protocol
 from urllib.parse import urlparse
+
+from services.hotwords import HotwordRuntimeConfig
 
 from core import (
     AudioFrame,
@@ -37,10 +39,11 @@ class FunAsrClientOptions:
     semantic_punctuation_enabled: bool = False
     max_sentence_silence_ms: int = 1300
     heartbeat_enabled: bool = True
+    vocabulary_id: str = ''
 
 
 class FunAsrClient(Protocol):
-    def start(self) -> None: ...
+    def start(self, **kwargs) -> None: ...
     def send_audio_frame(self, data: bytes) -> None: ...
     def stop(self) -> None: ...
 
@@ -115,6 +118,8 @@ def _build_client(
     }
     if options.source_language != 'auto':
         parameters['language_hints'] = [options.source_language]
+    if options.vocabulary_id:
+        parameters['vocabulary_id'] = options.vocabulary_id
 
     return Recognition(
         model=options.model,
@@ -162,6 +167,7 @@ class FunAsrProvider(RecognitionProvider):
         max_reconnects: int = 3,
         reconnect_backoff_seconds: float = 0.25,
         max_buffered_frames: int = 50,
+        hotwords: HotwordRuntimeConfig = HotwordRuntimeConfig(),
     ) -> None:
         super().__init__()
         validate_fun_asr_options(options)
@@ -171,7 +177,13 @@ class FunAsrProvider(RecognitionProvider):
             raise ValueError('reconnect backoff cannot be negative')
         if max_buffered_frames <= 0:
             raise ValueError('max_buffered_frames must be positive')
-        self._options = options
+        self._options = replace(
+            options,
+            **hotwords.recognition_client_options(options.model),
+        )
+        self._hotword_start_options = hotwords.recognition_start_options(
+            options.model
+        )
         self._client_factory = client_factory
         self._sleeper = sleeper
         self._clock = clock
@@ -359,7 +371,7 @@ class FunAsrProvider(RecognitionProvider):
             if self._stopping:
                 return
             self._client = client
-        client.start()
+        client.start(**self._hotword_start_options)
 
     def _reconnect(self, failed_generation: int) -> None:
         with self._lock:

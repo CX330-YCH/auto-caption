@@ -53,7 +53,12 @@ Auto Caption 的持久化配置位于 Electron `userData/config.json`。当前�
         "apiKey": "",
         "semanticPunctuationEnabled": false,
         "maxSentenceSilenceMs": 1300,
-        "heartbeatEnabled": true
+        "heartbeatEnabled": true,
+        "hotwords": {
+          "vocabularyId": "",
+          "targetModel": "fun-asr-realtime",
+          "contextTerms": []
+        }
       }
     },
     "custom": {
@@ -81,6 +86,8 @@ Auto Caption 的持久化配置位于 Electron `userData/config.json`。当前�
 - 翻译和 GLM URL 只能为空（仅允许翻译 URL）或使用 HTTP/HTTPS。
 - Fun-ASR 模型只能为 `fun-asr-realtime` 或 `fun-asr-realtime-2025-11-07`；最大句间静音范围为 200–6000 ms。
 - Fun-ASR 启动时必须同时提供 Workspace ID 和专属 WebSocket 地址。地址必须使用 WSS、路径必须为 `/api-ws/v1/inference`，并且只能是 `<WorkspaceId>.cn-beijing.maas.aliyuncs.com` 或 `<WorkspaceId>.ap-southeast-1.maas.aliyuncs.com`；主机中的 Workspace ID 必须与配置字段一致。
+- `funAsr.hotwords.vocabularyId` 为空时不加载预编译热词；非空时只接受字母、数字、`_`、`-`，且 `targetModel` 必须与 `funAsr.model` 完全一致。
+- `contextTerms` 最多 100 个非空且不重复的术语；规范化后以换行连接，总长度不得超过 400 字符。它属于实时上下文，不带权重，也不等同于即时热词。
 - 字幕样式数值按当前 UI 的滑块范围校验。
 - 来自渲染进程的 application、engine 和 caption 配置在主进程重新校验；拒绝日志只记录配置分类和异常类型，不输出字段值或密钥。
 
@@ -88,8 +95,8 @@ V2 对象中的未知扩展字段会在解析和同层更新时保留，便于�
 
 ## 旧配置行为
 
-本项目按既定决策不提供 V1、无版本配置或已安装版本兼容迁移。第六阶段将 `engine.providers.funAsr` 作为 V2 的必需已知层；此前生成但缺少该层的 V2 文件也会按非法配置整体拒绝，本次运行使用最新 V2 默认配置，应用退出时写回。旧配置值不会自动复制、备份或恢复。
+本项目按既定决策不提供 V1、无版本配置或已安装版本兼容迁移。`engine.providers.funAsr` 及其 `hotwords` 子层都是 V2 的必需已知层；此前生成但缺少任一层的 V2 文件会按非法配置整体拒绝，本次运行使用最新 V2 默认配置，应用退出时写回。旧配置值不会自动复制、备份或恢复。
 
 ## 凭据
 
-Gummy、GLM、Fun-ASR 和翻译 API Key 仍按既有行为保存在用户目录的 JSON 文件中。主进程不会把配置内容写入日志，生成的进程命令日志会对 `-k`、`-gkey`、`-fkey` 和翻译凭据参数脱敏；Python 配置对象的 `repr` 也隐藏凭据。本阶段没有引入系统安全存储；这是后续独立安全改造事项。
+Gummy、GLM、Fun-ASR 和翻译 API Key 仍按既有行为保存在用户目录的 JSON 文件中。主进程不会把配置内容写入日志，生成的进程命令日志会对 `-k`、`-gkey`、`-fkey` 和翻译凭据参数脱敏；Python 配置对象的 `repr` 也隐藏凭据。热词管理时 API Key 仅由主进程写入一次性 Python 子进程 stdin，不进入 Renderer IPC、进程参数或响应。本阶段没有引入系统安全存储；这是后续独立安全改造事项。

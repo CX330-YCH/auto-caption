@@ -21,6 +21,7 @@ test('creates a complete layered V2 document', () => {
   assert.equal(config.engine.providers.glm.model, 'glm-asr-2512')
   assert.equal(config.engine.providers.funAsr.model, 'fun-asr-realtime')
   assert.equal(config.engine.providers.funAsr.heartbeatEnabled, true)
+  assert.deepEqual(config.engine.providers.funAsr.hotwords.contextTerms, [])
   assert.equal(config.caption.styles.fontSize, 24)
   assert.equal('controls' in config, false)
   assert.equal('engineEnabled' in config.engine, false)
@@ -76,6 +77,38 @@ test('validates nested values while preserving V2 extension fields', () => {
     providers: { ...config.engine.providers, funAsr }
   })
   assert.equal(parsedFunAsr.providers.funAsr.workspaceId, 'workspace-1')
+  const enhancedFunAsr = parseEngineConfig({
+    ...config.engine,
+    provider: 'fun_asr',
+    providers: {
+      ...config.engine.providers,
+      funAsr: {
+        ...funAsr,
+        hotwords: {
+          vocabularyId: 'vocab-project-1',
+          targetModel: 'fun-asr-realtime',
+          contextTerms: ['Auto Caption', '阿里云百炼']
+        }
+      }
+    }
+  })
+  assert.deepEqual(
+    enhancedFunAsr.providers.funAsr.hotwords.contextTerms,
+    ['Auto Caption', '阿里云百炼']
+  )
+  assert.throws(
+    () => parseEngineConfig({
+      ...enhancedFunAsr,
+      providers: {
+        ...enhancedFunAsr.providers,
+        funAsr: {
+          ...enhancedFunAsr.providers.funAsr,
+          model: 'fun-asr-realtime-2025-11-07'
+        }
+      }
+    }),
+    /target model mismatch/
+  )
   assert.throws(
     () => parseEngineConfig({
       ...config.engine,

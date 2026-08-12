@@ -11,6 +11,8 @@
 
 两个方向都使用 UTF-8 NDJSON：每条消息是一个 JSON 对象，并以单个换行符 `\n` 结束。`\r\n` 输入也可以被解析。空行被忽略。
 
+`python main.py --hotword-service` 是 Electron 主进程专用的一次性热词管理模式：它只从 stdin 读取一份私有 envelope、向 stdout 写一份响应后退出，不启动音频、TCP Server 或 RecognitionSession，也不属于本文公开的自定义字幕引擎协议。该模式的输入限制为 1 MiB，凭据不出现在命令行和响应中。
+
 ```text
 JSON object + "\n" + JSON object + "\n" + ...
 ```
@@ -84,6 +86,8 @@ JSON object + "\n" + JSON object + "\n" + ...
 Python 内部已经区分 `CaptionPartial` 和 `CaptionFinal`，但为保持现有协议兼容，两者目前都映射为 `caption`。同一句的 partial/final 复用 `index` 和 `time_s`；外部协议暂不提供 final 标记。Provider 自带的翻译（当前为 Gummy）会直接写入 `translation`；包括 Fun-ASR 在内的其他 Provider 只在 final 后通过独立 `translation` 消息补充一次翻译。
 
 Fun-ASR 的 `sentence_end: false/true` 分别映射为内部 partial/final。服务端 `begin_time`/`end_time` 毫秒偏移会基于本次任务起始时间转换为协议中的 `time_s`/`time_t`，不会用回调到达时间冒充音频时间；缺少 partial 结束时间时才以已发送音频时长作为保守上界。服务端心跳不形成 stdout 消息；任务用量映射为 `usage`，失败映射为已脱敏的 `error`，外部 command envelope 没有变化。
+
+Fun-ASR 的预编译热词表 ID 和上下文术语是任务启动参数，不新增 stdout/TCP command。每次有界重连产生新任务时都会重新传入；上下文按一条 `user/input_text` 消息发送，最多 400 字符。
 
 ### `translation`
 

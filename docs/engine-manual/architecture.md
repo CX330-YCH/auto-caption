@@ -24,6 +24,7 @@ engine/
 │   ├── sosv.py
 │   └── vosk.py
 ├── services/
+│   ├── hotwords.py            # 运行时热词配置与一次性远端管理服务
 │   └── translation.py         # Provider 无关的有界翻译服务
 └── protocol/
     ├── ndjson.py              # NDJSON 解码
@@ -33,7 +34,7 @@ engine/
 
 旧 `audio2text/` 目录、各识别类的 `translate()` 循环、全局无界音频队列和 `utils.server` 兼容层已经删除。仓库中只有一套活动 Provider 实现。
 
-`services/hotwords.py` 仍未创建：远端热词资源语义和用户操作流程不属于第六阶段，不创建无调用方空壳。Fun-ASR 目录也明确声明当前不支持热词，不能把热词 ID 暂存为普通文本字段。
+`services/hotwords.py` 分离两种职责：`HotwordRuntimeConfig` 只把已验证的热词表 ID 和上下文构造成 Fun-ASR 任务启动参数；`HotwordService` 只在一次性管理模式中调用官方 `VocabularyService`。Provider 不负责资源 CRUD，远端管理也不进入 RecognitionSession。
 
 ## 依赖方向
 
@@ -47,6 +48,9 @@ main.py ──> ProviderRegistry ──> ProviderRuntime
 AudioCaptureWorker ──> bounded Queue[AudioFrame]
 RecognitionSession ──> Provider ──> internal events
 internal events ──> ProtocolEventSink ──> stdout NDJSON
+
+Electron HotwordService ──stdin──> main.py --hotword-service
+                               └─> VocabularyService ──> 阿里云远端资源
 ```
 
 `core` 不得依赖具体 ASR SDK、stdout 协议、Electron、云服务或平台音频实现。Provider 不得直接写 stdout、读取全局音频队列或创建翻译线程。
@@ -159,7 +163,17 @@ API Key 字段在 `CliOptions` 和 `ProviderConfig` 的 `repr` 中隐藏。未�
 - API Key 可来自 `-fkey` 或 `DASHSCOPE_API_KEY`。Workspace ID、API Key 和专属 Endpoint 必须属于同一地域；配置层只接受官方北京或新加坡 WSS 主机和固定 inference 路径。
 - 非主动关闭连接最多重连 3 次，退避为 0.25、0.5、1 秒；重连期间最多保留约 5 秒（50 帧）新音频，溢出时丢弃最旧帧并上报信息事件。回调带连接 generation，旧连接迟到事件会被忽略。
 - `stop()` 由 SDK 发送 `finish-task` 并等待剩余结果和 `task-finished`/失败。Session 再冲刷统一事件，`ProviderStopped` 只发布一次。
-- Fun-ASR 不提供集成翻译，final 由统一翻译服务提交一次。热词不在第六阶段范围内。
+- `HotwordRuntimeConfig` 在每个新 SDK client 的 `Recognition(...)` 构造参数中传入预编译 `vocabulary_id`，并在 `start()` 传入 `raw_input.context`；重连任务重复构造和传入。不能把新版预编译词表误传给 SDK 的旧 `phrase_id` 接口。热词表目标模型必须与识别模型一致，上下文合计最多 400 字符且没有权重。
+- Fun-ASR 不提供集成翻译，final 由统一翻译服务提交一次。
+
+## 独立热词服务
+
+热词实现分为两级：
+
+- 一级是 V2 持久配置中的 `vocabularyId`、`targetModel` 和 `contextTerms`，只在用户应用配置后影响后续识别任务。
+- 二级是远端热词管理器，支持 list/query/create/update/delete；update 按官方语义完整替换词表。修改和删除前先查询资源并校验 `target_model`。
+
+Electron 主进程从已应用配置取得 Workspace、Endpoint、模型和 API Key，重新验证 Renderer 请求后启动一次性 Python worker。API Key 仅写入子进程 stdin，不进入 Renderer、argv 或日志。worker 只返回规范化数据或错误码；输入/输出均有 1 MiB 上限，主进程限制单个在途操作并设置 20 秒超时。创建、更新、删除只能由 UI 用户操作触发，删除前显示目标账号语义、Workspace、地域、模型和资源 ID 并二次确认。因 SDK 不返回账号 ID，界面将目标账号明确表示为“已应用 API Key 的所属账号”，不显示密钥或账号标识。
 
 ## 翻译服务与后台任务
 
@@ -220,7 +234,7 @@ src/renderer/src/engines/
 - 支持的源/目标语言及其角色。
 - 仅属于该 Provider 的字段描述、帮助链接、默认值和启动校验。
 
-`catalog.ts` 根据能力补齐语言、音频、翻译、录音、超时和自定义引擎等公共字段。`EngineFieldRenderer.vue` 统一渲染 text、password、number、select、switch 和 directory 控件；`EngineControl.vue` 只维护一份 `EngineConfig` 草稿并按字段 section 分组，不了解任何 Provider 的专属字段。Fun-ASR 的模型、Workspace、Endpoint、凭据、断句和心跳字段完全由 `providers/fun_asr.ts` 描述，并通过目录级跨字段校验检查 Endpoint/Workspace 一致性。
+`catalog.ts` 根据能力补齐语言、音频、翻译、录音、超时和自定义引擎等公共字段。`EngineFieldRenderer.vue` 统一渲染 text、password、number、select、switch 和 directory 控件；`EngineControl.vue` 只维护一份 `EngineConfig` 草稿并按字段 section 分组。Fun-ASR 的模型、Workspace、Endpoint、凭据、断句和心跳字段由 `providers/fun_asr.ts` 描述，并通过目录级跨字段校验检查 Endpoint/Workspace 与热词模型一致性。目录把热词能力声明为 `manager`，`EngineControl.vue` 仅据此挂载专用 `HotwordManager.vue`，不通过 Provider ID 分支实现。
 
 新增普通 Provider 的前端流程是：先扩展 V2 Provider 类型和主进程校验，再新增一个 `providers/<name>.ts` 定义并在目录注册。常规字段不得在 `EngineControl.vue` 增加 Provider `v-if`。热词远端资源管理器等包含列表编辑、远端创建/删除和确认流程的交互应使用专用组件，并由 capability 明确声明；不得把这类状态压成普通文本字段。
 
@@ -244,4 +258,4 @@ Provider 的启动前要求同样由目录字段校验提供，`EngineStatus.vue
 5. 验证外部 command 协议和错误脱敏。
 6. 对需要网络的 Provider 增加有界重试、停止冲刷和显式启用的在线测试。
 
-Fun-ASR 已按上述顺序完成离线可验证纵向接入；真实账号、地域、设备和计费链路仍需在有凭据时显式执行在线验收。热词仍是后续独立阶段，不能通过复制 Gummy、在 `main.py` 增加条件分支或向通用表单塞入临时字段接入。
+Fun-ASR 与两级热词已按上述顺序完成离线可验证纵向接入；真实账号、地域、设备、计费和远端 CRUD 链路仍需在有凭据时由用户显式执行在线验收。后续 Provider 的热词能力应继续复用独立服务边界，不能通过复制识别循环、在 `main.py` 增加 Provider 条件分支或向通用表单塞入临时资源状态接入。
