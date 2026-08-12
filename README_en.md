@@ -3,7 +3,7 @@
     <h1 align="center">auto-caption</h1>
     <p>Auto Caption is a cross-platform real-time caption display software.</p>
     <p>
-      <a href="https://github.com/HiMeditator/auto-caption/releases"><img src="https://img.shields.io/badge/release-1.1.1-blue"></a>
+      <a href="https://github.com/HiMeditator/auto-caption/releases"><img src="https://img.shields.io/badge/release-2.0.0-blue"></a>
       <a href="https://github.com/HiMeditator/auto-caption/issues"><img src="https://img.shields.io/github/issues/HiMeditator/auto-caption?color=orange"></a>
       <img src="https://img.shields.io/github/languages/top/HiMeditator/auto-caption?color=royalblue">
       <img src="https://img.shields.io/github/repo-size/HiMeditator/auto-caption?color=green">
@@ -14,7 +14,7 @@
         | <b>English</b>
         | <a href="./README_ja.md">日本語</a> |
     </p>
-    <p><i>v1.1.1 has been released, adding the GLM-ASR cloud caption model and OpenAI compatible model translation...</i></p>
+    <p><i>v2.0.0 has been released, providing the V2 configuration architecture, Fun-ASR, and a macOS arm64 build...</i></p>
 </div>
 
 ![](./assets/media/main_en.png)
@@ -51,7 +51,7 @@ https://github.com/user-attachments/assets/9c188d78-9520-4397-bacf-4c8fdcc54874
 
 ## 📖 Basic Usage
 
-> ⚠️ Note: Currently, only the latest version of the software on Windows platform is maintained, while the last versions for other platforms remain at v1.0.0.
+> ⚠️ Note: v2.0.0 currently provides Windows and macOS arm64 builds; Linux still needs verification from source or the existing build pipeline.
 
 The software has been adapted for Windows, macOS, and Linux platforms. The tested platform information is as follows:
 

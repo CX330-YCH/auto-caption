@@ -1101,3 +1101,101 @@
 - 阿里云官方 [热词 Python SDK](https://help.aliyun.com/zh/model-studio/vocabulary-python-sdk)：VocabularyService CRUD、Workspace Endpoint、词条结构、update 完整替换和新加坡子业务空间限制。
 - 本地项目锁定 DashScope 1.26.6 的 `Recognition.start` 与任务构造源码，用于识别旧 `phrase_id` 签名和新版 `vocabulary_id` 构造参数的实际边界。
 - 根目录 `AGENTS.md` 的远端修改必须用户触发、目标信息/删除确认、官方 SDK、模型匹配、账号地域、凭据脱敏、有限进程、三语、测试、文档和完整 `change.md` 约束。
+
+## 2026-08-12 - V2 版本号更新与 macOS arm64 构建
+
+### 授权与目标
+
+- 用户授权：要求“编译一下Mac版本，并更新大版本号为V2”。
+- 本批次将“大版本号 V2”按应用发布版本处理为 `v2.0.0` / `2.0.0`，同步应用元数据、可见版本标识和发布文档，并生成 macOS Apple Silicon arm64 安装产物。
+- 明确非目标：不修改系统 Python、Node、shell 环境或全局依赖；不升级依赖；不改配置 schema、IPC、字幕进程协议、Provider 行为或远端资源。
+
+### 变更类型
+
+- 配置：更新 npm 应用版本号和锁文件根版本。
+- 文档：同步 README、CHANGELOG 与中英日用户/引擎文档版本标识。
+- 构建：重新生成 Python 引擎与 macOS arm64 桌面包。
+
+### 修改文件与原因
+
+- `package.json`
+  - 将应用版本从 `1.1.1` 更新为 `2.0.0`，供 Electron builder、Info.plist 和产物命名使用。
+- `package-lock.json`
+  - 同步根包版本从 `1.0.0` 到 `2.0.0`；没有新增、删除或升级依赖。
+- `src/renderer/index.html`
+  - 将窗口标题版本从 `v1.1.1` 更新为 `v2.0.0`。
+- `src/renderer/src/components/EngineStatus.vue`
+  - 将关于窗口显示版本从 `v1.1.1` 更新为 `v2.0.0`。
+- `README.md`、`README_en.md`、`README_ja.md`
+  - 将 release badge 与首页发布提示更新为 `v2.0.0`。
+  - 将旧的“非 Windows 停留在 v1.0.0”说明改为当前 V2 已提供 Windows 与 macOS arm64 构建，Linux 仍需单独验证。
+- `docs/user-manual/zh.md`、`docs/user-manual/en.md`、`docs/user-manual/ja.md`
+  - 将对应版本更新为 `v2.0.0`。
+- `docs/engine-manual/zh.md`、`docs/engine-manual/en.md`、`docs/engine-manual/ja.md`
+  - 将对应版本更新为 `v2.0.0`。
+- `docs/CHANGELOG.md`
+  - 追加 `v2.0.0` 发布与构建记录。
+- `change.md`
+  - 追加本批次授权、变更范围、验证、风险与回滚记录。
+
+### 构建产物
+
+- `engine/dist/main`
+  - 使用 `engine/.venv` 内 PyInstaller 重新生成的 macOS arm64 Python 引擎。
+- `dist/mac-arm64/Auto Caption.app`
+  - Electron builder 生成的 macOS arm64 应用目录，Info.plist 中 `CFBundleShortVersionString` 和 `CFBundleVersion` 均为 `2.0.0`。
+- `dist/Auto Caption-2.0.0-arm64-mac.zip`
+  - 对本地 ad-hoc 签名后的 `.app` 重新封装生成。
+- `dist/Auto Caption-2.0.0-arm64-mac.zip.blockmap`
+  - 使用 app-builder 对重封后的 zip 重新生成，避免旧 blockmap 指向重封前内容。
+- `dist/auto-caption-2.0.0.dmg`
+  - 使用本机 `hdiutil create` 从签名后的 `.app` 生成。
+- `dist/latest-mac.yml`
+  - 更新为 `2.0.0` zip 的路径、大小、sha512 和 releaseDate；这是生成目录中的更新元数据。
+
+### 修改前后行为
+
+- 修改前：应用版本源为 `package.json` 的 `1.1.1`，锁文件根版本为 `1.0.0`；标题、关于窗口、README 和手册仍显示旧版本；上次 Mac 构建产物为 `1.1.1`。
+- 修改后：应用元数据、运行界面可见版本、README、手册、CHANGELOG 与本次 macOS 构建产物统一为 `2.0.0` / `v2.0.0`。
+- 配置、IPC、Python stdout/TCP 协议、命令行参数和数据结构没有变化。
+- 没有新增依赖，没有安装全局包，没有修改系统环境变量或 shell 配置。
+
+### 兼容性、迁移与回滚
+
+- 配置 schemaVersion 仍为 `2`；本批次只更新应用发布版本，不涉及用户配置迁移。
+- macOS 产物为 arm64；未生成 x64 或 universal 包。
+- 由于没有 Developer ID 证书，本次只做本地 ad-hoc 签名，未做 Apple Developer ID 签名或 notarization。首次打开可能仍需用户通过 macOS 安全提示手动允许。
+- 精确回滚：恢复本批次列出的版本/文档文件；删除或忽略 `dist/` 与 `engine/dist/` 中本次生成的 `2.0.0` 构建产物；如需恢复旧包，使用此前的 `1.1.1` 产物或重新按旧版本号构建。
+
+### 验证记录
+
+- `npm version 2.0.0 --no-git-tag-version --allow-same-version`：通过；同时输出既有 npm mirror 配置弃用警告。
+- `npm run typecheck`：通过；Node 与 Web/Vue TypeScript 检查均通过。
+- `npm run lint`：通过。
+- `npm run build`：通过；Electron main、preload、renderer 生产构建完成。
+- `PYINSTALLER_CONFIG_DIR=... engine/.venv/bin/pyinstaller --clean --noconfirm ./main.spec`：通过，生成 `engine/dist/main`；保留既有 `pycparser` 可选隐藏导入警告和 `@rpath/libomp.dylib` 解析警告。
+- `engine/dist/main --help`：沙盒内首次因 PyInstaller sync semaphore 权限失败；经用户批准在沙盒外运行后通过，CLI help 正常输出。
+- `npm test`：通过；Node 37/37，Python 49/49。测试仍输出既有 npm mirror 弃用警告和 Node `MODULE_TYPELESS_PACKAGE_JSON` 性能提示。
+- `./node_modules/.bin/electron-builder --mac`：`.app` 和 zip 构建完成；DMG 阶段因 `hdiutil create` 失败退出码 1。该失败未忽略，随后用本机 `hdiutil create` 单独生成最终 DMG。
+- `codesign --force --deep --sign - dist/mac-arm64/Auto Caption.app`：通过，本地 ad-hoc 签名完成。
+- `codesign --verify --deep --strict --verbose=2 dist/mac-arm64/Auto Caption.app`：通过。
+- `ditto -c -k --sequesterRsrc --keepParent ...`：通过，重封签名后的 zip。
+- `hdiutil create -volname 'Auto Caption' -fs APFS -format UDZO -srcfolder ... -ov dist/auto-caption-2.0.0.dmg`：通过；hdiutil 提示该 create 用法已弃用，未影响产物生成。
+- `hdiutil verify dist/auto-caption-2.0.0.dmg`：通过，checksum VALID。
+- `unzip -tq dist/Auto Caption-2.0.0-arm64-mac.zip`：通过，无压缩数据错误。
+- `file dist/mac-arm64/Auto Caption.app/Contents/MacOS/Auto Caption dist/mac-arm64/Auto Caption.app/Contents/Resources/engine/main`：二者均为 Mach-O 64-bit executable arm64。
+- `shasum -a 256 dist/auto-caption-2.0.0.dmg dist/Auto Caption-2.0.0-arm64-mac.zip`：
+  - DMG：`fee084c97afcb7ac3b990f496034edf3a425309f7353220a34ed2556034b1527`
+  - ZIP：`d4c0f8684eb0eddca8172ff997594ed194442a9a8e5bfc20f68d3c492d15c221`
+
+### 未执行、风险与后续事项
+
+- 未启动真实 Electron GUI 做窗口交互、麦克风/系统音频授权或真实识别流程；本批次验证到构建、测试、签名和安装包完整性。
+- 未做 Windows、Linux、macOS x64 或 universal 构建；不能声称这些平台的 V2 安装包已由本批次验证。
+- 未使用真实 API Key、Workspace 或云服务，不产生费用，也不修改远端热词资源。
+- Electron builder 仍提示缺少 Developer ID signing identity；发布到普通用户机器前建议使用正式证书签名并 notarize。
+
+### 参考与决策依据
+
+- 本地 `package.json` 与 `electron-builder.yml`：确认 macOS 产物版本来自 npm 包版本，DMG artifact 使用 `${name}-${version}.${ext}`。
+- 根目录 `AGENTS.md`：遵循修改前检查、三语文档同步、构建产物记录、验证记录、系统环境与依赖边界、`change.md` 追加记录要求。
