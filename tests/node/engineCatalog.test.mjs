@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
+import { reactive } from 'vue'
 
 import { createDefaultConfig } from '../../src/shared/config/schema.ts'
 import {
@@ -71,6 +72,15 @@ test('reads, writes, clones, and evaluates nested form fields without provider b
 
   clone.common.translation.provider = 'google'
   assert.equal(isEngineFieldVisible(clone, modelField), false)
+})
+
+test('clones Vue reactive engine config without retaining proxy state', () => {
+  const config = reactive(createDefaultConfig('/recordings').engine)
+  const clone = cloneEngineConfig(config)
+
+  assert.deepEqual(clone, createDefaultConfig('/recordings').engine)
+  clone.common.translation.model = 'qwen3:0.6b'
+  assert.equal(config.common.translation.model, 'qwen2.5:0.5b')
 })
 
 test('validates start requirements from the selected provider definition', () => {

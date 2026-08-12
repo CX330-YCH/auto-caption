@@ -1199,3 +1199,155 @@
 
 - 本地 `package.json` 与 `electron-builder.yml`：确认 macOS 产物版本来自 npm 包版本，DMG artifact 使用 `${name}-${version}.${ext}`。
 - 根目录 `AGENTS.md`：遵循修改前检查、三语文档同步、构建产物记录、验证记录、系统环境与依赖边界、`change.md` 追加记录要求。
+
+## 2026-08-12 - 修复声明式引擎设置卡片初始化崩溃
+
+### 授权与目标
+
+- 用户授权：明确要求“修复引擎设置卡片崩溃问题”。
+- 变更类型：修复、测试。
+- 目标：修复 `EngineControl.vue` 初始化、应用更改和取消更改时复制 Vue/Pinia 响应式引擎配置触发 `DataCloneError`，恢复首页字幕引擎、模型选择和模型配置入口。
+- 明确非目标：不调整声明式 Provider 目录、字段布局、配置 schema、默认值、IPC、Python 子进程、字幕协议、依赖、版本号或安装包；不顺带修改其他界面。
+
+### 修改文件与原因
+
+- `src/renderer/src/engines/form.ts`
+  - `cloneEngineConfig` 在调用 `structuredClone` 前使用 Vue `toRaw` 解除根配置对象的响应式 Proxy。
+  - 保留既有深复制和草稿隔离语义，同时使 Pinia store 配置与 `ref` 草稿可以安全通过同一克隆边界。
+- `tests/node/engineCatalog.test.mjs`
+  - 新增 Vue `reactive` 配置回归测试，直接覆盖此前普通对象测试未触发的 Proxy 场景。
+  - 同时断言克隆结果内容完整，且修改克隆不会回写响应式源配置。
+- `change.md`
+  - 追加本批次授权、行为、兼容性、验证和风险记录。
+
+### 修改前后行为
+
+- 修改前：`EngineControl.vue` 在 setup 中把 Pinia 暴露的响应式 `engineConfig` 传给 `structuredClone`；浏览器拒绝克隆 Proxy 并抛出 `DataCloneError`，Vue 将失败的子组件留为空节点，首页从通用设置直接跳到字幕样式设置。应用和取消路径也存在同一异常风险。
+- 修改后：统一克隆工具先取得 Vue 原始对象再执行结构化深复制；引擎设置卡片能够完成初始化，既有 Provider/模型字段可以渲染，应用与取消继续使用彼此隔离的完整 V2 草稿。
+- Gummy、Vosk、SOSV、GLM、Fun-ASR 的字段定义、可见性、模型选项、更多设置和热词管理行为没有变化。
+
+### 配置、接口、兼容性与回滚
+
+- 配置 `schemaVersion`、V2 数据结构、默认值和持久化格式均无变化，不需要迁移，也不会删除或覆盖 Provider 专属配置。
+- Electron IPC、Python CLI、子进程生命周期、stdout/TCP 协议、数据结构和命令行均无变化。
+- 没有新增或升级依赖；复用项目已有 Vue `toRaw` API。
+- 用户可见文本没有变化，因此不需要增加中英日 i18n 键或修改用户手册；本次恢复的是文档已经描述的既有入口。
+- 跨平台逻辑只依赖 Vue 响应式 API 和浏览器结构化克隆；自动化验证在 macOS arm64 执行，Windows 和 Linux GUI 未实测。
+- 精确回滚：恢复 `form.ts` 中直接 `structuredClone(config)` 的旧实现，删除 `engineCatalog.test.mjs` 的响应式克隆测试，并追加更正记录；回滚会重新引入卡片初始化崩溃。
+
+### 验证记录
+
+- `npm run test:node && npm run typecheck && npm run lint`：通过；Node 38/38，通过新增的响应式 Proxy 克隆测试，Node/Web/Vue TypeScript 与 ESLint 均通过。
+- `npm run verify`：通过；类型检查、ESLint、Node 38/38 和 Python 49/49 全部通过。
+- `npm run build`：通过；Electron main、preload、renderer 生产构建分别转换 22、1、3253 个模块，新的 renderer bundle 正常生成。
+- 验证继续输出仓库既有 npm Electron mirror 配置弃用警告和 Node `MODULE_TYPELESS_PACKAGE_JSON` 性能警告；没有为消除提示扩大修改范围。
+
+### 未执行、风险与后续事项
+
+- 未启动真实 Electron GUI 进行卡片视觉、Provider 切换、应用/取消点击和重启持久化手工回归；自动化测试验证了导致崩溃的响应式克隆边界，生产构建验证了组件可编译，但不能替代 GUI 验收。
+- 未重新生成 PyInstaller 引擎、DMG、ZIP、Windows 或 Linux 安装包；本次没有修改 Python 和打包配置，现有安装包仍包含修复前的 renderer bundle，发布时需要重新打包。
+- `toRaw` 只解除传入对象自身的 Proxy。当前 V2 配置由普通 JSON 数据经单一 Vue 响应式根对象包装，符合该前提；如果未来向配置树直接嵌入独立 reactive 子对象，应扩展克隆边界测试，而不能假设任意嵌套 Proxy 可被 `structuredClone` 接受。
+
+### 关键技术决策来源
+
+- Vue 3 `toRaw` 的既有项目依赖 API：用于在只读克隆边界取得 Proxy 的原始对象，不改变 store 的响应式状态。
+- 浏览器/Node `structuredClone` 的实际行为：可深复制 V2 的 JSON 兼容数据，但拒绝 Vue Proxy；新增测试以运行时行为固定该约束。
+- 根目录 `AGENTS.md` 的最小范围、配置兼容、测试、真实结果和 `change.md` 记录要求。
+
+## 2026-08-12 - V2.1.0 小版本号更新与 macOS arm64 构建
+
+### 授权与目标
+
+- 用户授权：要求“编译一下Mac版本 并更新小版本号”。
+- 本批次将“小版本号”按语义化版本从 `2.0.0` 提升为 `2.1.0`，同步应用元数据、可见版本标识和发布文档，并重新生成 macOS Apple Silicon arm64 安装产物。
+- 本批次构建包含当前工作区已有的“引擎设置卡片初始化崩溃”修复；该修复代码和测试已由上一条记录说明，本批次不再修改其实现。
+- 明确非目标：不修改系统 Python、Node、shell 环境或全局依赖；不升级依赖；不改配置 schema、IPC、字幕进程协议、Provider 行为或远端资源。
+
+### 变更类型
+
+- 配置：更新 npm 应用版本号和锁文件根版本。
+- 文档：同步 README、CHANGELOG 与中英日用户/引擎文档版本标识。
+- 构建：重新生成 Python 引擎与 macOS arm64 桌面包。
+
+### 修改文件与原因
+
+- `package.json`
+  - 将应用版本从 `2.0.0` 更新为 `2.1.0`，供 Electron builder、Info.plist 和产物命名使用。
+- `package-lock.json`
+  - 同步根包版本从 `2.0.0` 到 `2.1.0`；没有新增、删除或升级依赖。
+- `src/renderer/index.html`
+  - 将窗口标题版本从 `v2.0.0` 更新为 `v2.1.0`。
+- `src/renderer/src/components/EngineStatus.vue`
+  - 将关于窗口显示版本从 `v2.0.0` 更新为 `v2.1.0`。
+- `README.md`、`README_en.md`、`README_ja.md`
+  - 将 release badge、首页发布提示和平台说明更新为 `v2.1.0`，并说明本小版本包含引擎设置卡片初始化修复与 macOS arm64 构建。
+- `docs/user-manual/zh.md`、`docs/user-manual/en.md`、`docs/user-manual/ja.md`
+  - 将对应版本更新为 `v2.1.0`。
+- `docs/engine-manual/zh.md`、`docs/engine-manual/en.md`、`docs/engine-manual/ja.md`
+  - 将对应版本更新为 `v2.1.0`。
+- `docs/CHANGELOG.md`
+  - 追加 `v2.1.0` 修复与构建记录。
+- `change.md`
+  - 追加本批次授权、变更范围、验证、风险与回滚记录。
+
+### 构建产物
+
+- `engine/dist/main`
+  - 使用 `engine/.venv` 内 PyInstaller 重新生成的 macOS arm64 Python 引擎。
+- `dist/mac-arm64/Auto Caption.app`
+  - Electron builder 生成的 macOS arm64 应用目录，Info.plist 中 `CFBundleShortVersionString` 和 `CFBundleVersion` 均为 `2.1.0`。
+- `dist/Auto Caption-2.1.0-arm64-mac.zip`
+  - 对本地 ad-hoc 签名后的 `.app` 重新封装生成。
+- `dist/Auto Caption-2.1.0-arm64-mac.zip.blockmap`
+  - 使用 app-builder 对重封后的 zip 重新生成。
+- `dist/auto-caption-2.1.0.dmg`
+  - 使用本机 `hdiutil create` 从签名后的 `.app` 生成。
+- `dist/latest-mac.yml`
+  - 更新为 `2.1.0` zip 的路径、大小、sha512 和 releaseDate；这是生成目录中的更新元数据。
+
+### 修改前后行为
+
+- 修改前：应用版本源、标题、关于窗口、README、手册和上次 Mac 构建产物为 `2.0.0` / `v2.0.0`。
+- 修改后：应用元数据、运行界面可见版本、README、手册、CHANGELOG 与本次 macOS 构建产物统一为 `2.1.0` / `v2.1.0`。
+- 配置、IPC、Python stdout/TCP 协议、命令行参数和数据结构没有变化。
+- 没有新增依赖，没有安装全局包，没有修改系统环境变量或 shell 配置。
+
+### 兼容性、迁移与回滚
+
+- 配置 schemaVersion 仍为 `2`；本批次只更新应用发布版本，不涉及用户配置迁移。
+- macOS 产物为 arm64；未生成 x64 或 universal 包。
+- 由于没有 Developer ID 证书，本次只做本地 ad-hoc 签名，未做 Apple Developer ID 签名或 notarization。首次打开可能仍需用户通过 macOS 安全提示手动允许。
+- 精确回滚：恢复本批次列出的版本/文档文件；删除或忽略 `dist/` 与 `engine/dist/` 中本次生成的 `2.1.0` 构建产物；如需恢复旧包，使用此前的 `2.0.0` 产物或重新按旧版本号构建。
+
+### 验证记录
+
+- `npm version minor --no-git-tag-version`：通过；版本提升到 `v2.1.0`，同时输出既有 npm mirror 配置弃用警告。
+- `npm run verify`：通过；Node/Web/Vue TypeScript、ESLint、Node 38/38 和 Python 49/49 全部通过。
+- `npm run build`：通过；Electron main、preload、renderer 生产构建分别转换 22、1、3253 个模块。
+- `PYINSTALLER_CONFIG_DIR=... engine/.venv/bin/pyinstaller --clean --noconfirm ./main.spec`：通过，生成 `engine/dist/main`；保留既有 `pycparser` 可选隐藏导入警告和 `@rpath/libomp.dylib` 解析警告。
+- `engine/dist/main --help`：沙盒内首次因 PyInstaller sync semaphore 权限失败；经用户批准在沙盒外运行后通过，CLI help 正常输出。
+- `./node_modules/.bin/electron-builder --mac`：`.app` 和 zip 构建完成；DMG 阶段因 `hdiutil create` 失败退出码 1。该失败未忽略，随后用本机 `hdiutil create` 单独生成最终 DMG。
+- `codesign --force --deep --sign - dist/mac-arm64/Auto Caption.app`：通过，本地 ad-hoc 签名完成。
+- `codesign --verify --deep --strict --verbose=2 dist/mac-arm64/Auto Caption.app`：通过。
+- `ditto -c -k --sequesterRsrc --keepParent ...`：通过，重封签名后的 zip。
+- `node_modules/app-builder-bin/mac/app-builder_arm64 blockmap --input ... --output ...`：通过，生成 `2.1.0` zip blockmap。
+- `hdiutil create -volname 'Auto Caption' -fs APFS -format UDZO -srcfolder ... -ov dist/auto-caption-2.1.0.dmg`：通过；hdiutil 提示该 create 用法已弃用，未影响产物生成。
+- `hdiutil verify dist/auto-caption-2.1.0.dmg`：通过，checksum VALID。
+- `unzip -tq dist/Auto Caption-2.1.0-arm64-mac.zip`：通过，无压缩数据错误。
+- `file dist/mac-arm64/Auto Caption.app/Contents/MacOS/Auto Caption dist/mac-arm64/Auto Caption.app/Contents/Resources/engine/main`：二者均为 Mach-O 64-bit executable arm64。
+- `shasum -a 256 dist/auto-caption-2.1.0.dmg dist/Auto Caption-2.1.0-arm64-mac.zip`：
+  - DMG：`b2b49b1549c696262189cd4f0582469f6623296285cfdf50b7c7fba6c6adb6e3`
+  - ZIP：`5219bd628dfb9c1f4e26b2e4b79d52dad303b023e309323a638f2f10004d251a`
+
+### 未执行、风险与后续事项
+
+- 未启动真实 Electron GUI 做窗口交互、麦克风/系统音频授权或真实识别流程；本批次验证到构建、测试、签名和安装包完整性。
+- 未做 Windows、Linux、macOS x64 或 universal 构建；不能声称这些平台的 V2.1.0 安装包已由本批次验证。
+- 未使用真实 API Key、Workspace 或云服务，不产生费用，也不修改远端热词资源。
+- Electron builder 仍提示缺少 Developer ID signing identity；发布到普通用户机器前建议使用正式证书签名并 notarize。
+- 当前工作区还包含本批次之前已有的 `src/renderer/src/engines/form.ts` 与 `tests/node/engineCatalog.test.mjs` 修复改动；本批次构建将这些未提交改动打入 `2.1.0` 产物。
+
+### 参考与决策依据
+
+- 本地 `package.json` 与 `electron-builder.yml`：确认 macOS 产物版本来自 npm 包版本，DMG artifact 使用 `${name}-${version}.${ext}`。
+- 根目录 `AGENTS.md`：遵循修改前检查、三语文档同步、构建产物记录、验证记录、系统环境与依赖边界、`change.md` 追加记录要求。

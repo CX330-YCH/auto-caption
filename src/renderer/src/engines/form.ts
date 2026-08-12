@@ -1,3 +1,4 @@
+import { toRaw } from 'vue'
 import type { EngineConfig } from '../../../shared/config/schema.ts'
 import type { EngineConfigPath, EngineFieldCondition, EngineFieldDescriptor } from './types.ts'
 
@@ -9,7 +10,7 @@ function asRecord(value: unknown): Record<string, unknown> {
 }
 
 export function cloneEngineConfig(config: EngineConfig): EngineConfig {
-  return structuredClone(config)
+  return structuredClone(toRaw(config))
 }
 
 export function getEngineConfigValue(config: EngineConfig, path: EngineConfigPath): unknown {
