@@ -1,6 +1,6 @@
 # Auto Caption 用户手册
 
-对应版本：v2.7.0
+对应版本：v2.8.0
 
 ## 软件简介
 
@@ -48,6 +48,8 @@ Auto Caption 是一个跨平台的字幕显示软件，能够实时获取系统�
 先在阿里云百炼同一个 Workspace 中准备 API Key、Workspace ID 和专属 WebSocket 地址。地址必须是官方北京或新加坡地域的 `wss://<WorkspaceId>.<region>.maas.aliyuncs.com/api-ws/v1/inference`，其中的 Workspace ID 必须与设置字段一致，三者也必须属于同一地域。该云端服务会产生费用，使用前请查看[官方 WebSocket API 文档](https://help.aliyun.com/zh/model-studio/fun-asr-realtime-websocket-api)和当前计费规则。
 
 设置页可选择模型、语义断句、最大句间静音（200–6000 ms）和心跳。Fun-ASR 的最终句使用现有外部翻译配置。
+
+字幕引擎启动时会初始化操作系统原生 CA 信任库：macOS 使用钥匙串的 Security 信任，Windows 使用 CryptoAPI，Linux 使用系统 OpenSSL 证书路径。公司代理或私有 CA 必须先正确安装到系统信任库；应用不会关闭 TLS 证书校验，也不依赖打包 Python 中可能缺失的独立 CA 文件。
 
 “更多设置”中的热词分两级：一级可直接填写已有热词表 ID 和目标模型，并逐行填写上下文术语；上下文合计最多 400 字符、没有权重，可与热词表同时使用。修改一级配置后必须点击“应用更改”，下次识别任务才会使用。二级管理器使用已经应用的 API Key 所属账号、Workspace、地域和模型，可刷新、创建、完整替换、删除远端热词表；远端写操作立即生效，不受本地“取消更改”影响。删除会显示全部目标信息并再次确认。热词表模型必须与当前识别模型一致；阿里云当前说明新加坡子业务空间不支持热词。
 

@@ -2,8 +2,14 @@ import threading
 import sys
 from queue import Queue
 
+from system_trust import initialize_system_trust
+
+
+SYSTEM_TRUST_BACKEND = initialize_system_trust()
+
+
 from cli import CliOptions, parse_args
-from core import AudioCaptureWorker, RecognitionSession
+from core import AudioCaptureWorker, ProviderDebug, RecognitionSession
 from protocol.output import ProtocolEventSink
 from protocol.server import start_server
 from providers import ProviderConfig, build_provider_registry
@@ -23,6 +29,11 @@ def run(options: CliOptions) -> None:
         change_caption_display(True)
 
     output = ProtocolEventSink()
+    output.publish(ProviderDebug(
+        provider='runtime',
+        message='System CA trust initialized.',
+        details={'backend': SYSTEM_TRUST_BACKEND},
+    ))
     audio_source = AudioStream(options.audio_type, options.chunk_rate)
     runtime = build_provider_registry().create(
         _provider_config(options),

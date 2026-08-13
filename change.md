@@ -2004,6 +2004,91 @@
 - macOS 本机 `codesign`、`hdiutil`、`ditto` 与 Electron Builder 输出：确认最终 `.app`、zip、DMG 的签名、镜像和压缩包完整性。
 - 根目录 `AGENTS.md`：遵循修改前检查、系统环境不修改、三语文档同步、构建产物记录和 `change.md` 追加记录要求。
 
+## 2026-08-13 - 初始化操作系统原生 CA 信任
+
+### 用户授权与变更目标
+
+- 用户明确允许新增依赖并要求“fix：初始化 CA问题”。
+- 变更类型：修复、依赖、测试、构建、文档。
+- 目标：修复 Fun-ASR WebSocket 在打包 Python 运行时因默认 OpenSSL CA 路径为空而持续报 `SSLCertVerificationError: unable to get local issuer certificate` 的问题，使应用统一使用操作系统原生 CA 信任，同时保持完整的 TLS 证书链和主机名校验。
+- 明确非目标：不关闭证书校验，不绕过主机名校验，不修改 Fun-ASR 鉴权/重试协议，不调用真实付费识别任务，不安装或删除系统证书，不更新安装目录中的现有 App，不发布构建、提交、推送或创建 PR。
+- 修改前执行 `git status --short --branch`，工作区为 `main...origin/main` 且没有未提交文件；本批次修改均可与任务开始前状态区分。
+
+### 根因与技术决策
+
+- 用户提供的新 Debug JSONL 显示 Fun-ASR 初始连接及三次重试均在 TLS 握手阶段失败，错误为 `ClientConnectorCertificateError` / `SSLCertVerificationError`；generation 幂等、最终 fatal 和正常退出已按预期工作。
+- 同一 Endpoint 使用系统 `curl` 可完成 TLS 校验并返回未鉴权 HTTP 401，说明服务端证书链和 macOS 系统信任正常。
+- 当前 Python 3.13 的 `ssl.get_default_verify_paths()` 指向 `/Library/Frameworks/Python.framework/Versions/3.13/etc/openssl/cert.pem`，该文件不存在，默认 SSLContext 的 CA 统计为 0；系统 `/etc/ssl/cert.pem` 存在。因此故障不是服务端断链，而是 Python/OpenSSL 未继承系统信任。
+- DashScope 1.26.7 的普通 aiohttp Session 会显式使用 `certifi.where()`，但 Fun-ASR 所走的 `websocket_request.py` 创建 `aiohttp.ClientSession(trust_env=True)` 后直接 `ws_connect()`，没有传入 SDK 另一处创建的 SSLContext；它最终命中了上述空的 Python 默认信任。
+- 选择在应用入口、导入 DashScope/aiohttp 等网络客户端之前调用 `truststore.inject_into_ssl()`。官方文档明确该 API 适用于应用和脚本，并为 macOS 使用 Security framework、Windows 使用 CryptoAPI、Linux 使用 OpenSSL 系统路径；本项目属于应用入口，不是在可复用库的 import side effect 中注入。
+- 新增直接精确依赖 `truststore==0.10.4`：本地与官方资料显示其为稳定版、MIT 许可、要求 Python 3.10+，支持本项目三平台；当前引擎 Python 3.13 满足要求。它此前只是 httpcore2/httpx2 的传递依赖，直接固定后不再依赖其他包偶然带入。
+- 未采用的替代方案：`certifi` 是独立静态 CA 包，不能完整继承 macOS/Windows 企业信任；硬编码 `SSL_CERT_FILE` 不跨平台且无法等价访问原生证书库；修改 DashScope 私有 WebSocket 实现会与锁定 SDK 内部结构耦合；关闭 TLS 校验不符合安全要求。
+
+### 修改文件与具体原因
+
+- `engine/system_trust.py`
+  - 新增幂等的 `initialize_system_trust()`，通过 truststore 将标准库 SSLContext 切换到当前 OS 原生信任，并返回不含敏感信息的后端名称。
+- `engine/main.py`
+  - 在导入 CLI、Provider、服务和 DashScope/aiohttp 之前完成系统 CA 初始化，保证 aiohttp 的模块级默认 SSLContext 缓存在初始化后创建。
+  - 启动时增加一条现有 `ProviderDebug` 协议事件，记录 `macOS Security`、`Windows CryptoAPI` 或 `OpenSSL system paths` 后端；该事件只进入隐式完整 Debug 日志，原有日志记录页继续不显示 DEBUG。
+- `engine/requirements.txt`
+  - 增加精确直接依赖 `truststore==0.10.4`，未更改其他依赖版本。
+- `engine/main.spec`
+  - 使用 `collect_submodules('truststore')` 收集条件加载的 macOS、Windows、Linux 后端，避免 PyInstaller 静态分析只收集当前构建平台后端而破坏跨平台各自构建。
+- `engine/tests/test_system_trust.py`
+  - 新增隔离子进程测试，验证重复初始化幂等、标准库默认 Context 使用 truststore、真实 `main` 入口按正确时序初始化，以及 aiohttp 模块级 verified Context 也确实使用 truststore。
+- `docs/engine-manual/architecture.md`
+  - 记录入口时序、跨平台信任后端、TLS 校验不降级和隐藏 Debug 行为。
+- `docs/user-manual/zh.md`、`docs/user-manual/en.md`、`docs/user-manual/ja.md`
+  - 三语说明 Fun-ASR 使用系统 CA 信任，以及企业代理/私有 CA 应安装到系统信任库。
+- `docs/testing.md`
+  - 补充系统 CA 的隔离测试边界和无凭据 TLS 握手验收方式。
+- `docs/CHANGELOG.md`
+  - 在未发布条目记录系统 CA 修复、直接依赖和 PyInstaller 收集策略。
+- `change.md`
+  - 追加本批次授权、根因、依赖决策、行为变化、验证、风险和回滚记录。
+
+### 修改前后行为、接口与兼容性
+
+- 修改前：Fun-ASR WebSocket 未显式提供 SSLContext，打包 Python 的默认 OpenSSL CA 文件缺失时，即使 macOS 系统已信任服务端证书也会在 TLS 握手阶段失败并重试耗尽。
+- 修改后：Python 进程在所有应用网络客户端导入前初始化系统信任；Fun-ASR、热词服务和其他依赖标准库 SSL 默认值的 TLS 客户端均使用 OS 原生 CA，仍执行完整证书链和主机名校验。
+- 配置 schemaVersion、默认值、迁移、持久字段、IPC、TCP 命令、Python CLI、字幕/翻译/热词数据结构均无变化，不需要配置迁移。
+- Python→Electron 没有新增协议 command 或字段，只复用已有隐藏 `debug` 事件增加一条启动诊断；旧 Electron 若不识别 debug 仍可按既有兼容策略忽略，不影响字幕事件。
+- 新依赖为纯 Python wheel，无新增编译工具链；要求 Python 3.10+，低于该版本的自定义引擎开发环境不再满足依赖要求，但项目现有语法和当前构建环境本已使用 Python 3.10+ / 3.13。
+- 回滚方式：恢复本条列出的代码、依赖、spec、测试和文档文件；删除 `engine/system_trust.py` 与 `engine/tests/test_system_trust.py`，并按旧 spec 重新构建引擎。配置数据无需回滚。回滚会重新暴露打包 Python 不继承系统 CA 的故障。
+
+### 实际验证与真实结果
+
+- `engine/.venv/bin/python3 -m pip install truststore==0.10.4`：通过，报告 `Requirement already satisfied`，没有安装或升级其他包；pip 仅提示用户缓存目录不可写并禁用缓存。
+- `engine/.venv/bin/python3 -m pip show truststore`：确认版本 `0.10.4`、MIT 许可、本地安装路径及当前仅被 httpcore2/httpx2 传递使用的状态。
+- `engine/.venv/bin/python3 -m unittest engine.tests.test_system_trust -v`：最终 2/2 通过；覆盖幂等初始化、真实入口顺序和 aiohttp verified Context。
+- `npm run verify`：通过；TypeScript、ESLint、Node 53/53、Python 59/59 全部成功。保留既有 npm mirror 配置弃用警告和 Node `MODULE_TYPELESS_PACKAGE_JSON` 性能警告。
+- `npm run build`：通过；Electron main、preload、renderer 生产构建成功，分别转换 26、1、3260 个模块。
+- 首次从仓库根目录执行 `PYINSTALLER_CONFIG_DIR=... engine/.venv/bin/pyinstaller --clean --noconfirm engine/main.spec`：失败；既有 spec 的 Vosk 相对路径按错误工作目录解析到仓库根 `.venv/lib/python3.12/...`。这次失败没有隐藏为成功。
+- 切换到 `engine/` 后执行 `PYINSTALLER_CONFIG_DIR=/private/tmp/auto-caption-ca-pyinstaller ./.venv/bin/pyinstaller --clean --noconfirm ./main.spec`：通过，生成 macOS arm64 `engine/dist/main`。保留既有 `pycparser` 可选隐藏导入及 `@rpath/libomp.dylib` 解析警告。
+- `./.venv/bin/pyi-archive_viewer -r -b ./dist/main | rg ...`：确认单文件归档包含 `system_trust`、`truststore._api`、`_macos`、`_openssl`、`_ssl_constants`、`_windows`。
+- `file engine/dist/main`：确认生成物为 Mach-O 64-bit arm64。
+- 沙盒内首次执行 `engine/dist/main --help`：因 PyInstaller semaphore 权限报 `semctl: Operation not permitted`；经授权在沙盒外重试通过并完整输出 CLI help，说明 truststore 及三平台条件模块没有破坏打包入口。
+- 无凭据 aiohttp WSS 探针在沙盒内首先因 DNS 受限失败；沙盒外第一次探针故意/错误地在 CA 初始化前导入 aiohttp，复现原 `CERTIFICATE_VERIFY_FAILED`，从而确认导入时序是关键约束；改为与真实 `main.py` 一致的“先初始化、后导入 aiohttp”后返回 `tls_verified_http_status=401`。401 是未提供 API Key 的预期服务端响应，证明 TLS 证书校验已经通过，且没有创建识别任务或产生 API 费用。
+- `git diff --check`：代码、测试和文档修改后通过；追加本记录后再次执行最终检查。
+
+### 未执行验证、已知风险与后续事项
+
+- 未使用真实 API Key 启动 Fun-ASR 任务，未采集音频，未调用翻译或远端热词 API，因此没有产生云端费用；在线验证止于无凭据 TLS 握手后的 HTTP 401。
+- 仅在 macOS arm64 源码环境和 PyInstaller 产物上实测；Windows CryptoAPI 与 Linux OpenSSL 后端由 truststore 官方支持、归档包含对应模块且离线测试验证后端选择，但尚未在 Windows/Linux 实机打包和联网验收，不能声明这两个平台已实测。
+- 本批次只重新生成被 Git 忽略的 `engine/dist/main`，没有重新封装 Electron `.app`、DMG/ZIP，也没有替换 `/Applications/Auto Caption.app` 中的旧引擎。要让已安装 App 使用修复，仍需在后续获授权后重新构建并安装/替换应用产物。
+- `truststore.inject_into_ssl()` 必须早于 aiohttp 等会缓存默认 SSLContext 的模块导入；当前入口顺序和回归测试对此有保护。未来若增加 PyInstaller runtime hook 或在 `main.py` 前导入网络库，必须维持同一约束。
+- truststore 作为安全边界依赖应继续精确锁定；升级时需复核官方平台支持、许可证、aiohttp 导入时序和三平台 PyInstaller 收集结果。
+
+### 关键外部文档与技术决策来源
+
+- Truststore 0.10.4 官方文档：`https://truststore.readthedocs.io/en/stable/`，用于确认 `inject_into_ssl()` 的应用入口适用范围、Python 版本要求和 macOS Security / Windows CryptoAPI / Linux OpenSSL 支持。
+- Truststore 0.10.4 PyPI 发布页：`https://pypi.org/project/truststore/0.10.4/`，用于确认精确发布版本、wheel 与项目元数据。
+- 项目锁定的 DashScope 1.26.7 本地源码 `dashscope/api_entities/websocket_request.py` 与 `aio_session.py`：用于确认 Fun-ASR WebSocket 没有复用 SDK 另一处 certifi SSLContext。
+- 用户提供的 `auto-caption-debug-2026-08-13T08-40-21-364Z.jsonl`：用于确认真实失败类型、重试次数和正常 fatal 退出行为。
+- macOS 系统 `curl`、Python `ssl` 默认路径/CA 统计、本地 `/etc/ssl/cert.pem` 状态及无凭据 aiohttp WSS 探针：用于区分服务端证书问题与 Python CA 初始化问题，并验证修复结果。
+- 根目录 `AGENTS.md`：决定直接依赖评审、跨平台说明、三语用户文档、凭据保护、真实失败记录和本条 `change.md` 内容。
+
 ## 2026-08-13 - Electron 安全升级与三平台构建测试
 
 ### 授权与目标
@@ -2239,6 +2324,103 @@
 ### 关键外部文档或技术决策来源
 
 - 本地 `package.json`、`package-lock.json`：确认版本源、当前 Electron/Electron Builder 解析版本和 npm 脚本。
+- 本地 `electron-builder.yml`：确认当前平台化 `extraResources` 配置会把 macOS/Linux 引擎打包到 `Resources/engine/main`。
+- Electron Builder 26 本地模块 `app-builder-lib/out/targets/blockmap/blockmap`：用于刷新签名后产物 blockmap。
+- macOS 本机 `codesign`、`hdiutil`、`ditto` 与 Electron Builder 输出：确认最终 `.app`、zip、DMG 的签名、镜像和压缩包完整性。
+- 根目录 `AGENTS.md`：遵循修改前检查、系统环境不修改、三语文档同步、构建产物记录和 `change.md` 追加记录要求。
+
+## 2026-08-13 - V2.8.0 小版本与 macOS arm64 构建
+
+### 授权与目标
+
+- 用户要求“编译一下Mac版本 并更新小版本号”。
+- 变更类型：构建、配置、文档、测试。
+- 目标：在不修改系统环境的前提下，将 V2 小版本从 `2.7.0` 提升到 `2.8.0`，并生成 macOS arm64 构建产物。
+- 明确非目标：本次用户未要求依赖检查或升级，因此不主动执行依赖治理；不创建 git tag、commit、branch、PR 或 Release；不做 Windows、Linux、macOS x64/universal 构建；不调用真实麦克风、识别云服务、翻译云服务或远端热词资源。
+- 修改前工作区已有未提交改动，包含 Python 系统信任库初始化、`truststore==0.10.4` 直接依赖、PyInstaller 隐式导入、文档和测试；本批次保留这些改动，只在当前工作区基础上叠加版本号、文档版本标识和 macOS arm64 构建产物。
+
+### 修改文件与原因
+
+- `package.json`
+  - 通过 `npm version minor --no-git-tag-version` 将应用版本更新为 `2.8.0`；未创建 git tag。
+- `package-lock.json`
+  - 同步根包版本到 `2.8.0`。
+- `README.md`、`README_en.md`、`README_ja.md`
+  - 同步版本徽章、发布提示和平台说明到 `v2.8.0`。
+- `docs/user-manual/zh.md`、`docs/user-manual/en.md`、`docs/user-manual/ja.md`
+  - 同步用户手册版本标识到 `v2.8.0`；保留本批次前已有的系统 CA 信任库说明。
+- `docs/engine-manual/zh.md`、`docs/engine-manual/en.md`、`docs/engine-manual/ja.md`
+  - 同步引擎手册版本标识到 `v2.8.0`。
+- `src/renderer/index.html`
+  - 同步浏览器标题中的可见版本到 `Auto Caption v2.8.0`。
+- `src/renderer/src/components/EngineStatus.vue`
+  - 同步关于信息中的可见版本到 `v2.8.0`。
+- `docs/CHANGELOG.md`
+  - 新增 `v2.8.0` 条目，记录版本同步与 macOS arm64 构建。
+- `dist/latest-mac.yml`
+  - 在生成目录中同步最终签名后 zip 和 DMG 的 `2.8.0` 路径、大小、sha512 与 releaseDate。
+- `change.md`
+  - 追加本批次授权、修改范围、构建上下文、验证、风险和回滚记录。
+- 生成产物：
+  - `engine/dist/main`：PyInstaller 生成的 macOS arm64 Python 引擎可执行文件，构建时包含本批次前已有的 `truststore` 隐式导入配置。
+  - `dist/mac-arm64/Auto Caption.app`：Electron Builder 生成并经本地 ad-hoc 签名的 macOS arm64 应用。
+  - `dist/Auto Caption-2.8.0-arm64-mac.zip` 与 `.blockmap`：签名后 `.app` 重新封装的 zip 和 Electron Builder 26 blockmap。
+  - `dist/auto-caption-2.8.0.dmg` 与 `.blockmap`：包含签名后 `.app` 的 APFS UDZO DMG 和 Electron Builder 26 blockmap。
+
+### 修改前后行为
+
+- 修改前：应用版本源、README、手册、关于窗口、浏览器标题和 macOS 构建元数据为 `2.7.0` / `v2.7.0`。
+- 修改后：应用版本源、可见版本文本、README、用户手册、引擎手册、CHANGELOG 与本次 macOS arm64 产物统一为 `2.8.0` / `v2.8.0`。
+- 本批次没有新增或删除用户配置字段，没有修改配置迁移、IPC、Python stdout/TCP 协议、命令行参数、字幕数据结构、热词语义或远端资源操作。
+- 未修改系统环境；构建使用项目本地 `node_modules` 与 `engine/.venv`，仅在项目目录生成和更新构建产物。
+
+### 兼容性、迁移与回滚
+
+- 本批次只更新发布版本并重新构建 macOS arm64 包，不涉及用户配置迁移。
+- macOS 产物为 arm64；未生成 Intel x64 或 universal 包。
+- 当前构建基于工作区已有的 `electron@43.4.0` 与 `electron-builder@26.15.3`；自动化测试与打包通过，但未在真实安装后的 GUI 中做 Electron 43 交互回归。
+- 本次 Python 打包基于工作区已有的系统 CA 信任库改动：`engine/requirements.txt` 已包含 `truststore==0.10.4`，`engine/main.spec` 使用 `collect_submodules('truststore')`。构建日志确认 `truststore` 相关依赖参与分析；未修改系统证书或系统 Python。
+- Electron Builder 26 不再提供旧的 `node_modules/app-builder-bin/mac/app-builder_arm64` 路径；本批次继续使用 `app-builder-lib/out/targets/blockmap/blockmap` 的 `buildBlockMap` API 刷新签名后 zip/DMG 的 blockmap。
+- 由于没有 Developer ID 证书，本次只做本地 ad-hoc 签名，未做 Apple Developer ID 签名或 notarization。首次打开可能仍需用户通过 macOS 安全提示手动允许。
+- 精确回滚：恢复本批次列出的版本/文档文件到 `2.7.0`；恢复 `package.json` 和 `package-lock.json` 根版本；删除或忽略 `dist/` 与 `engine/dist/` 中本次生成的 `2.8.0` 构建产物；如需恢复旧包，使用此前 `2.7.0` 产物或按旧版本号重新构建。
+
+### 验证记录
+
+- `git status --short --branch`：已执行；确认当前在 `main...origin/main`，且工作区开局已有未提交修改，需要保留。
+- `engine/.venv/bin/python3 -m pip show truststore`：通过，确认项目虚拟环境内 `truststore` 版本为 `0.10.4`；保留 pip cache 目录不可写警告。
+- `engine/.venv/bin/python3 -m pip check`：通过，输出 `No broken requirements found.`；只检查项目虚拟环境，未修改系统 Python。
+- `npm version minor --no-git-tag-version`：通过；版本提升到 `2.8.0`，没有创建 git tag；保留既有 npm mirror 配置弃用警告。
+- `rg -n "2\\.7\\.0|v2\\.7\\.0|auto-caption-2\\.7\\.0|Auto Caption-2\\.7\\.0" ...`：应用版本相关文件无旧版本残留；历史 `docs/CHANGELOG.md` 条目和 `package-lock.json` 中依赖自身版本 `jiti@2.7.0`、`@peculiar/asn1-schema` 约束与应用版本无关。
+- `npm run verify`：通过；TypeScript、ESLint、Node 53/53 和 Python 59/59 全部成功；Python 覆盖包含 `test_system_trust`；保留既有 `MODULE_TYPELESS_PACKAGE_JSON` 性能警告。
+- `npm run build`：通过；Electron main、preload、renderer 生产构建成功，分别转换 26、1、3260 个模块。
+- `PYINSTALLER_CONFIG_DIR=/private/tmp/auto-caption-pyinstaller-config ./.venv/bin/pyinstaller --clean --noconfirm ./main.spec`：通过，生成 `engine/dist/main`；日志显示 `hook-urllib3`、`hook-certifi`、`truststore` 相关依赖进入分析流程；保留既有 `pycparser` 可选隐藏导入警告和 `@rpath/libomp.dylib` 解析警告。
+- `engine/dist/main --help`：经用户授权在沙盒外运行后通过，CLI help 正常输出。
+- `./node_modules/.bin/electron-builder --mac`：沙盒内因 `npmmirror.com` DNS 失败；经用户授权沙盒外重试后通过，基于 `electron@43.4.0` 与 `electron-builder@26.15.3` 生成 `.app`、zip、DMG 和初始 blockmap。构建日志提示 duplicate dependency references，并提示缺少 Developer ID 签名证书；未导致构建失败。
+- `file dist/mac-arm64/Auto Caption.app/Contents/MacOS/Auto Caption dist/mac-arm64/Auto Caption.app/Contents/Resources/engine/main`：二者均为 Mach-O 64-bit executable arm64。
+- `plutil -p dist/mac-arm64/Auto Caption.app/Contents/Info.plist | rg 'CFBundleShortVersionString|CFBundleVersion'`：通过，两个版本字段均为 `2.8.0`。
+- `codesign --force --deep --sign - dist/mac-arm64/Auto Caption.app`：通过，本地 ad-hoc 签名完成。
+- `codesign --verify --deep --strict --verbose=2 dist/mac-arm64/Auto Caption.app`：通过，`.app` valid on disk 且 satisfies its Designated Requirement。
+- `ditto -c -k --sequesterRsrc --keepParent ...`：通过，重新封装签名后的 `Auto Caption-2.8.0-arm64-mac.zip`。
+- `hdiutil create -volname 'Auto Caption' -fs APFS -format UDZO -srcfolder ... -ov dist/auto-caption-2.8.0.dmg`：通过，重新生成包含签名后 `.app` 的 DMG；hdiutil 提示该 create 用法已弃用，未影响产物生成。
+- `node -e "const { buildBlockMap } = require('./node_modules/app-builder-lib/out/targets/blockmap/blockmap'); ..."`：通过，生成最终 zip 和 DMG blockmap；最终 zip size `224894490`、sha512 `rvkdpz3/oOm0c/h0ECVZTY3d9/cIZ2TvBfzYViNr5DkIioNYck188R86yjFKX3PJhaoMJrpxnHKgUiyM3rcO6A==`；最终 DMG size `244884069`、sha512 `9s9GxDjENoqmv4WI24VwW/SwadxMmWY4DKz0CLS3ldM6PJoB95FlSgkKekvSu7SbWUq2z4VfROyp8cTwqGDWwQ==`。
+- `hdiutil verify dist/auto-caption-2.8.0.dmg`：通过，checksum VALID。
+- `unzip -tq dist/Auto Caption-2.8.0-arm64-mac.zip`：通过，无压缩数据错误。
+- `shasum -a 256 dist/auto-caption-2.8.0.dmg dist/Auto Caption-2.8.0-arm64-mac.zip`：
+  - DMG：`1563f0b9a432b60088a563cf71ab5644fd01785859ddebd5c2a64882dac9813f`
+  - ZIP：`f95928691f5e26a42f06799aaf602a1f2a270ea49040f044789590ff47c57f77`
+- `git diff --check`：通过，无空白错误。
+
+### 未执行、风险与后续事项
+
+- 未启动安装后的真实 Electron GUI，也未测试麦克风、系统音频权限、真实识别、真实翻译 API、系统代理证书链或热词远端资源；本批次验证到自动化测试、生产构建、引擎 help、签名和安装包完整性。
+- 未做 Apple Developer ID 签名和 notarization；若面向外部分发，建议使用正式证书重新签名、公证并再次生成/校验 DMG 与 zip。
+- 未执行 Windows、Linux、macOS x64 或 universal 构建；不能声明这些平台的 `2.8.0` 包已验证。
+- 当前工作区已有 Electron 43 / Electron Builder 26 大版本依赖状态，并且包含本批次前已有的系统信任库改动；虽然本次测试和打包通过，仍建议在发布前做安装包级 GUI 和真实 TLS 回归，尤其关注 macOS 企业 CA、Windows CryptoAPI、Linux OpenSSL 路径和内置 Python 引擎启动路径。
+
+### 关键外部文档或技术决策来源
+
+- 本地 `package.json`、`package-lock.json`：确认版本源、当前 Electron/Electron Builder 解析版本和 npm 脚本。
+- 本地 `engine/requirements.txt`、`engine/main.spec`、`engine/system_trust.py` 与 `engine/tests/test_system_trust.py`：确认当前系统信任库改动、`truststore==0.10.4` 和 PyInstaller 隐式导入策略。
 - 本地 `electron-builder.yml`：确认当前平台化 `extraResources` 配置会把 macOS/Linux 引擎打包到 `Resources/engine/main`。
 - Electron Builder 26 本地模块 `app-builder-lib/out/targets/blockmap/blockmap`：用于刷新签名后产物 blockmap。
 - macOS 本机 `codesign`、`hdiutil`、`ditto` 与 Electron Builder 输出：确认最终 `.app`、zip、DMG 的签名、镜像和压缩包完整性。

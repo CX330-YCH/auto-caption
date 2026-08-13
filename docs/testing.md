@@ -98,6 +98,7 @@ Python 测试覆盖：
 - GLM VAD 分段、异步 final、WAV 请求内容、URL 校验和错误正文脱敏。
 - Gummy SDK callback 的 partial/final、服务端翻译、usage 和累计发送失败策略。
 - Fun-ASR SDK callback 的 partial/final/heartbeat/usage 映射、服务端时间戳、final 去重、有界重连、永久/暂时错误分类、错误脱敏、停止冲刷和 16 kHz 单声道 PCM16 输入约束；同 generation 重复 `on_error` 及随后 `on_close → stop` 只处理一次，task-failed 后不再调用 SDK `stop()`。SDK 1.26.7 适配器会直接验证失败任务 timer 被取消。任务启动与重连会重复传入热词表 ID 和上下文。测试使用伪造 SDK 客户端，不建立网络连接。
+- 系统 CA 初始化测试在隔离子进程中验证重复调用幂等，并验证导入真实 `main` 入口后、任何网络客户端工作前，标准库 `ssl.SSLContext` 已切换为 `truststore.SSLContext`。该测试不建立网络连接；发布验收另以不带凭据的 WSS 握手确认 TLS 已通过、服务端返回预期 HTTP 鉴权错误。
 - `HotwordRuntimeConfig` 的模型/上下文限制、基于伪造 `VocabularyClient` 的完整 CRUD、修改前模型检查，以及一次性 worker 的错误脱敏。测试不创建、更新或删除真实云资源。
 
 ## 本阶段未覆盖范围

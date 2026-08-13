@@ -2,6 +2,7 @@
 
 from pathlib import Path
 import sys
+from PyInstaller.utils.hooks import collect_submodules
 
 if sys.platform == 'win32':
     vosk_path = str(Path('./.venv/Lib/site-packages/vosk').resolve())
@@ -18,7 +19,7 @@ a = Analysis(
     pathex=[],
     binaries=[],
     datas=[(vosk_path, 'vosk')],
-    hiddenimports=[],
+    hiddenimports=collect_submodules('truststore'),
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],

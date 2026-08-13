@@ -1,6 +1,6 @@
 # Auto Caption User Manual
 
-Corresponding Version: v2.7.0
+Corresponding Version: v2.8.0
 
 **Note: Due to limited personal resources, the English and Japanese documentation files for this project (except for the README document) will no longer be maintained. The content of this document may not be consistent with the latest version of the project. If you are willing to help with translation, please submit relevant Pull Requests.**
 
@@ -51,6 +51,8 @@ You need to obtain an API KEY first, refer to: [Quick Start](https://docs.bigmod
 Create or select an Alibaba Cloud Model Studio Workspace, then use an API key, Workspace ID, and dedicated WebSocket endpoint from that same Workspace and region. The endpoint must be an official Beijing or Singapore URL in the form `wss://<WorkspaceId>.<region>.maas.aliyuncs.com/api-ws/v1/inference`, and the embedded Workspace ID must match the configured value. This online service may incur charges; review the [official WebSocket API documentation](https://help.aliyun.com/zh/model-studio/fun-asr-realtime-websocket-api) and current pricing before use.
 
 The UI exposes the model, semantic punctuation, maximum sentence silence (200–6000 ms), and heartbeat settings. Final Fun-ASR sentences use the existing external translation configuration.
+
+The caption engine initializes the operating system's native CA trust store at startup: macOS Security and Keychain trust, Windows CryptoAPI, and the system OpenSSL certificate paths on Linux. Install an enterprise proxy or private CA into the system trust store first. The application does not disable TLS certificate verification and does not depend on a separate CA file that may be absent from the packaged Python runtime.
 
 Hotwords under More Settings have two levels. Level 1 accepts an existing vocabulary ID and its target model plus one context term per line. Context is unweighted, limited to 400 combined characters, and can be used with the vocabulary. Click Apply Changes before a recognition task uses this draft. Level 2 uses the applied API-key owner account, Workspace, region, and model to list, create, fully replace, or delete remote vocabularies. Remote writes take effect immediately and Cancel Changes cannot undo them. Delete shows the full target and requires confirmation. The vocabulary model must exactly match the recognition model; Alibaba Cloud currently states that Singapore sub-workspaces do not support hotwords.
 

@@ -157,6 +157,7 @@ API Key 字段在 `CliOptions` 和 `ProviderConfig` 的 `repr` 中隐藏。未�
 
 ### Fun-ASR Realtime
 
+- Python 进程入口在导入 DashScope/aiohttp 等网络客户端前调用 `truststore.inject_into_ssl()`，使无显式 SSLContext 的 SDK WebSocket 也使用操作系统原生 CA 信任：macOS Security、Windows CryptoAPI、Linux OpenSSL 系统路径。初始化幂等，不关闭主机名或证书链校验；启动后端只写入隐藏 Debug 事件。
 - 使用阿里云官方 DashScope Python SDK 的 `Recognition.start()`、`send_audio_frame()` 和 `stop()`，不在 Provider 内复制底层 WebSocket 任务协议。
 - 输入经共享 Pipeline 规范化为 16 kHz、单声道、PCM16；默认 `chunk_rate=10`，即约 100 ms 一帧。
 - SDK callback 中的 `sentence_end` 映射为 partial/final；心跳被忽略；服务端毫秒时间戳映射为任务起点上的字幕时间；duration 用量映射为 `UsageUpdated`。

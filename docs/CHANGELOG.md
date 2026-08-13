@@ -1,5 +1,6 @@
 ## 未发布
 
+- 修复打包 Python 运行时未初始化系统 CA 的问题；所有 TLS 客户端在入口阶段统一使用 macOS Security、Windows CryptoAPI 或 Linux OpenSSL 系统信任，并新增 `truststore==0.10.4` 直接依赖和 PyInstaller 隐式导入。
 - 新增本次软件启动的隐式完整 Debug JSONL 会话和日志页保存按钮；原有日志页仍只显示 INFO、WARN、ERROR，凭据始终脱敏。
 - 修复窗口尺寸调整期间 application 配置消息和 `Set application config` 日志刷屏，滑块仅在拖动结束时提交，重复配置由主进程忽略。
 - 修复 Fun-ASR task-failed 后 `on_error`、`on_close` 和 `stop()` 重复处理：按 generation 幂等地重连或失败，永久错误立即停止，预期 SDK `InvalidParameter` 不再提示用户。
@@ -255,4 +256,11 @@
 ### 发布与构建
 
 - 更新应用版本号为 v2.7.0，并同步应用标题、关于窗口、README 与中英日用户/引擎文档版本标识。
+- 基于当前工作区依赖和打包配置生成 macOS arm64 构建产物，作为 V2 小版本的 Mac 版本验证包。
+
+## v2.8.0
+
+### 发布与构建
+
+- 更新应用版本号为 v2.8.0，并同步应用标题、关于窗口、README 与中英日用户/引擎文档版本标识。
 - 基于当前工作区依赖和打包配置生成 macOS arm64 构建产物，作为 V2 小版本的 Mac 版本验证包。
