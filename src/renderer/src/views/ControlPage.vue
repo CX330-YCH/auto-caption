@@ -308,27 +308,20 @@ watch(uiLanguage, (val) => {
   display: none;
 }
 
-@container (max-width: 360px) {
-  .caption-control :deep(.ant-card-head-wrapper) {
-    align-items: flex-start;
-    flex-direction: column;
-    gap: 8px;
-  }
+.caption-control :deep(.ant-card-head-wrapper) {
+  min-width: 0;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+}
 
-  .caption-control :deep(.ant-card-extra) {
-    margin-inline-start: 0;
-    white-space: normal;
-  }
+.caption-control :deep(.ant-card-head-title) {
+  min-width: 0;
+}
 
-  .caption-control :deep(.input-label),
-  .caption-control :deep(.hotword-label) {
-    flex-basis: 100%;
-    text-align: left;
-  }
-
-  .caption-control :deep(.input-item-value) {
-    padding-inline-start: 0;
-  }
+.caption-control :deep(.ant-card-extra) {
+  min-width: 0;
+  margin-inline-start: auto;
+  white-space: normal;
 }
 
 .settings-panel {

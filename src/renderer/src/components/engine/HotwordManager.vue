@@ -366,11 +366,12 @@ function showModelMismatch(): void {
 
 <style scoped>
 .input-item {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: minmax(90px, 110px) minmax(0, 1fr);
   align-items: center;
-  gap: 8px 10px;
-  margin: 10px 0;
+  column-gap: 12px;
+  row-gap: 6px;
+  margin: 12px 0;
 }
 
 .remote-card {
@@ -384,14 +385,15 @@ function showModelMismatch(): void {
 
 .hotword-label,
 .editor-label {
-  flex: 0 0 110px;
+  grid-column: 1;
   min-width: 0;
   text-align: right;
+  overflow-wrap: anywhere;
 }
 
 .hotword-input {
-  flex: 1 1 120px;
-  width: auto;
+  grid-column: 2;
+  width: 100%;
   min-width: 0;
 }
 
@@ -417,5 +419,23 @@ function showModelMismatch(): void {
 
 .danger-action {
   color: #ff4d4f;
+}
+
+@container (max-width: 480px) {
+  .input-item {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .hotword-label,
+  .editor-label,
+  .hotword-input,
+  .input-item > :deep(.ant-input) {
+    grid-column: 1;
+  }
+
+  .hotword-label,
+  .editor-label {
+    text-align: left;
+  }
 }
 </style>

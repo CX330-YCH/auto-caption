@@ -12,7 +12,7 @@
     <div>
       <div class="input-item">
         <span class="input-label">{{ $t('general.uiLanguage') }}</span>
-        <a-radio-group v-model:value="uiLanguage">
+        <a-radio-group v-model:value="uiLanguage" class="responsive-radio-group">
           <a-radio-button value="zh">中文</a-radio-button>
           <a-radio-button value="en">English</a-radio-button>
           <a-radio-button value="ja">日本語</a-radio-button>
@@ -21,7 +21,7 @@
 
       <div class="input-item">
         <span class="input-label">{{ $t('general.theme') }}</span>
-        <a-radio-group v-model:value="uiTheme">
+        <a-radio-group v-model:value="uiTheme" class="responsive-radio-group">
           <a-radio-button value="system">{{ $t('general.system') }}</a-radio-button>
           <a-radio-button value="light">{{ $t('general.light') }}</a-radio-button>
           <a-radio-button value="dark">{{ $t('general.dark') }}</a-radio-button>
@@ -30,7 +30,7 @@
 
       <div class="input-item">
         <span class="input-label">{{ $t('general.color') }}</span>
-        <a-radio-group v-model:value="uiColor">
+        <a-radio-group v-model:value="uiColor" class="responsive-radio-group color-radio-group">
           <template v-for="color in colorList" :key="color">
             <a-radio-button :value="color"
               :style="{backgroundColor: color}"
@@ -100,10 +100,20 @@ watch(uiTheme, (val) => {
 @import url(../assets/input.css);
 
 .span-input {
-  flex: 1 1 120px;
-  width: auto;
+  grid-column: 2;
+  width: 100%;
   min-width: 0;
   margin: 0;
+}
+
+.color-radio-group > :deep(.ant-radio-button-wrapper) {
+  padding-inline: 0;
+}
+
+@container (max-width: 480px) {
+  .span-input {
+    grid-column: 1;
+  }
 }
 
 .general-note {

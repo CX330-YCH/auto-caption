@@ -15,13 +15,20 @@
     </a-popover>
     <span v-else class="input-label">{{ $t(field.labelKey) }}</span>
 
-    <span
-      v-if="field.control === 'directory'"
-      class="input-folder"
-      :style="{ color: accentColor }"
-      @click="$emit('browse')"
-      ><FolderOpenOutlined
-    /></span>
+    <div v-if="field.control === 'directory'" class="input-with-addon">
+      <span
+        class="input-folder"
+        :style="{ color: accentColor }"
+        @click="$emit('browse')"
+        ><FolderOpenOutlined
+      /></span>
+      <a-input
+        class="input-area-with-folder"
+        :value="modelValue"
+        :placeholder="field.placeholder"
+        @update:value="$emit('update:modelValue', $event)"
+      />
+    </div>
 
     <a-select
       v-if="field.control === 'select'"
@@ -32,9 +39,8 @@
       @update:value="$emit('update:modelValue', $event)"
     />
     <a-input
-      v-else-if="field.control === 'text' || field.control === 'directory'"
+      v-else-if="field.control === 'text'"
       class="input-area"
-      :class="{ 'input-area-with-folder': field.control === 'directory' }"
       :value="modelValue"
       :placeholder="field.placeholder"
       @update:value="$emit('update:modelValue', $event)"
@@ -121,5 +127,19 @@ const localizedOptions = computed(
   flex: 1 1 100px;
   width: auto;
   min-width: 0;
+}
+
+.input-with-addon {
+  grid-column: 2;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+@container (max-width: 480px) {
+  .input-with-addon {
+    grid-column: 1;
+  }
 }
 </style>

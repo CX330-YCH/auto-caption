@@ -2078,3 +2078,168 @@
 - Electron Builder Architecture：确认 macOS arm64、Windows x64、Linux x64 CLI 架构参数及原生模块的目标平台约束，`https://www.electron.build/docs/architecture/`。
 - 本地 `package.json`、`package-lock.json`、`electron-builder.yml`、构建日志和产物文件格式检查：作为实际解析版本、配置行为与平台构建结论的权威证据。
 - 根目录 `AGENTS.md`：遵循依赖升级授权、平台兼容、生成目录排除、真实失败记录与 `change.md` 追加制度。
+
+## 2026-08-13 - 设置表单临界宽度断行与间距一致性修复
+
+### 授权与目标
+
+- 用户提供三张实际窗口截图并明确要求修复两个问题：部分宽度下表单元素间距不一致，以及特定宽度下语言、颜色等选项与字幕样式开关仍会错行。
+- 变更类型：修复、重构、文档、测试。
+- 目标：消除依赖 Flex 剩余空间计算产生的临界宽度随机断行，让同类字段采用可预测的两种布局，并保证单选按钮组和开关单元不会被拆成孤立行。
+- 明确非目标：不改变窗口断点、侧栏宽度持久化、设置草稿、字幕样式数据、引擎配置、IPC、Python CLI、子进程协议或依赖版本；不处理本任务以外的视觉风格和功能。
+
+### 修改文件与原因
+
+- `src/renderer/src/assets/input.css`
+  - 将通用 `.input-item` 从可任意换行的 Flex 改为确定性的 CSS Grid，统一 12px 行外间距、12px 列间距和 6px 行内间距。
+  - 设置面板不超过 480px 时统一切换为标签在上、控件在下；普通开关字段仍保持标签与开关为不可拆分的同一行。
+  - 新增等分且禁止内部换行的 `.responsive-radio-group`，避免按钮组在临界剩余宽度下留下单个选项。
+- `src/renderer/src/components/GeneralSetting.vue`
+  - 语言、主题和颜色按钮组接入等分单行布局；颜色按钮取消多余水平 padding，保证六个色块在 300px 侧栏和 360px 浮层中仍完整同排。
+  - 左栏宽度滑块适配 Grid 的控制列和窄面板堆叠模式。
+- `src/renderer/src/components/CaptionStyle.vue`
+  - 字幕行数改为四等分单行按钮组。
+  - 将显示预览、显示翻译和文本阴影重构为三个独立开关单元，每行固定标签列与开关列；标签列扩大到 128px，保证中英日最长文案也不折行，三行高度和间距一致。
+- `src/renderer/src/components/engine/EngineFieldRenderer.vue`
+  - 将目录图标和目录输入框包装为同一控件单元，避免 Grid 切换时二者被分配到不同的自动行。
+- `src/renderer/src/components/engine/HotwordManager.vue`
+  - 热词表单同步使用确定性 Grid 和 480px 堆叠规则，防止更深层设置在相同宽度再次出现同类问题。
+- `src/renderer/src/views/ControlPage.vue`
+  - 卡片标题与附加操作改为整体可换行，并保持附加操作靠右；删除仅在 360px 强制整列换行的旧规则，避免小信息图标或操作区被单独挤到异常行。
+- `docs/user-manual/zh.md`、`docs/user-manual/en.md`、`docs/user-manual/ja.md`
+  - 同步说明 480px 表单布局切换和选项/开关完整单元行为。
+- `change.md`
+  - 追加本批次授权、根因、文件范围、兼容性、验证与回滚记录。
+
+### 修改前后行为
+
+- 修改前：`.input-item` 使用 `flex-wrap`，浏览器会根据标签文本、Ant Design 控件固有宽度和剩余像素分别决定断行；因此相邻几像素可能出现“标签在左/标签在上”切换、日语或黑色色块单独掉到下一行，以及三个字幕开关按 2+1 分行。折行后的行高不同又进一步表现为元素间距不一致。
+- 修改后：设置面板宽度不超过 480px 时所有普通表单稳定采用上下布局，超过 480px 时稳定采用标签列加控件列。语言、主题、颜色和字幕行数按钮组始终分别保持 3、3、6、4 个选项在同一行并等分宽度。
+- 三个字幕样式开关始终为三个独立行；中文、英文和日文标签均为单行，开关不会脱离自己的标签，行间距固定。
+- 目录输入、热词表单和卡片标题操作同步遵守相同边界，不新增另一套特殊宽度补丁。
+
+### 配置、接口、兼容性与回滚
+
+- 配置 schemaVersion、`leftBarWidth`、字幕样式字段、默认值、迁移和保存行为均无变化。
+- Electron IPC、Python CLI、NDJSON/TCP 协议、识别/翻译/热词业务逻辑和数据结构均无变化。
+- 没有新增、删除或升级依赖；实现使用项目现有 Electron/Chromium 支持的 CSS Grid、容器查询和 `:has()`。
+- 公共渲染代码适用于 Windows、macOS 和 Linux；本批次自动化与生产 renderer 视觉回归在 macOS arm64 环境完成，未声称其他平台实机 GUI 已验证。
+- 精确回滚：恢复本条列出的 6 个渲染代码文件和 3 个用户手册文件即可；无需配置迁移。回滚会重新引入 Flex 临界断行和不等间距问题。
+
+### 验证记录
+
+- `npm run typecheck`：通过，Node TypeScript 与 Vue TypeScript 均无错误。
+- `npm run lint`：通过，无 ESLint 错误。
+- `npm run verify`：最终代码通过；Node 41/41、Python 49/49、类型检查和 ESLint 全部成功。
+- `npm run build`：最终代码通过；Electron main、preload、renderer 生产构建分别转换 23、1、3259 个模块。
+- 生产 renderer 连续宽度回归：在 25% 侧栏下检查 1200、1280、1400、1600、1800、1920、2000、2200px 窗口宽度，对应面板约 299–549px；4 组目标单选按钮的实际行数始终为 1，三个字幕开关的实际行距始终为 32px，body 无横向溢出。
+- 480px 边界精细扫描：窗口宽度从 1900px 到 1960px 每 5px 检查一次；面板在约 479px 保持堆叠、约 480px 切换为双列，切换前后所有按钮组均为单行且无页面溢出。
+- 折叠浮层回归：1199×900 下设置浮层为 360px，语言、主题、颜色和字幕行数均为单行，三个开关的标签与开关垂直对齐，页面无横向溢出。
+- 25%/50% 和三语回归：300px 与约 598px 侧栏下均无目标控件掉行；中文、英文、日文的三个开关标签高度均为 22px，英文 `Show Translation` 不再折成两行。
+- 浏览器回归只向本地临时服务器加载生产 renderer；没有提交表单、访问外部站点或持久化测试配置。临时服务器在验证结束时关闭，测试文件位于 `/private/tmp`，未进入仓库。
+
+### 未执行、风险与后续事项
+
+- 未在 Windows/Linux 实机运行 GUI，也未重新生成三平台安装包；发布前仍建议在目标平台检查系统字体度量差异。
+- 未测试真实音频、识别、翻译或远端热词 API；本批次不触及这些路径。
+- 本批次使用的 480px 是设置面板自身宽度而非窗口宽度，因此仍兼容 25%–50% 用户侧栏设置和 360px 折叠浮层。
+
+### 关键技术决策来源
+
+- 用户提供的三张 macOS 实际窗口截图：确认问题集中在 Flex 临界宽度的自由换行，而非 1200px Sider 断点或数据状态。
+- 本地生产 renderer 的实际 DOM 几何扫描：以按钮 `getBoundingClientRect().top`、开关行高/行距、侧栏实际宽度和 body overflow 作为验收依据。
+- 项目现有 Ant Design Vue 控件结构、Electron 43 Chromium 运行时和已存在的设置面板容器查询边界。
+- 根目录 `AGENTS.md`：遵循最小范围、三语文档同步、跨平台说明、真实验证和 `change.md` 追加制度。
+
+## 2026-08-13 - V2.6.0 小版本与 macOS arm64 构建
+
+### 授权与目标
+
+- 用户要求“编译一下Mac版本 并更新小版本号”。
+- 变更类型：构建、配置、文档、测试。
+- 目标：在不修改系统环境的前提下，将 V2 小版本从 `2.5.0` 提升到 `2.6.0`，并生成 macOS arm64 构建产物。
+- 明确非目标：本次用户未要求依赖检查或升级，因此不主动执行依赖治理；不创建 git tag、commit、branch、PR 或 Release；不做 Windows、Linux、macOS x64/universal 构建；不调用真实麦克风、识别云服务、翻译云服务或远端热词资源。
+- 修改前工作区已有未提交改动，包含设置表单响应式布局相关的渲染代码、三语用户手册和 `change.md` 记录；本批次保留这些改动，只在当前工作区基础上叠加版本号、文档版本标识和 macOS arm64 构建产物。
+
+### 修改文件与原因
+
+- `package.json`
+  - 通过 `npm version minor --no-git-tag-version` 将应用版本更新为 `2.6.0`；未创建 git tag。
+- `package-lock.json`
+  - 同步根包版本到 `2.6.0`。
+- `README.md`、`README_en.md`、`README_ja.md`
+  - 同步版本徽章、发布提示和平台说明到 `v2.6.0`；本次文案只描述 macOS arm64 构建，不新增依赖更新声明。
+- `docs/user-manual/zh.md`、`docs/user-manual/en.md`、`docs/user-manual/ja.md`
+  - 同步用户手册版本标识到 `v2.6.0`；保留本批次前已有的 480px 表单布局说明。
+- `docs/engine-manual/zh.md`、`docs/engine-manual/en.md`、`docs/engine-manual/ja.md`
+  - 同步引擎手册版本标识到 `v2.6.0`。
+- `src/renderer/index.html`
+  - 同步浏览器标题中的可见版本到 `Auto Caption v2.6.0`。
+- `src/renderer/src/components/EngineStatus.vue`
+  - 同步关于信息中的可见版本到 `v2.6.0`。
+- `docs/CHANGELOG.md`
+  - 新增 `v2.6.0` 条目，记录版本同步与 macOS arm64 构建。
+- `dist/latest-mac.yml`
+  - 在生成目录中同步最终签名后 zip 和 DMG 的 `2.6.0` 路径、大小、sha512 与 releaseDate。
+- `change.md`
+  - 追加本批次授权、修改范围、构建上下文、验证、风险和回滚记录。
+- 生成产物：
+  - `engine/dist/main`：PyInstaller 生成的 macOS arm64 Python 引擎可执行文件。
+  - `dist/mac-arm64/Auto Caption.app`：Electron Builder 生成并经本地 ad-hoc 签名的 macOS arm64 应用。
+  - `dist/Auto Caption-2.6.0-arm64-mac.zip` 与 `.blockmap`：签名后 `.app` 重新封装的 zip 和 Electron Builder 26 blockmap。
+  - `dist/auto-caption-2.6.0.dmg` 与 `.blockmap`：包含签名后 `.app` 的 APFS UDZO DMG 和 Electron Builder 26 blockmap。
+
+### 修改前后行为
+
+- 修改前：应用版本源、README、手册、关于窗口、浏览器标题和 macOS 构建元数据为 `2.5.0` / `v2.5.0`。
+- 修改后：应用版本源、可见版本文本、README、用户手册、引擎手册、CHANGELOG 与本次 macOS arm64 产物统一为 `2.6.0` / `v2.6.0`。
+- 本批次没有新增或删除用户配置字段，没有修改配置迁移、IPC、Python stdout/TCP 协议、命令行参数、字幕数据结构、热词语义或远端资源操作。
+- 未修改系统环境；构建使用项目本地 `node_modules` 与 `engine/.venv`，仅在项目目录生成和更新构建产物。
+
+### 兼容性、迁移与回滚
+
+- 本批次只更新发布版本并重新构建 macOS arm64 包，不涉及用户配置迁移。
+- macOS 产物为 arm64；未生成 Intel x64 或 universal 包。
+- 当前构建基于工作区已有的 `electron@43.4.0` 与 `electron-builder@26.15.3`；自动化测试与打包通过，但未在真实安装后的 GUI 中做 Electron 43 交互回归。
+- Electron Builder 26 不再提供旧的 `node_modules/app-builder-bin/mac/app-builder_arm64` 路径；本批次继续使用 `app-builder-lib/out/targets/blockmap/blockmap` 的 `buildBlockMap` API 刷新签名后 zip/DMG 的 blockmap。
+- 由于没有 Developer ID 证书，本次只做本地 ad-hoc 签名，未做 Apple Developer ID 签名或 notarization。首次打开可能仍需用户通过 macOS 安全提示手动允许。
+- 精确回滚：恢复本批次列出的版本/文档文件到 `2.5.0`；恢复 `package.json` 和 `package-lock.json` 根版本；删除或忽略 `dist/` 与 `engine/dist/` 中本次生成的 `2.6.0` 构建产物；如需恢复旧包，使用此前 `2.5.0` 产物或按旧版本号重新构建。
+
+### 验证记录
+
+- `git status --short --branch`：已执行；确认当前在 `main...origin/main`，且工作区开局已有未提交修改，需要保留。
+- `npm version minor --no-git-tag-version`：通过；版本提升到 `2.6.0`，没有创建 git tag；保留既有 npm mirror 配置弃用警告。
+- `rg -n "2\\.5\\.0|v2\\.5\\.0|auto-caption-2\\.5\\.0|Auto Caption-2\\.5\\.0" ...`：应用版本相关文件无旧版本残留；历史 `docs/CHANGELOG.md` 条目和 `package-lock.json` 中依赖自身版本 `@electron/notarize@2.5.0`、`ts-api-utils@2.5.0` 与应用版本无关。
+- `npm run verify`：通过；TypeScript、ESLint、Node 41/41 和 Python 49/49 全部成功；保留既有 `MODULE_TYPELESS_PACKAGE_JSON` 性能警告。
+- `npm run build`：通过；Electron main、preload、renderer 生产构建成功，renderer 由 Vite 6.4.3 转换 3259 个模块。
+- `PYINSTALLER_CONFIG_DIR=/private/tmp/auto-caption-pyinstaller-config ./.venv/bin/pyinstaller --clean --noconfirm ./main.spec`：通过，生成 `engine/dist/main`；保留既有 `pycparser` 可选隐藏导入警告和 `@rpath/libomp.dylib` 解析警告。
+- `engine/dist/main --help`：经用户授权在沙盒外运行后通过，CLI help 正常输出。
+- `./node_modules/.bin/electron-builder --mac`：沙盒内因 `npmmirror.com` DNS 失败；经用户授权沙盒外重试后通过，基于 `electron@43.4.0` 与 `electron-builder@26.15.3` 生成 `.app`、zip、DMG 和初始 blockmap。构建日志提示 duplicate dependency references，并提示缺少 Developer ID 签名证书；未导致构建失败。
+- `file dist/mac-arm64/Auto Caption.app/Contents/MacOS/Auto Caption dist/mac-arm64/Auto Caption.app/Contents/Resources/engine/main`：二者均为 Mach-O 64-bit executable arm64。
+- `plutil -p dist/mac-arm64/Auto Caption.app/Contents/Info.plist | rg 'CFBundleShortVersionString|CFBundleVersion'`：通过，两个版本字段均为 `2.6.0`。
+- `codesign --force --deep --sign - dist/mac-arm64/Auto Caption.app`：通过，本地 ad-hoc 签名完成。
+- `codesign --verify --deep --strict --verbose=2 dist/mac-arm64/Auto Caption.app`：通过，`.app` valid on disk 且 satisfies its Designated Requirement。
+- `ditto -c -k --sequesterRsrc --keepParent ...`：通过，重新封装签名后的 `Auto Caption-2.6.0-arm64-mac.zip`。
+- `hdiutil create -volname 'Auto Caption' -fs APFS -format UDZO -srcfolder ... -ov dist/auto-caption-2.6.0.dmg`：通过，重新生成包含签名后 `.app` 的 DMG；hdiutil 提示该 create 用法已弃用，未影响产物生成。
+- `node -e "const { buildBlockMap } = require('./node_modules/app-builder-lib/out/targets/blockmap/blockmap'); ..."`：通过，生成最终 zip 和 DMG blockmap；最终 zip size `224871311`、sha512 `ePdEWXwPW+XNDC6fboUIgypjorIMnPNGzZi9ViUkvEj9xxVWaCarxS0RG+JZ/vNJVL1BzSIcGjQOvdVxv8yk4A==`；最终 DMG size `245647089`、sha512 `aVSUAh/XP9NL+xHYreCZELsZrRNTEpmWplqVcTWLuxAbZnqUMcdUMN6psS/HqV6LDyfFcQQnNLGoapnp22WEdw==`。
+- `hdiutil verify dist/auto-caption-2.6.0.dmg`：通过，checksum VALID。
+- `unzip -tq dist/Auto Caption-2.6.0-arm64-mac.zip`：通过，无压缩数据错误。
+- `shasum -a 256 dist/auto-caption-2.6.0.dmg dist/Auto Caption-2.6.0-arm64-mac.zip`：
+  - DMG：`7f51ee99047658e33331616472664b6502cab83a91c4698bae473606fbab7990`
+  - ZIP：`93d45c88f8e64e5d4f676c16523122151c7f4deea579248b8e55c1b036cb9869`
+- `git diff --check`：通过，无空白错误。
+
+### 未执行、风险与后续事项
+
+- 未启动安装后的真实 Electron GUI，也未测试麦克风、系统音频权限、真实识别、真实翻译 API 或热词远端资源；本批次验证到自动化测试、生产构建、引擎 help、签名和安装包完整性。
+- 未做 Apple Developer ID 签名和 notarization；若面向外部分发，建议使用正式证书重新签名、公证并再次生成/校验 DMG 与 zip。
+- 未执行 Windows、Linux、macOS x64 或 universal 构建；不能声明这些平台的 `2.6.0` 包已验证。
+- 当前工作区已有 Electron 43 / Electron Builder 26 大版本依赖状态；虽然本次测试和打包通过，仍建议在发布前做安装包级 GUI 回归，尤其关注窗口生命周期、权限提示、自动更新和内置 Python 引擎启动路径。
+
+### 关键外部文档或技术决策来源
+
+- 本地 `package.json`、`package-lock.json`：确认版本源、当前 Electron/Electron Builder 解析版本和 npm 脚本。
+- 本地 `electron-builder.yml`：确认当前平台化 `extraResources` 配置会把 macOS/Linux 引擎打包到 `Resources/engine/main`。
+- Electron Builder 26 本地模块 `app-builder-lib/out/targets/blockmap/blockmap`：用于刷新签名后产物 blockmap。
+- macOS 本机 `codesign`、`hdiutil`、`ditto` 与 Electron Builder 输出：确认最终 `.app`、zip、DMG 的签名、镜像和压缩包完整性。
+- 根目录 `AGENTS.md`：遵循修改前检查、系统环境不修改、三语文档同步、构建产物记录和 `change.md` 追加记录要求。

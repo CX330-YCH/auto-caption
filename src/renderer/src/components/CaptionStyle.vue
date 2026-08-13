@@ -8,7 +8,7 @@
 
     <div class="input-item">
       <span class="input-label">{{ $t('style.lineNumber') }}</span>
-      <a-radio-group v-model:value="currentLineNumber">
+      <a-radio-group v-model:value="currentLineNumber" class="responsive-radio-group">
         <a-radio-button :value="1">1</a-radio-button>
         <a-radio-button :value="2">2</a-radio-button>
         <a-radio-button :value="3">3</a-radio-button>
@@ -80,9 +80,11 @@
       <div class="input-item-value">{{ currentOpacity }}%</div>
     </div>
 
-    <div class="input-item">
-      <span class="input-label">{{ $t('style.preview') }}</span>
-      <a-switch v-model:checked="currentPreview" />
+    <div class="switch-list">
+      <div class="switch-option">
+        <span class="switch-label">{{ $t('style.preview') }}</span>
+        <a-switch v-model:checked="currentPreview" />
+      </div>
       <div class="switch-option">
         <span class="switch-label">{{ $t('style.translation') }}</span>
         <a-switch v-model:checked="currentTransDisplay" />
@@ -377,9 +379,17 @@ watch(changeSignal, (val) => {
 
 .switch-option {
   min-width: 0;
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(112px, 128px) auto;
   align-items: center;
-  gap: 8px;
+  justify-content: start;
+  column-gap: 12px;
+}
+
+.switch-list {
+  display: grid;
+  row-gap: 10px;
+  margin: 12px 0;
 }
 
 .preview-container {
