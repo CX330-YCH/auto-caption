@@ -97,6 +97,54 @@ class FailingProvider(RecognitionProvider):
         return None
 
 
+class StartFatalProvider(RecognitionProvider):
+    def __init__(self):
+        super().__init__()
+        self.stopped = False
+
+    @property
+    def name(self):
+        return 'start_fatal'
+
+    def start(self):
+        self._emit(ProviderError(
+            provider=self.name,
+            message='permanent startup failure',
+            fatal=True,
+        ))
+
+    def accept_audio(self, frame):
+        raise AssertionError('audio must not be accepted after startup fatal')
+
+    def stop(self):
+        self.stopped = True
+
+
+class RuntimeFatalProvider(RecognitionProvider):
+    def __init__(self):
+        super().__init__()
+        self.accepted = 0
+        self.stopped = False
+
+    @property
+    def name(self):
+        return 'runtime_fatal'
+
+    def start(self):
+        self._emit(ProviderReady(self.name, 'ready'))
+
+    def accept_audio(self, frame):
+        self.accepted += 1
+        self._emit(ProviderError(
+            provider=self.name,
+            message='permanent runtime failure',
+            fatal=True,
+        ))
+
+    def stop(self):
+        self.stopped = True
+
+
 class FakeEventSink:
     def __init__(self):
         self.events = []
@@ -170,6 +218,83 @@ class AudioCoreTests(unittest.TestCase):
 
 
 class RecognitionSessionTests(unittest.TestCase):
+    def test_startup_fatal_skips_capture_and_closes_owned_resources(self):
+        provider = StartFatalProvider()
+        audio_source = FakeAudioSource()
+        event_sink = FakeEventSink()
+        translation = FakeTranslationService()
+        capture_starts = []
+        running = [True]
+
+        def request_stop():
+            running[0] = False
+
+        session = RecognitionSession(
+            provider=provider,
+            audio_queue=Queue(),
+            audio_source=audio_source,
+            event_sink=event_sink,
+            translation_service=translation,
+            start_audio_capture=lambda: capture_starts.append(True),
+            is_running=lambda: running[0],
+            request_stop=request_stop,
+            queue_timeout=0.01,
+        )
+
+        session.run()
+
+        self.assertEqual(capture_starts, [])
+        self.assertTrue(provider.stopped)
+        self.assertTrue(audio_source.closed)
+        self.assertTrue(translation.closed)
+        self.assertEqual(
+            sum(
+                isinstance(event, ProviderError) and event.fatal
+                for event in event_sink.events
+            ),
+            1,
+        )
+
+    def test_runtime_fatal_uses_normal_session_cleanup(self):
+        provider = RuntimeFatalProvider()
+        audio_queue = Queue()
+        audio_queue.put(make_frame())
+        audio_source = FakeAudioSource()
+        event_sink = FakeEventSink()
+        translation = FakeTranslationService()
+        capture_starts = []
+        running = [True]
+
+        def request_stop():
+            running[0] = False
+
+        session = RecognitionSession(
+            provider=provider,
+            audio_queue=audio_queue,
+            audio_source=audio_source,
+            event_sink=event_sink,
+            translation_service=translation,
+            start_audio_capture=lambda: capture_starts.append(True),
+            is_running=lambda: running[0],
+            request_stop=request_stop,
+            queue_timeout=0.01,
+        )
+
+        session.run()
+
+        self.assertEqual(capture_starts, [True])
+        self.assertEqual(provider.accepted, 1)
+        self.assertTrue(provider.stopped)
+        self.assertTrue(audio_source.closed)
+        self.assertTrue(translation.closed)
+        self.assertEqual(
+            sum(
+                isinstance(event, ProviderError) and event.fatal
+                for event in event_sink.events
+            ),
+            1,
+        )
+
     def test_session_translates_final_once_and_closes_owned_resources(self):
         provider = FakeProvider()
         audio_queue = Queue()

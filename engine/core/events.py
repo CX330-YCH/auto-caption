@@ -33,6 +33,13 @@ class ProviderInfo:
 
 
 @dataclass(frozen=True)
+class ProviderDebug:
+    provider: str
+    message: str
+    details: dict[str, object] | None = None
+
+
+@dataclass(frozen=True)
 class ProviderStopped:
     provider: str
     message: str
@@ -43,6 +50,7 @@ class ProviderError:
     provider: str
     message: str
     fatal: bool = True
+    details: dict[str, object] | None = None
 
 
 @dataclass(frozen=True)
@@ -57,6 +65,7 @@ RecognitionEvent: TypeAlias = (
     | CaptionFinal
     | ProviderReady
     | ProviderInfo
+    | ProviderDebug
     | ProviderStopped
     | ProviderError
     | UsageUpdated

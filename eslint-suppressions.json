@@ -14,14 +14,6 @@
       "count": 1
     }
   },
-  "src/main/utils/Log.ts": {
-    "@typescript-eslint/explicit-function-return-type": {
-      "count": 6
-    },
-    "@typescript-eslint/no-explicit-any": {
-      "count": 4
-    }
-  },
   "src/main/utils/UtilsFunc.ts": {
     "@typescript-eslint/explicit-function-return-type": {
       "count": 3

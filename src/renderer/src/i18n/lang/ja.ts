@@ -301,6 +301,9 @@ export default {
     "all": "すべて",
     "copySuccess": "字幕がクリップボードにコピーされました",
     "clear": "記録をクリア",
-    "title2": "ログ記録"
+    "title2": "ログ記録",
+    "saveDebug": "完全な Debug ログを保存",
+    "debugSaved": "完全な Debug ログを保存しました",
+    "debugSaveFailed": "Debug ログを保存できませんでした"
   }
 }

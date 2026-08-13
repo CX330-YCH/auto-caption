@@ -2243,3 +2243,263 @@
 - Electron Builder 26 本地模块 `app-builder-lib/out/targets/blockmap/blockmap`：用于刷新签名后产物 blockmap。
 - macOS 本机 `codesign`、`hdiutil`、`ditto` 与 Electron Builder 输出：确认最终 `.app`、zip、DMG 的签名、镜像和压缩包完整性。
 - 根目录 `AGENTS.md`：遵循修改前检查、系统环境不修改、三语文档同步、构建产物记录和 `change.md` 追加记录要求。
+
+## 2026-08-13 - 隐式 Debug 会话、Fun-ASR 幂等失败处理与进程组收尾
+
+### 用户授权与变更目标
+
+- 用户先要求对 Fun-ASR 的重复重连、task-failed 后 `stop()`、错误分类、fatal 退出、进程树强杀和真实回调顺序测试进行技术评审，随后明确改为要求实现：新增本次软件启动的完整 Debug 日志、日志页保存按钮、消除 `Set application config` 刷屏，并完成上述 Fun-ASR 和进程生命周期修复。
+- 用户最新补充要求：Debug 只隐式记录，原有日志记录页不显示 DEBUG；原有 INFO、WARN、ERROR 展示行为保持不变。
+- 用户此前要求 Debug 字段不脱敏，但根目录 `AGENTS.md` 第 13 节强制禁止 API Key、Token 和密码进入日志，二者直接冲突。本批次已向用户说明并遵循更高优先级项目安全约束：诊断字段、错误码、请求 ID、generation 和异常栈尽量完整保留，凭据值始终脱敏。
+- 变更类型：功能、修复、重构、测试、文档。
+- 明确非目标：不升级或安装依赖，不调用真实阿里云/翻译 API，不操作远端热词，不修改配置 schemaVersion，不创建分支/commit/PR/Release，不生成三平台安装包，不扩展到其他 Provider 的重试架构重写。
+- 修改前执行 `git status --short --branch`，工作区为 `main...origin/main` 且无未提交文件；本批次没有覆盖用户已有修改。
+
+### 修改文件与原因
+
+#### Debug 会话、日志安全与用户界面
+
+- `src/main/logging/DebugLogSession.ts`
+  - 新增每次软件启动独立的 UTF-8 JSON Lines 会话写入器；支持 Electron ready 前内存缓冲、初始化后逐条同步持久化及当前会话完整复制导出。
+  - 明确定义 `DEBUG` 为不可见级别，INFO/WARN/ERROR 为原有可见级别。
+- `src/main/utils/Log.ts`
+  - 将所有 `Log.debug/info/warn/error` 统一写入本次 Debug 会话；只有 INFO/WARN/ERROR 继续进入控制台、队列和 Renderer 日志页。
+  - Debug 记录包含单调 sequence、ISO 时间、级别、来源、格式化消息和结构化字段。
+- `src/main/utils/UtilsFunc.ts`
+  - 新增字符串、异常、数组和嵌套对象的递归日志脱敏，覆盖 API Key、Token、Password、Secret、Authorization、Bearer、`sk-*`、URL 查询凭据和现有命令行凭据参数。
+  - 复用既有命令参数敏感项集合，避免普通命令日志与完整 Debug 日志的掩码规则漂移。
+- `src/main/index.ts`
+  - 在 `app.whenReady()` 最前初始化会话，并隐式记录应用版本、平台和架构；不向原日志页增加启动 DEBUG。
+- `src/main/ControlWindow.ts`
+  - 新增 `control.debugLog.export` IPC，由主进程打开系统保存对话框并导出当前会话，Renderer 不接触内部日志路径。
+- `src/renderer/src/components/SoftwareLog.vue`
+  - 在原日志记录页增加“保存完整 Debug 日志”按钮及保存结果提示；原表格数据源和显示级别不变。
+- `src/renderer/src/i18n/lang/zh.ts`、`en.ts`、`ja.ts`
+  - 同步增加按钮、成功和失败文案。
+- `src/renderer/src/stores/softwareLog.ts`
+  - 删除收到日志 IPC 时的冗余 Renderer `console.log`。
+- `src/renderer/src/components/GeneralSetting.vue`
+  - 删除主题变化时两个未归档的 `console.log` 调试输出，避免调试信息绕过统一会话。
+- `tests/node/debugLogSession.test.mjs`
+  - 覆盖初始化前后记录、JSONL 导出、结构化脱敏，以及生产共用路由中 DEBUG 只持久化而 INFO/WARN/ERROR 同时对外投递。
+
+#### application 配置刷屏
+
+- `src/main/config/ApplicationConfigChange.ts`
+  - 新增可独立测试的 application 配置深度变化判断。
+- `src/main/utils/AllConfig.ts`
+  - 深度相同的 application 消息直接忽略；真实变化改记隐式 DEBUG，不再输出可见的 `Set application config` INFO。
+- `src/main/ControlWindow.ts`
+  - 只有配置真实变化后才向字幕窗口广播，阻断相同配置回显循环。
+- `src/renderer/src/stores/generalSetting.ts`
+  - 后端配置回填期间通过 `ApplicationConfigSync` 抑制 watch 回发；取消 `leftBarWidth` 每一步变化都提交的 watch，保留显式一次提交方法。
+- `src/renderer/src/utils/ApplicationConfigSync.ts`
+  - 提取可测试的 Renderer 配置同步门：Vue flush 前禁止反馈提交，revision 保证较早 flush 不会提前结束较新的回填窗口。
+- `src/renderer/src/components/GeneralSetting.vue`
+  - 侧栏宽度滑块改为拖动结束时提交一次，拖动期间仅更新本地布局预览。
+- `tests/node/applicationConfigChange.test.mjs`
+  - 覆盖相同配置抑制、真实布局变化识别、远端回填反馈抑制和连续回填 revision 顺序。
+
+#### Fun-ASR generation 状态机、错误分类和协议诊断
+
+- `engine/core/events.py`、`engine/core/__init__.py`
+  - 新增内部 `ProviderDebug`；`ProviderError` 可带可选结构化 details，不改变既有构造调用。
+- `engine/protocol/output.py`
+  - 新增可选 `debug` stdout command；带 details 的错误增加 `diagnostic.version: 1`，无 details 的旧错误输出保持原格式。
+- `src/main/utils/CaptionEngine.ts`
+  - 接收 `debug` 后只调用 `Log.debug`；错误 `content` 仍进入原日志和用户通知，`diagnostic` 只进入隐式完整日志。
+- `engine/providers/fun_asr.py`
+  - 为每个连接 generation 引入 `connecting/active/failed/closing/closed` 状态；失败声明在锁内幂等完成，使 `on_error`、后续 `on_close` 和最终 `stop()` 最多触发一次重连或一次 fatal。
+  - 从 SDK result 提取并脱敏 status code、code、message、request ID；鉴权、权限、参数、欠费、模型不存在/不可用/禁用等永久错误优先立即 fatal，限流、超时、网络、WebSocket、内部服务和 5xx 错误才进入最多三次指数退避。未知 SDK/传输错误仍受相同上限约束。
+  - task-failed 后从当前 Provider 分离 SDK client，并不再调用其 `stop()`；预期的 `InvalidParameter` 只形成隐藏 Debug，不向用户报错。
+  - 用局部 DashScope 1.26.x 适配器隔离 SDK 内部状态：仅活动 task 可 stop；task-failed 时取消 1.26.7 遗留的非 daemon silence timer。访问私有字段使用 `getattr`/`setattr` 降级，未来 SDK 小版本缺少字段时不会因清理再次失败。
+  - 重连成功接收首个服务端事件后重置连续失败计数；旧 generation 的迟到回调继续忽略。
+- `engine/tests/test_fun_asr_provider.py`
+  - 将伪客户端补齐可停止/失败清理能力及结构化 SDK 结果。
+  - 新增真实顺序 `on_error → on_close → stop` 测试，验证永久失败只上报一次、无重连、失败 client 不 stop、停止事件只一次且密钥不泄漏。
+  - 新增同 generation 重复 `on_error` 后再 `on_close` 仍只启动一次重连、鉴权/权限/模型不可用/限流/服务不可用分类表、`ModelUnavailable + HTTP 503` 仍按永久错误立即终止，以及生产 SDK 适配器取消失败 timer 且不 stop 的测试。
+- `engine/tests/test_protocol_output.py`
+  - 覆盖隐藏 debug command 和版本化错误 diagnostic envelope。
+
+#### fatal 正常退出与跨平台进程树
+
+- `engine/core/session.py`
+  - Provider `start()` 后先发布 pending fatal；只有共享状态仍为 running 才启动音频采集。
+- `engine/main.py`
+  - Provider fatal 将共享状态改为 `stop` 并走 Session 正常清理，不再在 Session 返回后输出 `kill` 要求 Electron 立即强杀。
+- `engine/tests/test_engine_core.py`
+  - 新增启动阶段 fatal 不启动采集、运行中 fatal 退出循环，且两条路径均关闭 Provider、翻译服务和音频资源的测试。
+- `src/main/engine/EngineProcessControl.ts`
+  - 新增可注入、可测试的进程树策略：POSIX 校验 PID 后向 `-pid` 进程组发送 SIGKILL；Windows 调用 taskkill tree 适配器。
+- `src/main/utils/CaptionEngine.ts`
+  - macOS/Linux 以 detached 子进程建立独立 PyInstaller 进程组；强杀覆盖整个组。Windows 从 shell 字符串 `exec` 改为 `execFile('taskkill', ['/pid', pid, '/t', '/f'])`。
+  - close 日志同时记录 exit code 和 signal，便于区分正常退出与强杀。
+- `tests/node/engineProcessControl.test.mjs`
+  - 覆盖 POSIX 独立组策略、负 PID kill、Windows tree kill 和非法 PID 拒绝；在 POSIX 上实际启动 detached Node 父子进程，验证组 SIGKILL 后两者均不存在。
+
+#### 文档、基线和 Lint 记录
+
+- `docs/api-docs/caption-engine.md`
+  - 记录 `debug`、可选错误 diagnostic、Fun-ASR generation 幂等顺序、错误分类和兼容性。
+- `docs/api-docs/electron-ipc.md`
+  - 记录 Debug 导出 IPC、可见/隐藏日志边界、脱敏规则和 application 去重语义。
+- `docs/engine-manual/architecture.md`、`docs/engine-manual/zh.md`、`en.md`、`ja.md`
+  - 同步 Provider 生命周期、SDK 1.26.7 隔离、fatal 正常退出和跨平台强杀策略。
+- `docs/user-manual/zh.md`、`en.md`、`ja.md`
+  - 同步说明完整 Debug 保存按钮、只隐式显示 DEBUG、清空表格与会话文件的区别、导出时点和凭据脱敏。
+- `README.md`、`README_en.md`、`README_ja.md`
+  - 三语功能列表增加隐式 Debug 会话及按启动导出能力。
+- `docs/testing.md`
+  - 更新 Node/Python 离线覆盖与仍未覆盖的真实进程/云端范围。
+- `docs/CHANGELOG.md`
+  - 在未发布条目记录本批次用户可见功能和修复。
+- `eslint-suppressions.json`
+  - `Log.ts` 改用 unknown 并补齐显式返回类型后，执行 ESLint 官方 prune 清除该文件已失效的 suppression；未新增 suppression。
+- `change.md`
+  - 追加本批次完整变更记录。
+
+### 修改前后行为
+
+- 修改前：日志系统没有 DEBUG 级别持久化；关闭或刷新日志页后缺少本次启动的完整诊断；Fun-ASR SDK 结构化失败信息没有保留。
+- 修改后：应用启动即创建 `userData/debug-logs/debug-<ISO>.jsonl`，DEBUG/INFO/WARN/ERROR 全部进入该文件；日志页仍只显示既有 INFO/WARN/ERROR。用户可将点击时为止的完整当前会话另存为 `.jsonl`。
+- 修改前：侧栏滑块变化、配置回显和重复值均可能触发 `Set application config` INFO 与广播，调整窗口/布局时形成刷屏。
+- 修改后：拖动期间只本地预览，结束提交一次；Renderer 回填不反向发送，主进程深度相同配置不保存、不广播，真实变化只留下隐藏 DEBUG。
+- 修改前：同一 Fun-ASR task-failed 的 `on_error`、`on_close` 和 Session `stop()` 可重复消耗重试、重复上报，失败 task 再 stop 产生用户可见 `InvalidParameter`；fatal 后 Electron 收到 `kill` 并立即强杀。
+- 修改后：每个 generation 只能决定一次失败结果；失败 task 只做 abort 清理且不 stop；永久错误立即 fatal，暂时错误有界重试；预期 InvalidParameter 隐藏。fatal 先走 Python 正常资源关闭，只有停止超时/启动超时等异常路径才强杀完整进程树。
+
+### 配置、IPC、协议、数据结构与兼容性
+
+- 配置 schemaVersion、持久字段、默认值和迁移函数均无变化；只改变 application 相同值的处理和滑块发送时机，不需要配置迁移。
+- 新增 Renderer→Main 调用式 IPC `control.debugLog.export`，无请求参数，返回 `saved/canceled/unavailable/failed`；保存路径由主进程系统对话框选择。
+- Python→Electron stdout 协议新增可选 `debug` command，以及可选 `error.diagnostic`/`debug.details`；所有旧 command 与字段均未改名或删除。旧自定义引擎无需产生新字段；新 Electron 仍接受旧 error 格式。
+- Python 内部事件联合新增 `ProviderDebug`，`ProviderError.details` 有默认值，对现有 Provider 调用向后兼容。
+- Python CLI 参数、TCP command、字幕/翻译数据结构、热词配置与远端资源语义无变化。
+- macOS/Linux bundled/custom 引擎现在作为独立进程组启动；pipe/stdout/TCP 行为不变。Windows 继续整树强杀，但改用无 shell 的参数数组，减少命令注入面。
+- 没有新增、删除或升级依赖；DashScope 继续使用项目显式锁定版本。SDK 私有 timer 清理被限制在局部适配器内，且缺少字段时安全降级。
+- 精确回滚：恢复本条列出的代码、测试和文档文件并恢复 `eslint-suppressions.json` 对应旧条目即可；无需配置迁移。回滚会重新引入 Debug 不可导出、application 刷屏、Fun-ASR 重复回调处理和 POSIX 只杀单 PID 的问题。
+
+### 验证记录
+
+- 开发中首次 Python 测试出现 1 个失败：新增 `ProviderDebug` 排在原有 `ProviderReady` 前导致旧断言读取首事件失败；调整为保持原 Ready 顺序后通过。该失败没有隐藏为成功。
+- 开发中首次 TypeScript 检查曾发现无父窗口 `showSaveDialog` 重载和之后的 DEBUG 联合类型未收窄问题；分别用有/无 BrowserWindow 分支及 `VisibleLogLevel` 类型谓词修复。
+- 开发中首次 Lint 报告 `Log.ts` 新方法缺少 7 处显式返回类型；补齐后 Lint只提示旧 suppression 已失效，执行 `npx eslint --cache . --prune-suppressions` 后通过。
+- 完成审计补强测试首次运行失败：Node strip-only 不支持 TypeScript 构造器参数属性，Lint 同时拒绝测试 finally 中的空 catch；改为显式类字段和明确 ESRCH 断言后聚焦测试通过。该失败没有记为成功。
+- `npm run test:node`：前一轮 49/49；补强日志路由、配置同步和真实 POSIX 进程组后最终 53/53。
+- `npm run test:python`：前一轮 54/54；补强运行中 fatal、重复 on_error、错误分类表和 SDK timer 适配器后最终 57/57。
+- `npm run typecheck`：最终通过，Node TypeScript 与 Vue TypeScript 均无错误。
+- `npm run lint`：最终通过，无新增 ESLint 错误或 suppression。
+- `npm run verify`：全部审计测试加入后最终通过；typecheck、Lint、Node 53/53、Python 57/57 全部成功。
+- `npm run build`：最终代码通过；Electron main、preload、renderer 生产构建成功，分别转换 26、1、3260 个模块。
+- `git diff --check`：在代码和文档变更完成后通过；追加本记录后再次执行并记录最终结果。
+- 验证保留 npm 既有 mirror 配置弃用警告和 Node `MODULE_TYPELESS_PACKAGE_JSON` 性能警告；二者未造成测试或构建失败，本批次未扩大范围修改 package/module 策略。
+
+### 未执行、风险与后续事项
+
+- 未连接真实 Fun-ASR 服务、麦克风或系统音频，未产生云端费用；错误分类与回调顺序均使用伪 SDK client/result 离线验证。发布前应显式使用测试账号分别验收鉴权失败、模型不可用、限流/5xx 和正常 stop。
+- 未运行真实 PyInstaller 子进程的启动超时与正常停止，也未在 Windows/Linux 实机验证；POSIX 组强杀已用 detached Node 父子进程验证无遗留。发布前仍应在三平台打包产物上验证正常 fatal 的 exit code/signal，以及超时路径无遗留 PyInstaller 子进程。
+- 未启动 Electron GUI 点击保存对话框或视觉验收按钮；类型、三语键一致性和生产构建已覆盖，仍建议做一次桌面交互回归，确认取消、覆盖文件和无写权限路径的提示。
+- Debug 会话采用同步逐条 append，优先保证崩溃前记录和导出一致性。当前 DEBUG 量低且 application 高频相同值已被抑制；如未来引入高频逐帧 DEBUG，应先测量 I/O 再改为带 flush/背压的异步 writer，不能无界缓存。
+- 每次启动产生独立内部会话文件，目前不自动删除历史 Debug 文件，避免未经用户同意销毁诊断。后续如需保留策略，应单独定义数量/容量上限、用户可见说明和安全删除测试。
+- DashScope 1.26.7 非 daemon silence timer 清理依赖 SDK 私有实现，已通过局部适配和缺字段降级降低风险；升级 SDK 时必须重新检查 task-failed 回调顺序和 timer 行为。
+
+### 关键外部文档与技术决策来源
+
+- 阿里云百炼 Fun-ASR Realtime Python SDK 文档：`https://help.aliyun.com/zh/model-studio/fun-asr-realtime-python-sdk`，用于确认官方 SDK 的 start/send/stop 与 callback 语义。
+- 阿里云百炼 Fun-ASR Realtime WebSocket API：`https://help.aliyun.com/zh/model-studio/fun-asr-realtime-websocket-api`，用于错误结果、task 生命周期和地域端点边界。
+- 项目锁定的 DashScope 1.26.7 本地实现：用于复现 task-failed 后 `_running` 与 `_silence_timer` 的实际状态；未通过猜测改写裸 WebSocket。
+- Node.js `child_process` detached 文档：`https://nodejs.org/api/child_process.html#optionsdetached`；POSIX `kill(2)` 进程组语义：`https://man7.org/linux/man-pages/man2/kill.2.html`。
+- 用户提供的 15:27:51–15:28:17 日志和错误截图：确认真实顺序为三次任务启动/重连耗尽、重复最终失败、随后 stop InvalidParameter、Electron 强杀且进程延迟退出。
+- 根目录 `AGENTS.md`：决定凭据必须脱敏、协议增量兼容、三语文档同步、离线测试边界、跨平台说明和本记录内容。
+
+## 2026-08-13 - V2.7.0 小版本与 macOS arm64 构建
+
+### 授权与目标
+
+- 用户要求“编译一下Mac版本 并更新小版本号”。
+- 变更类型：构建、配置、文档、测试。
+- 目标：在不修改系统环境的前提下，将 V2 小版本从 `2.6.0` 提升到 `2.7.0`，并生成 macOS arm64 构建产物。
+- 明确非目标：本次用户未要求依赖检查或升级，因此不主动执行依赖治理；不创建 git tag、commit、branch、PR 或 Release；不做 Windows、Linux、macOS x64/universal 构建；不调用真实麦克风、识别云服务、翻译云服务或远端热词资源。
+- 修改前工作区已有大量未提交改动，包含 Debug 日志、配置同步、Fun-ASR 生命周期、协议文档、进程树控制、测试和三语文档；本批次保留这些改动，只在当前工作区基础上叠加版本号、文档版本标识和 macOS arm64 构建产物。
+
+### 修改文件与原因
+
+- `package.json`
+  - 通过 `npm version minor --no-git-tag-version` 将应用版本更新为 `2.7.0`；未创建 git tag。
+- `package-lock.json`
+  - 同步根包版本到 `2.7.0`。
+- `README.md`、`README_en.md`、`README_ja.md`
+  - 同步版本徽章、发布提示和平台说明到 `v2.7.0`；保留本批次前已有的 Debug 日志功能说明。
+- `docs/user-manual/zh.md`、`docs/user-manual/en.md`、`docs/user-manual/ja.md`
+  - 同步用户手册版本标识到 `v2.7.0`；保留本批次前已有的完整 Debug 日志保存说明。
+- `docs/engine-manual/zh.md`、`docs/engine-manual/en.md`、`docs/engine-manual/ja.md`
+  - 同步引擎手册版本标识到 `v2.7.0`；保留本批次前已有的 Fun-ASR generation 幂等和 debug 协议说明。
+- `src/renderer/index.html`
+  - 同步浏览器标题中的可见版本到 `Auto Caption v2.7.0`。
+- `src/renderer/src/components/EngineStatus.vue`
+  - 同步关于信息中的可见版本到 `v2.7.0`。
+- `docs/CHANGELOG.md`
+  - 新增 `v2.7.0` 条目，记录版本同步与 macOS arm64 构建。
+- `dist/latest-mac.yml`
+  - 在生成目录中同步最终签名后 zip 和 DMG 的 `2.7.0` 路径、大小、sha512 与 releaseDate。
+- `change.md`
+  - 追加本批次授权、修改范围、构建上下文、验证、风险和回滚记录。
+- 生成产物：
+  - `engine/dist/main`：PyInstaller 生成的 macOS arm64 Python 引擎可执行文件。
+  - `dist/mac-arm64/Auto Caption.app`：Electron Builder 生成并经本地 ad-hoc 签名的 macOS arm64 应用。
+  - `dist/Auto Caption-2.7.0-arm64-mac.zip` 与 `.blockmap`：签名后 `.app` 重新封装的 zip 和 Electron Builder 26 blockmap。
+  - `dist/auto-caption-2.7.0.dmg` 与 `.blockmap`：包含签名后 `.app` 的 APFS UDZO DMG 和 Electron Builder 26 blockmap。
+
+### 修改前后行为
+
+- 修改前：应用版本源、README、手册、关于窗口、浏览器标题和 macOS 构建元数据为 `2.6.0` / `v2.6.0`。
+- 修改后：应用版本源、可见版本文本、README、用户手册、引擎手册、CHANGELOG 与本次 macOS arm64 产物统一为 `2.7.0` / `v2.7.0`。
+- 本批次没有新增或删除用户配置字段，没有修改配置迁移、IPC、Python stdout/TCP 协议、命令行参数、字幕数据结构、热词语义或远端资源操作。
+- 未修改系统环境；构建使用项目本地 `node_modules` 与 `engine/.venv`，仅在项目目录生成和更新构建产物。
+
+### 兼容性、迁移与回滚
+
+- 本批次只更新发布版本并重新构建 macOS arm64 包，不涉及用户配置迁移。
+- macOS 产物为 arm64；未生成 Intel x64 或 universal 包。
+- 当前构建基于工作区已有的 `electron@43.4.0` 与 `electron-builder@26.15.3`；自动化测试与打包通过，但未在真实安装后的 GUI 中做 Electron 43 交互回归。
+- Electron Builder 26 不再提供旧的 `node_modules/app-builder-bin/mac/app-builder_arm64` 路径；本批次继续使用 `app-builder-lib/out/targets/blockmap/blockmap` 的 `buildBlockMap` API 刷新签名后 zip/DMG 的 blockmap。
+- 由于没有 Developer ID 证书，本次只做本地 ad-hoc 签名，未做 Apple Developer ID 签名或 notarization。首次打开可能仍需用户通过 macOS 安全提示手动允许。
+- 精确回滚：恢复本批次列出的版本/文档文件到 `2.6.0`；恢复 `package.json` 和 `package-lock.json` 根版本；删除或忽略 `dist/` 与 `engine/dist/` 中本次生成的 `2.7.0` 构建产物；如需恢复旧包，使用此前 `2.6.0` 产物或按旧版本号重新构建。
+
+### 验证记录
+
+- `git status --short --branch`：已执行；确认当前在 `main...origin/main`，且工作区开局已有大量未提交修改，需要保留。
+- `npm version minor --no-git-tag-version`：通过；版本提升到 `2.7.0`，没有创建 git tag；保留既有 npm mirror 配置弃用警告。
+- `rg -n "2\\.6\\.0|v2\\.6\\.0|auto-caption-2\\.6\\.0|Auto Caption-2\\.6\\.0" ...`：应用版本相关文件无旧版本残留；历史 `docs/CHANGELOG.md` 条目和 `package-lock.json` 中依赖自身版本 `mime@2.6.0` 与应用版本无关。
+- `npm run verify`：通过；TypeScript、ESLint、Node 53/53 和 Python 57/57 全部成功；保留既有 `MODULE_TYPELESS_PACKAGE_JSON` 性能警告。
+- `npm run build`：通过；Electron main、preload、renderer 生产构建成功，分别转换 26、1、3260 个模块。
+- `PYINSTALLER_CONFIG_DIR=/private/tmp/auto-caption-pyinstaller-config ./.venv/bin/pyinstaller --clean --noconfirm ./main.spec`：通过，生成 `engine/dist/main`；保留既有 `pycparser` 可选隐藏导入警告和 `@rpath/libomp.dylib` 解析警告。
+- `engine/dist/main --help`：经用户授权在沙盒外运行后通过，CLI help 正常输出。
+- `./node_modules/.bin/electron-builder --mac`：沙盒内因 `npmmirror.com` DNS 失败；经用户授权沙盒外重试后通过，基于 `electron@43.4.0` 与 `electron-builder@26.15.3` 生成 `.app`、zip、DMG 和初始 blockmap。构建日志提示 duplicate dependency references，并提示缺少 Developer ID 签名证书；未导致构建失败。
+- `file dist/mac-arm64/Auto Caption.app/Contents/MacOS/Auto Caption dist/mac-arm64/Auto Caption.app/Contents/Resources/engine/main`：二者均为 Mach-O 64-bit executable arm64。
+- `plutil -p dist/mac-arm64/Auto Caption.app/Contents/Info.plist | rg 'CFBundleShortVersionString|CFBundleVersion'`：通过，两个版本字段均为 `2.7.0`。
+- `codesign --force --deep --sign - dist/mac-arm64/Auto Caption.app`：通过，本地 ad-hoc 签名完成。
+- `codesign --verify --deep --strict --verbose=2 dist/mac-arm64/Auto Caption.app`：通过，`.app` valid on disk 且 satisfies its Designated Requirement。
+- `ditto -c -k --sequesterRsrc --keepParent ...`：通过，重新封装签名后的 `Auto Caption-2.7.0-arm64-mac.zip`。
+- `hdiutil create -volname 'Auto Caption' -fs APFS -format UDZO -srcfolder ... -ov dist/auto-caption-2.7.0.dmg`：通过，重新生成包含签名后 `.app` 的 DMG；hdiutil 提示该 create 用法已弃用，未影响产物生成。
+- `node -e "const { buildBlockMap } = require('./node_modules/app-builder-lib/out/targets/blockmap/blockmap'); ..."`：通过，生成最终 zip 和 DMG blockmap；最终 zip size `224887308`、sha512 `ZscQMJUzfwGBx+xGsx2hfFn+R9aa78Brk1V/i2HsWcWKR6fxFEO1AA6R9qc55JmxMLzv9yRbJYQZR9TKfibK7w==`；最终 DMG size `244878808`、sha512 `Bd3eAztFwmL8ka/RjEmJ6pki9FGQGDcXN8J5crsheSU5jB9ApLuOOtNG9l2j3rBlM1x+NnvT0dFO0078Q+veGg==`。
+- `hdiutil verify dist/auto-caption-2.7.0.dmg`：通过，checksum VALID。
+- `unzip -tq dist/Auto Caption-2.7.0-arm64-mac.zip`：通过，无压缩数据错误。
+- `shasum -a 256 dist/auto-caption-2.7.0.dmg dist/Auto Caption-2.7.0-arm64-mac.zip`：
+  - DMG：`3ba131fc5dbe7479735436bd94117ec9e5ef7d63c464987f80731065fb64388e`
+  - ZIP：`75050ee7194db8d85984d2b4a0870b698eed998275fb9f0fb5c73b3765bc1bfc`
+- `git diff --check`：通过，无空白错误。
+
+### 未执行、风险与后续事项
+
+- 未启动安装后的真实 Electron GUI，也未测试麦克风、系统音频权限、真实识别、真实翻译 API 或热词远端资源；本批次验证到自动化测试、生产构建、引擎 help、签名和安装包完整性。
+- 未做 Apple Developer ID 签名和 notarization；若面向外部分发，建议使用正式证书重新签名、公证并再次生成/校验 DMG 与 zip。
+- 未执行 Windows、Linux、macOS x64 或 universal 构建；不能声明这些平台的 `2.7.0` 包已验证。
+- 当前工作区已有 Electron 43 / Electron Builder 26 大版本依赖状态，并且包含本批次前已有的大量功能改动；虽然本次测试和打包通过，仍建议在发布前做安装包级 GUI 回归，尤其关注窗口生命周期、权限提示、自动更新、Debug 日志导出和内置 Python 引擎启动路径。
+
+### 关键外部文档或技术决策来源
+
+- 本地 `package.json`、`package-lock.json`：确认版本源、当前 Electron/Electron Builder 解析版本和 npm 脚本。
+- 本地 `electron-builder.yml`：确认当前平台化 `extraResources` 配置会把 macOS/Linux 引擎打包到 `Resources/engine/main`。
+- Electron Builder 26 本地模块 `app-builder-lib/out/targets/blockmap/blockmap`：用于刷新签名后产物 blockmap。
+- macOS 本机 `codesign`、`hdiutil`、`ditto` 与 Electron Builder 输出：确认最终 `.app`、zip、DMG 的签名、镜像和压缩包完整性。
+- 根目录 `AGENTS.md`：遵循修改前检查、系统环境不修改、三语文档同步、构建产物记录和 `change.md` 追加记录要求。

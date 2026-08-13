@@ -11,7 +11,6 @@ export const useSoftwareLogStore = defineStore('softwareLog', () => {
 
   window.electron.ipcRenderer.on('control.softwareLog.add', (_, log) => {
     softwareLogs.value.push(log)
-    console.log(log)
   })
 
   return {

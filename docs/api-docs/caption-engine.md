@@ -87,6 +87,8 @@ Python 内部已经区分 `CaptionPartial` 和 `CaptionFinal`，但为保持现�
 
 Fun-ASR 的 `sentence_end: false/true` 分别映射为内部 partial/final。服务端 `begin_time`/`end_time` 毫秒偏移会基于本次任务起始时间转换为协议中的 `time_s`/`time_t`，不会用回调到达时间冒充音频时间；缺少 partial 结束时间时才以已发送音频时长作为保守上界。服务端心跳不形成 stdout 消息；任务用量映射为 `usage`，失败映射为已脱敏的 `error`，外部 command envelope 没有变化。
 
+每个 Fun-ASR 连接 generation 都维护独立生命周期状态。同一 generation 的 `on_error`、随后到达的 `on_close` 以及 Session 最后的 `stop()` 只允许触发一次重连或一次最终失败。收到服务端 task-failed 后不会再向已失效 SDK task 发送 `stop()`；SDK 因该竞态产生的预期 `InvalidParameter` 只进入隐藏的 `debug` 诊断，不形成用户错误。鉴权、权限、参数和模型不可用等永久失败立即终止；限流、超时、网络和 5xx 等暂时失败才进入最多三次的指数退避重连。未知 SDK/传输错误仍受相同重试上限约束。
+
 Fun-ASR 的预编译热词表 ID 和上下文术语是任务启动参数，不新增 stdout/TCP command。每次有界重连产生新任务时都会重新传入；上下文按一条 `user/input_text` 消息发送，最多 400 字符。
 
 ### `translation`
@@ -102,7 +104,7 @@ Fun-ASR 的预编译热词表 ID 和上下文术语是任务启动参数，不�
 
 异步翻译结果。现有实现通过 `time_s` 关联字幕；该字段和文本字段必须是字符串。
 
-### `print`、`info`、`warn`、`error`、`usage`
+### `print`、`debug`、`info`、`warn`、`error`、`usage`
 
 这些事件共用以下结构：
 
@@ -114,12 +116,34 @@ Fun-ASR 的预编译热词表 ID 和上下文术语是任务启动参数，不�
 ```
 
 - `print`：输出普通引擎文本，不计入应用日志。
+- `debug`：只写入本次软件启动的完整 Debug 日志文件，不进入原有日志记录页，也不弹出通知。
 - `info`：引擎提示信息。
 - `warn`：引擎警告信息。
 - `error`：引擎错误信息，并在前端显示错误消息。
 - `usage`：引擎结束时的计费或资源消耗信息。
 
 `content` 必须是字符串，且不得包含 API Key、Token 或密码。
+
+内置引擎可以在 `debug` 上附加 `details` 对象；也可以在 `error` 上附加以下版本化诊断。Electron 仅将诊断写入完整 Debug 日志，用户通知仍只显示 `content`：
+
+```js
+{
+  command: "error",
+  content: "Fun-ASR task failed (InvalidApiKey).",
+  diagnostic: {
+    version: 1,
+    provider: "fun_asr",
+    generation: 1,
+    retryable: false,
+    statusCode: 401,
+    code: "InvalidApiKey",
+    serviceMessage: "...",
+    requestId: "..."
+  }
+}
+```
+
+除 `version` 外的诊断字段均可缺省。`serviceMessage` 和所有 `details` 在 Python 与 Electron 两层再次脱敏；API Key、Token、密码或 Authorization 不得写入协议或日志。
 
 ## TCP 命令
 
@@ -149,6 +173,7 @@ Electron 发送命令时只记录命令名，不记录 `content`，避免后续�
 ## 兼容性说明
 
 - `command` 名称和现有字段没有改名或删除，原有自定义引擎事件保持兼容。
+- `debug` 是新增的可选命令；`error.diagnostic` 和 `debug.details` 是可选附加字段。旧自定义引擎无需产生这些字段，新 Electron 会忽略它不认识的附加字段。
 - 新版 Electron 发出的 TCP JSON 末尾新增明确的换行帧边界。JSON 解析器会把该换行视为空白，因此通常兼容原先直接对单次读取调用 `json.loads` 的自定义引擎；自定义实现仍应尽快改为增量 NDJSON 解码。
 - 末尾无换行消息仅作为连接/流关闭时的旧实现兼容，不支持在长连接中连续发送多条无分隔 JSON。
 - 本阶段没有新增协议版本字段；这是对既有 `command` 协议分帧规则的明确化和容错修复，而不是新的业务消息版本。

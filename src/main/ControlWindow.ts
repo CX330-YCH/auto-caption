@@ -88,6 +88,25 @@ class ControlWindow {
       return result.filePaths[0];
     })
 
+    ipcMain.handle('control.debugLog.export', async () => {
+      const timestamp = new Date().toISOString().replace(/[:.]/g, '-')
+      const options = {
+        defaultPath: `auto-caption-debug-${timestamp}.jsonl`,
+        filters: [{ name: 'JSON Lines', extensions: ['jsonl'] }]
+      }
+      const result = this.window
+        ? await dialog.showSaveDialog(this.window, options)
+        : await dialog.showSaveDialog(options)
+      if (result.canceled || !result.filePath) return 'canceled'
+      try {
+        return Log.exportDebugSession(result.filePath) ? 'saved' : 'unavailable'
+      }
+      catch (error) {
+        Log.error('Unable to export debug log', error)
+        return 'failed'
+      }
+    })
+
     ipcMain.handle('control.engine.info', async () => {
       const info: EngineInfo = {
         pid: 0, ppid: 0, port: 0, cpu: 0, mem: 0, elapsed: 0
@@ -108,9 +127,11 @@ class ControlWindow {
     })
 
     ipcMain.on('control.application.change', (_, args) => {
+      let changed = false
       if (!this.applyConfig('application', () => {
-        allConfig.setApplication(args)
+        changed = allConfig.setApplication(args)
       })) return
+      if (!changed) return
       if (captionWindow.window) {
         captionWindow.window.webContents.send(
           'both.application.set',

@@ -2,13 +2,61 @@ function passwordMasking(pwd: string) {
   return pwd.replace(/./g, '*')
 }
 
+const SENSITIVE_KEY = /(api.?key|token|password|secret|authorization)/i
+const SENSITIVE_ARGUMENTS = new Set(['-k', '-okey', '-gkey', '-fkey'])
+
+export function redactSensitiveText(value: string): string {
+  return value
+    .replace(/\bsk-(?:sp-)?[A-Za-z0-9_-]{8,}\b/g, '<redacted>')
+    .replace(/\bBearer\s+[^\s"']+/gi, 'Bearer <redacted>')
+    .replace(
+      /([?&](?:api_?key|token|password|secret)=)[^&\s]+/gi,
+      '$1<redacted>'
+    )
+}
+
+export function redactSensitiveValue(
+  value: unknown,
+  key: string = ''
+): unknown {
+  if (SENSITIVE_KEY.test(key)) {
+    return typeof value === 'string' && value.length === 0
+      ? ''
+      : '<redacted>'
+  }
+  if (typeof value === 'string') return redactSensitiveText(value)
+  if (Array.isArray(value)) {
+    const redacted = value.map((item) => redactSensitiveValue(item))
+    for (let index = 1; index < redacted.length; index++) {
+      if (typeof value[index - 1] === 'string' &&
+          SENSITIVE_ARGUMENTS.has(value[index - 1])) {
+        redacted[index] = '<redacted>'
+      }
+    }
+    return redacted
+  }
+  if (value instanceof Error) {
+    return {
+      name: value.name,
+      message: redactSensitiveText(value.message),
+      stack: value.stack ? redactSensitiveText(value.stack) : undefined
+    }
+  }
+  if (typeof value === 'object' && value !== null) {
+    return Object.fromEntries(
+      Object.entries(value).map(([childKey, childValue]) => [
+        childKey,
+        redactSensitiveValue(childValue, childKey)
+      ])
+    )
+  }
+  return value
+}
+
 export function passwordMaskingForList(args: string[]) {
   const maskedArgs = [...args]
   for(let i = 1; i < maskedArgs.length; i++) {
-    if(
-      maskedArgs[i-1] === '-k' || maskedArgs[i-1] === '-okey' ||
-      maskedArgs[i-1] === '-gkey' || maskedArgs[i-1] === '-fkey'
-    ) {
+    if(SENSITIVE_ARGUMENTS.has(maskedArgs[i-1])) {
       maskedArgs[i] = passwordMasking(maskedArgs[i])
     }
   }

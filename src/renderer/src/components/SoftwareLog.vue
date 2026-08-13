@@ -3,10 +3,13 @@
     <div class="log-title">
       <span>{{ $t('log.title2') }}</span>
     </div>
-    <a-button
-      danger
-      @click="softwareLog.clear()"
-    >{{ $t('log.clear') }}</a-button>
+    <div class="log-actions">
+      <a-button @click="saveDebugLog">{{ $t('log.saveDebug') }}</a-button>
+      <a-button
+        danger
+        @click="softwareLog.clear()"
+      >{{ $t('log.clear') }}</a-button>
+    </div>
   </div>
   <a-table
     :columns="columns"
@@ -37,9 +40,21 @@ import { ref } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useSoftwareLogStore } from '@renderer/stores/softwareLog'
 import { type SoftwareLogItem } from '../types'
+import { message } from 'ant-design-vue'
+import { useI18n } from 'vue-i18n'
+
+const { t } = useI18n()
 
 const softwareLog = useSoftwareLogStore()
 const { softwareLogs } = storeToRefs(softwareLog)
+
+async function saveDebugLog(): Promise<void> {
+  const result = await window.electron.ipcRenderer.invoke(
+    'control.debugLog.export'
+  )
+  if (result === 'saved') message.success(t('log.debugSaved'))
+  else if (result !== 'canceled') message.error(t('log.debugSaveFailed'))
+}
 
 const pagination = ref({
   current: 1,
@@ -110,6 +125,12 @@ const columns = [
   font-size: 24px;
   font-weight: bold;
   margin: 10px 0;
+}
+
+.log-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
 }
 
 .software-log-table {

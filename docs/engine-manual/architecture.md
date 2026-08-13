@@ -162,7 +162,9 @@ API Key 字段在 `CliOptions` 和 `ProviderConfig` 的 `repr` 中隐藏。未�
 - SDK callback 中的 `sentence_end` 映射为 partial/final；心跳被忽略；服务端毫秒时间戳映射为任务起点上的字幕时间；duration 用量映射为 `UsageUpdated`。
 - API Key 可来自 `-fkey` 或 `DASHSCOPE_API_KEY`。Workspace ID、API Key 和专属 Endpoint 必须属于同一地域；配置层只接受官方北京或新加坡 WSS 主机和固定 inference 路径。
 - 非主动关闭连接最多重连 3 次，退避为 0.25、0.5、1 秒；重连期间最多保留约 5 秒（50 帧）新音频，溢出时丢弃最旧帧并上报信息事件。回调带连接 generation，旧连接迟到事件会被忽略。
-- `stop()` 由 SDK 发送 `finish-task` 并等待剩余结果和 `task-finished`/失败。Session 再冲刷统一事件，`ProviderStopped` 只发布一次。
+- generation 使用 `connecting → active → failed/closing → closed` 状态机。`on_error` 先到时会原子声明失败，后续 `on_close` 和 Session `stop()` 只执行幂等清理，不重复重连或上报。鉴权、权限、参数、欠费和模型不可用属于永久错误并立即 fatal；限流、超时、网络与 5xx 才重试，未知 SDK 错误仍受三次上限约束。
+- `stop()` 只对仍处于活动状态的 SDK task 发送 `finish-task` 并等待剩余结果和 `task-finished`。task-failed 后不再调用 SDK `stop()`；DashScope SDK 1.26.7 的失败任务 silence timer 由版本隔离适配器取消，避免 PyInstaller 子进程额外存活约 23 秒。预期的 `InvalidParameter` 仅形成隐藏 `ProviderDebug`。Session 再冲刷统一事件，`ProviderStopped` 只发布一次。
+- fatal `ProviderError` 将共享状态切换为 stop，Session 依次关闭 Provider、翻译服务、音频流和 TCP Server 后正常退出，不再主动输出 `kill`。Electron 仅在停止超时等异常路径强杀；POSIX 打包引擎作为独立进程组启动，macOS/Linux 强杀对整个组发送 `SIGKILL`，Windows 继续使用 `taskkill /T /F`。
 - `HotwordRuntimeConfig` 在每个新 SDK client 的 `Recognition(...)` 构造参数中传入预编译 `vocabulary_id`，并在 `start()` 传入 `raw_input.context`；重连任务重复构造和传入。不能把新版预编译词表误传给 SDK 的旧 `phrase_id` 接口。热词表目标模型必须与识别模型一致，上下文合计最多 400 字符且没有权重。
 - Fun-ASR 不提供集成翻译，final 由统一翻译服务提交一次。
 

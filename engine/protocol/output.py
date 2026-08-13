@@ -5,6 +5,7 @@ from core import (
     CaptionFinal,
     CaptionPartial,
     ProviderError,
+    ProviderDebug,
     ProviderInfo,
     ProviderReady,
     ProviderStopped,
@@ -41,8 +42,24 @@ class ProtocolEventSink:
             })
         elif isinstance(event, (ProviderReady, ProviderInfo, ProviderStopped)):
             self._command_writer('info', event.message)
+        elif isinstance(event, ProviderDebug):
+            self._object_writer({
+                'command': 'debug',
+                'content': event.message,
+                'details': event.details or {},
+            })
         elif isinstance(event, ProviderError):
-            self._command_writer('error', event.message)
+            if event.details:
+                self._object_writer({
+                    'command': 'error',
+                    'content': event.message,
+                    'diagnostic': {
+                        'version': 1,
+                        **event.details,
+                    },
+                })
+            else:
+                self._command_writer('error', event.message)
         elif isinstance(event, UsageUpdated):
             content = f'{event.value} {event.unit}'.strip()
             self._command_writer('usage', content)

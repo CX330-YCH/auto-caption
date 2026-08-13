@@ -1,6 +1,6 @@
 # 字幕引擎说明文档
 
-对应版本：v2.6.0
+对应版本：v2.7.0
 
 ![](../../assets/media/structure_zh.png)
 
@@ -219,6 +219,8 @@ python main.py -e fun_asr -s ja -t zh -a 0 -c 10 \
 ```
 
 该 Provider 使用官方 DashScope SDK，输入必须为 16 kHz 单声道 PCM16。partial/final、服务端时间戳、用量和生命周期只转换为统一事件；final 翻译、stdout 和关闭流程仍由 Session/协议层负责。`HotwordRuntimeConfig` 校验热词表目标模型与识别模型一致，并在每次新任务启动时传入预编译热词 ID 和最多 400 字符的无权重上下文。远端 CRUD 由 `services/hotwords.py` 的独立一次性 worker 承担，不进入 Provider 或公开字幕协议。
+
+Fun-ASR 为每个连接 generation 维护幂等状态：同一次任务的 `on_error → on_close → stop` 最多触发一次重连或一次 fatal。永久服务错误立即终止，暂时错误才进行三次有界退避重连；task-failed 后不会再次调用 SDK `stop()`。生命周期细节通过隐藏的 `debug` 协议事件写入完整 Debug 日志，原有日志记录页不显示 DEBUG。fatal 会请求 Session 正常关闭资源；只有超时等异常路径才由 Electron 强杀整个打包进程树。
 
 ## 其他
 

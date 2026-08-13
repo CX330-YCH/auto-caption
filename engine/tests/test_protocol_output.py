@@ -10,6 +10,7 @@ from core import (  # noqa: E402
     CaptionFinal,
     CaptionPartial,
     ProviderError,
+    ProviderDebug,
     ProviderInfo,
     ProviderReady,
     UsageUpdated,
@@ -90,6 +91,47 @@ class ProtocolEventSinkTests(unittest.TestCase):
         ))
 
         self.assertEqual(objects[0]['translation'], '你好')
+
+    def test_maps_hidden_debug_and_versioned_error_diagnostics(self):
+        objects = []
+        sink = ProtocolEventSink(
+            command_writer=lambda command, content: None,
+            object_writer=objects.append,
+        )
+
+        sink.publish(ProviderDebug(
+            'fun_asr',
+            'generation failed',
+            {'generation': 2},
+        ))
+        sink.publish(ProviderError(
+            'fun_asr',
+            'task failed',
+            True,
+            {
+                'provider': 'fun_asr',
+                'generation': 2,
+                'code': 'InvalidApiKey',
+            },
+        ))
+
+        self.assertEqual(objects, [
+            {
+                'command': 'debug',
+                'content': 'generation failed',
+                'details': {'generation': 2},
+            },
+            {
+                'command': 'error',
+                'content': 'task failed',
+                'diagnostic': {
+                    'version': 1,
+                    'provider': 'fun_asr',
+                    'generation': 2,
+                    'code': 'InvalidApiKey',
+                },
+            },
+        ])
 
 
 if __name__ == '__main__':

@@ -46,6 +46,7 @@
         <span class="input-label">{{ $t('general.barWidth') }}</span>
         <a-slider class="span-input"
           :min="6" :max="12" v-model:value="leftBarWidth"
+          @afterChange="generalSettingStore.sendApplicationConfig"
         />
         <div class="input-item-value">{{ (leftBarWidth * 100 / 24).toFixed(0) }}%</div>
       </div>
@@ -88,11 +89,6 @@ watch(realTheme, (val) => {
   } else {
     colorList.value = colorListLight
   }
-  console.log(val)
-})
-
-watch(uiTheme, (val) => {
-  console.log(val)
 })
 </script>
 

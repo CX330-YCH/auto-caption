@@ -1,6 +1,6 @@
 # Caption Engine Documentation
 
-Corresponding version: v2.6.0
+Corresponding version: v2.7.0
 
 ![](../../assets/media/structure_en.png)
 
@@ -219,6 +219,8 @@ python main.py -e fun_asr -s en -t zh -a 0 -c 10 \
 ```
 
 The Provider uses the official DashScope SDK and accepts 16 kHz mono PCM16. `HotwordRuntimeConfig` requires the vocabulary target model to match recognition and supplies the precompiled vocabulary ID plus at most 400 characters of unweighted context at every task start, including reconnects. Remote CRUD runs through the separate one-shot worker in `services/hotwords.py`; it is not part of the Provider or the public caption protocol.
+
+Fun-ASR keeps an idempotent state for every connection generation: one task's `on_error → on_close → stop` sequence can cause at most one reconnect or one fatal result. Permanent service errors stop immediately, while transient errors use up to three bounded backoff retries; the SDK `stop()` method is not called after task-failed. Lifecycle diagnostics use the hidden `debug` protocol event and are written only to the complete Debug log, not the existing Software Log view. A fatal event asks the Session to close normally; Electron force-kills the complete packaged process tree only on exceptional timeout paths.
 
 This Provider uses the official DashScope SDK and accepts 16 kHz mono PCM16. It only maps partial/final results, server timestamps, usage, and lifecycle callbacks into unified events; the Session and protocol layer retain translation, stdout, and shutdown responsibilities. Hotwords are not supported in this stage.
 

@@ -48,7 +48,8 @@ class RecognitionSession:
         try:
             self._provider.start()
             self._publish_pending_events()
-            self._start_audio_capture()
+            if self._is_running():
+                self._start_audio_capture()
             while self._is_running():
                 try:
                     frame = self._audio_queue.get(timeout=self._queue_timeout)

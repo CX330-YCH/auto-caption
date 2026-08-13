@@ -1,4 +1,4 @@
-import { reactive, ref, toRaw, toRefs, watch } from 'vue'
+import { nextTick, reactive, ref, toRaw, toRefs, watch } from 'vue'
 import { defineStore } from 'pinia'
 import { i18n } from '../i18n'
 import type { ApplicationConfig } from '../../../shared/config/schema'
@@ -6,6 +6,7 @@ import { createDefaultConfig } from '../../../shared/config/schema'
 
 import { breakOptions, setThemeColor, getTheme } from '../i18n'
 import { useCaptionStyleStore } from './captionStyle'
+import { ApplicationConfigSync } from '../utils/ApplicationConfigSync'
 
 type RealTheme = 'light' | 'dark'
 
@@ -21,18 +22,24 @@ export const useGeneralSettingStore = defineStore('generalSetting', () => {
   const { leftBarWidth } = toRefs(applicationConfig.layout)
   const realTheme = ref<RealTheme>('light')
   const antdTheme = ref(getTheme())
-
-  function sendApplicationConfig(): void {
-    window.electron.ipcRenderer.send(
+  const applicationConfigSync = new ApplicationConfigSync(
+    () => window.electron.ipcRenderer.send(
       'control.application.change',
       toRaw(applicationConfig)
-    )
+    ),
+    (callback) => { void nextTick(callback) }
+  )
+
+  function sendApplicationConfig(): void {
+    applicationConfigSync.send()
   }
 
   function setApplicationConfig(value: ApplicationConfig): void {
-    const { layout, ...application } = value
-    Object.assign(applicationConfig, application)
-    Object.assign(applicationConfig.layout, layout)
+    applicationConfigSync.applyRemote(() => {
+      const { layout, ...application } = value
+      Object.assign(applicationConfig, application)
+      Object.assign(applicationConfig.layout, layout)
+    })
   }
 
   function handleThemeChange(newTheme: RealTheme): void {
@@ -82,10 +89,6 @@ export const useGeneralSettingStore = defineStore('generalSetting', () => {
     sendApplicationConfig()
   })
 
-  watch(leftBarWidth, () => {
-    sendApplicationConfig()
-  })
-
   window.electron.ipcRenderer.on(
     'both.application.set',
     (_, value: ApplicationConfig) => setApplicationConfig(value)
@@ -116,6 +119,7 @@ export const useGeneralSettingStore = defineStore('generalSetting', () => {
   return {
     applicationConfig,
     setApplicationConfig,
+    sendApplicationConfig,
     uiLanguage,
     realTheme,
     uiTheme,

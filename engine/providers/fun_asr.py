@@ -5,7 +5,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field, replace
 from datetime import datetime, timedelta
 from threading import RLock
-from typing import Any, Protocol
+from typing import Any, Literal, Protocol, TypeAlias
 from urllib.parse import urlparse
 
 from services.hotwords import HotwordRuntimeConfig
@@ -14,6 +14,7 @@ from core import (
     AudioFrame,
     CaptionFinal,
     CaptionPartial,
+    ProviderDebug,
     ProviderError,
     ProviderInfo,
     ProviderReady,
@@ -27,6 +28,85 @@ SUPPORTED_MODELS = (
     'fun-asr-realtime',
     'fun-asr-realtime-2025-11-07',
 )
+
+_PERMANENT_ERROR_MARKERS = (
+    'invalidapikey',
+    'notauthorized',
+    'unauthorized',
+    'accessdenied',
+    'forbidden',
+    'permissiondenied',
+    'authenticationfailed',
+    'invalidtoken',
+    'unpurchased',
+    'invalidparameter',
+    'modelnotexist',
+    'modelnotfound',
+    'modelunavailable',
+    'modelnotavailable',
+    'unsupportedmodel',
+    'invalidmodel',
+    'modeldisabled',
+    'arrearage',
+    'billoverdue',
+    'commoditynotpurchased',
+)
+_RETRYABLE_ERROR_MARKERS = (
+    'throttl',
+    'ratelimit',
+    'resourceexhausted',
+    'internalerror',
+    'systemerror',
+    'timeout',
+    'unavailable',
+    'connection',
+    'network',
+    'websocket',
+)
+
+
+def _safe_diagnostic_text(
+    value: object,
+    secrets: tuple[str, ...] = (),
+) -> str:
+    text = value if isinstance(value, str) else ''
+    for secret in secrets:
+        if secret:
+            text = text.replace(secret, '<redacted>')
+    text = re.sub(
+        r'\bsk-(?:sp-)?[A-Za-z0-9_-]{8,}\b',
+        '<redacted>',
+        text,
+    )
+    text = re.sub(
+        r'\bBearer\s+[^\s"\']+',
+        'Bearer <redacted>',
+        text,
+        flags=re.IGNORECASE,
+    )
+    return text[:1000]
+
+
+def _safe_identifier(value: object) -> str:
+    if not isinstance(value, str):
+        return ''
+    return value[:256] if re.fullmatch(r'[A-Za-z0-9_-]+', value) else ''
+
+
+def _is_retryable_failure(status_code: int | None, code: str) -> bool:
+    normalized = re.sub(r'[^a-z0-9]', '', code.lower())
+    if any(marker in normalized for marker in _PERMANENT_ERROR_MARKERS):
+        return False
+    if status_code in (400, 401, 403, 404):
+        return False
+    if status_code in (408, 425, 429) or (
+        status_code is not None and 500 <= status_code <= 599
+    ):
+        return True
+    if any(marker in normalized for marker in _RETRYABLE_ERROR_MARKERS):
+        return True
+    # Unknown transport/SDK failures remain bounded by max_reconnects.
+    return True
 
 
 @dataclass(frozen=True)
@@ -46,9 +126,15 @@ class FunAsrClient(Protocol):
     def start(self, **kwargs) -> None: ...
     def send_audio_frame(self, data: bytes) -> None: ...
     def stop(self) -> None: ...
+    def can_stop(self) -> bool: ...
+    def abort_failed(self) -> None: ...
 
 
 class FunAsrResult(Protocol):
+    status_code: int | None
+    code: str | None
+    message: str | None
+    request_id: str | None
     def get_sentence(self) -> dict[str, Any]: ...
     def get_usage(self, sentence: dict[str, Any]) -> dict[str, Any] | None: ...
     @staticmethod
@@ -67,7 +153,7 @@ class FunAsrCallback:
         self._provider.handle_complete(self._generation)
 
     def on_error(self, result: FunAsrResult) -> None:
-        self._provider.handle_error(self._generation)
+        self._provider.handle_error(self._generation, result)
 
     def on_close(self) -> None:
         self._provider.handle_close(self._generation)
@@ -80,6 +166,33 @@ FunAsrClientFactory = Callable[
     [FunAsrClientOptions, FunAsrCallback],
     FunAsrClient,
 ]
+
+
+class _DashScopeRecognitionClient:
+    """Contain the SDK 1.26.x failed-task cleanup quirk."""
+
+    def __init__(self, recognition: Any) -> None:
+        self._recognition = recognition
+
+    def start(self, **kwargs) -> None:
+        self._recognition.start(**kwargs)
+
+    def send_audio_frame(self, data: bytes) -> None:
+        self._recognition.send_audio_frame(data)
+
+    def stop(self) -> None:
+        self._recognition.stop()
+
+    def can_stop(self) -> bool:
+        return bool(getattr(self._recognition, '_running', True))
+
+    def abort_failed(self) -> None:
+        # DashScope 1.26.7 marks the task stopped before on_error but
+        # leaves its non-daemon 23-second silence timer alive.
+        timer = getattr(self._recognition, '_silence_timer', None)
+        if timer is not None:
+            timer.cancel()
+            setattr(self._recognition, '_silence_timer', None)
 
 
 def _build_client(
@@ -121,7 +234,7 @@ def _build_client(
     if options.vocabulary_id:
         parameters['vocabulary_id'] = options.vocabulary_id
 
-    return Recognition(
+    recognition = Recognition(
         model=options.model,
         format='pcm',
         sample_rate=16000,
@@ -129,6 +242,42 @@ def _build_client(
         callback=CallbackAdapter(),
         **parameters,
     )
+
+    return _DashScopeRecognitionClient(recognition)
+
+
+@dataclass(frozen=True)
+class FunAsrFailure:
+    status_code: int | None
+    code: str
+    message: str
+    request_id: str
+    retryable: bool
+
+    def details(self, generation: int) -> dict[str, object]:
+        details: dict[str, object] = {
+            'provider': 'fun_asr',
+            'generation': generation,
+            'retryable': self.retryable,
+        }
+        if self.status_code is not None:
+            details['statusCode'] = self.status_code
+        if self.code:
+            details['code'] = self.code
+        if self.message:
+            details['serviceMessage'] = self.message
+        if self.request_id:
+            details['requestId'] = self.request_id
+        return details
+
+
+GenerationState: TypeAlias = Literal[
+    'connecting',
+    'active',
+    'failed',
+    'closing',
+    'closed',
+]
 
 
 def validate_fun_asr_options(options: FunAsrClientOptions) -> None:
@@ -197,6 +346,8 @@ class FunAsrProvider(RecognitionProvider):
         self._ready = False
         self._stopping = False
         self._stopped_emitted = False
+        self._generation_states: dict[int, GenerationState] = {}
+        self._fatal_emitted = False
         self._finalized_caption_ids: set[int] = set()
         self._task_started_at = self._clock()
         self._latest_audio_offset_ms = 0
@@ -209,7 +360,17 @@ class FunAsrProvider(RecognitionProvider):
     def start(self) -> None:
         self._stopping = False
         self._stopped_emitted = False
-        self._connect_with_retry(initial=True)
+        self._generation_states.clear()
+        self._fatal_emitted = False
+        self._reconnects = 0
+        try:
+            self._connect_once()
+            self._flush_pending_audio()
+        except Exception as error:
+            self._handle_failure(
+                self._generation,
+                self._failure_from_exception(error),
+            )
 
     def accept_audio(self, frame: AudioFrame) -> None:
         if frame.format != 'pcm_s16le':
@@ -228,11 +389,13 @@ class FunAsrProvider(RecognitionProvider):
         try:
             client.send_audio_frame(frame.data)
             self._track_sent_audio(frame.data)
-        except Exception:
+        except Exception as error:
             with self._lock:
-                self._ready = False
                 self._buffer_audio(frame.data)
-            self._reconnect(generation)
+            self._handle_failure(
+                generation,
+                self._failure_from_exception(error),
+            )
 
     def stop(self) -> None:
         with self._lock:
@@ -241,19 +404,35 @@ class FunAsrProvider(RecognitionProvider):
             self._stopping = True
             self._ready = False
             client = self._client
-        if client is not None:
+            self._client = None
+            if client is not None:
+                self._generation_states[self._generation] = 'closing'
+        if client is not None and self._client_can_stop(client):
             try:
                 # SDK stop sends finish-task and blocks for task-finished/error.
                 client.stop()
             except Exception as error:
-                self._emit(ProviderError(
-                    provider=self.name,
-                    message=(
-                        'Fun-ASR stop failed '
-                        f'({type(error).__name__})'
-                    ),
-                    fatal=False,
-                ))
+                if type(error).__name__ == 'InvalidParameter':
+                    self._emit(ProviderDebug(
+                        provider=self.name,
+                        message='Ignored stop for an SDK-stopped task.',
+                        details={'generation': self._generation},
+                    ))
+                else:
+                    self._emit(ProviderError(
+                        provider=self.name,
+                        message=(
+                            'Fun-ASR stop failed '
+                            f'({type(error).__name__})'
+                        ),
+                        fatal=False,
+                    ))
+        elif client is not None:
+            self._emit(ProviderDebug(
+                provider=self.name,
+                message='Skipped stop for an inactive Fun-ASR task.',
+                details={'generation': self._generation},
+            ))
         self._emit_stopped()
 
     def handle_open(self, generation: int) -> None:
@@ -261,14 +440,23 @@ class FunAsrProvider(RecognitionProvider):
             if generation != self._generation or self._stopping:
                 return
             self._ready = True
+            self._generation_states[generation] = 'active'
         self._emit(ProviderReady(
             provider=self.name,
             message='Fun-ASR realtime task started.',
         ))
+        self._emit(ProviderDebug(
+            provider=self.name,
+            message='Fun-ASR client connection opened.',
+            details={'generation': generation},
+        ))
 
     def handle_complete(self, generation: int) -> None:
-        if generation != self._generation:
-            return
+        with self._lock:
+            if generation != self._generation:
+                return
+            self._ready = False
+            self._generation_states[generation] = 'closed'
         self._emit_stopped()
 
     def handle_close(self, generation: int) -> None:
@@ -277,25 +465,43 @@ class FunAsrProvider(RecognitionProvider):
                 return
             self._ready = False
             stopping = self._stopping
+            state = self._generation_states.get(generation)
+            already_failed = state == 'failed'
+            if stopping:
+                self._generation_states[generation] = 'closed'
         if stopping:
             self._emit_stopped()
+        elif already_failed:
+            self._emit(ProviderDebug(
+                provider=self.name,
+                message='Ignored close after generation failure.',
+                details={'generation': generation},
+            ))
         else:
-            self._reconnect(generation)
+            self._handle_failure(generation, FunAsrFailure(
+                status_code=None,
+                code='ConnectionClosed',
+                message='Fun-ASR connection closed unexpectedly.',
+                request_id='',
+                retryable=True,
+            ))
 
-    def handle_error(self, generation: int) -> None:
-        with self._lock:
-            if generation != self._generation or self._stopping:
-                return
-            self._ready = False
-        self._reconnect(generation)
+    def handle_error(
+        self,
+        generation: int,
+        result: FunAsrResult,
+    ) -> None:
+        self._handle_failure(generation, self._failure_from_result(result))
 
     def handle_event(
         self,
         generation: int,
         result: FunAsrResult,
     ) -> None:
-        if generation != self._generation or self._stopping:
-            return
+        with self._lock:
+            if generation != self._generation or self._stopping:
+                return
+            self._reconnects = 0
         sentence = result.get_sentence()
         if not isinstance(sentence, dict):
             raise ValueError('Fun-ASR sentence must be an object')
@@ -339,30 +545,11 @@ class FunAsrProvider(RecognitionProvider):
                 text=text,
             ))
 
-    def _connect_with_retry(self, initial: bool = False) -> None:
-        attempts = self._max_reconnects + 1 if initial else 1
-        for attempt in range(attempts):
-            if self._stopping:
-                return
-            try:
-                self._connect_once()
-                self._flush_pending_audio()
-                return
-            except Exception as error:
-                with self._lock:
-                    self._ready = False
-                if attempt + 1 >= attempts:
-                    raise RuntimeError(
-                        'Fun-ASR connection attempts exhausted'
-                    ) from error
-                self._sleeper(
-                    self._reconnect_backoff_seconds * (2 ** attempt)
-                )
-
     def _connect_once(self) -> None:
         with self._lock:
             self._generation += 1
             generation = self._generation
+            self._generation_states[generation] = 'connecting'
             self._task_started_at = self._clock()
             self._latest_audio_offset_ms = 0
         callback = FunAsrCallback(self, generation)
@@ -373,22 +560,64 @@ class FunAsrProvider(RecognitionProvider):
             self._client = client
         client.start(**self._hotword_start_options)
 
-    def _reconnect(self, failed_generation: int) -> None:
+    def _handle_failure(
+        self,
+        generation: int,
+        failure: FunAsrFailure,
+    ) -> None:
         with self._lock:
             if (
-                failed_generation != self._generation
+                generation != self._generation
                 or self._stopping
+                or self._generation_states.get(generation) in (
+                    'failed',
+                    'closed',
+                )
             ):
                 return
-            if self._reconnects >= self._max_reconnects:
-                self._emit(ProviderError(
+            self._generation_states[generation] = 'failed'
+            self._ready = False
+            client = self._client
+            self._client = None
+
+        if client is not None:
+            try:
+                self._abort_failed_client(client)
+            except Exception as error:
+                self._emit(ProviderDebug(
                     provider=self.name,
-                    message='Fun-ASR reconnect attempts exhausted.',
-                    fatal=True,
+                    message='Fun-ASR failed-client cleanup failed.',
+                    details={
+                        'generation': generation,
+                        'errorType': type(error).__name__,
+                    },
                 ))
+        self._emit(ProviderDebug(
+            provider=self.name,
+            message='Fun-ASR generation failed.',
+            details=failure.details(generation),
+        ))
+        if not failure.retryable:
+            self._emit_fatal(failure, generation, exhausted=False)
+            return
+        self._reconnect(generation, failure)
+
+    def _reconnect(
+        self,
+        failed_generation: int,
+        failure: FunAsrFailure,
+    ) -> None:
+        with self._lock:
+            if failed_generation != self._generation or self._stopping:
                 return
-            self._reconnects += 1
-            attempt = self._reconnects
+            if self._reconnects >= self._max_reconnects:
+                attempt = None
+            else:
+                self._reconnects += 1
+                attempt = self._reconnects
+        if attempt is None:
+            self._emit_fatal(failure, failed_generation, exhausted=True)
+            return
         self._emit(ProviderInfo(
             provider=self.name,
             message=(
@@ -400,9 +629,78 @@ class FunAsrProvider(RecognitionProvider):
             self._reconnect_backoff_seconds * (2 ** (attempt - 1))
         )
         try:
-            self._connect_with_retry()
-        except Exception:
-            self._reconnect(self._generation)
+            self._connect_once()
+            self._flush_pending_audio()
+        except Exception as error:
+            self._handle_failure(
+                self._generation,
+                self._failure_from_exception(error),
+            )
+
+    def _emit_fatal(
+        self,
+        failure: FunAsrFailure,
+        generation: int,
+        exhausted: bool,
+    ) -> None:
+        with self._lock:
+            if self._fatal_emitted:
+                return
+            self._fatal_emitted = True
+        if exhausted:
+            message = 'Fun-ASR reconnect attempts exhausted.'
+        elif failure.code:
+            message = f'Fun-ASR task failed ({failure.code}).'
+        else:
+            message = 'Fun-ASR task failed.'
+        self._emit(ProviderError(
+            provider=self.name,
+            message=message,
+            fatal=True,
+            details=failure.details(generation),
+        ))
+
+    @staticmethod
+    def _client_can_stop(client: FunAsrClient) -> bool:
+        can_stop = getattr(client, 'can_stop', None)
+        return bool(can_stop()) if callable(can_stop) else True
+
+    @staticmethod
+    def _abort_failed_client(client: FunAsrClient) -> None:
+        abort_failed = getattr(client, 'abort_failed', None)
+        if callable(abort_failed):
+            abort_failed()
+
+    def _failure_from_result(self, result: FunAsrResult) -> FunAsrFailure:
+        status = getattr(result, 'status_code', None)
+        status_code = int(status) if isinstance(status, int) else None
+        secrets = (self._options.api_key,)
+        code = _safe_diagnostic_text(getattr(result, 'code', ''), secrets)
+        message = _safe_diagnostic_text(
+            getattr(result, 'message', ''),
+            secrets,
+        )
+        request_id = _safe_identifier(getattr(result, 'request_id', ''))
+        return FunAsrFailure(
+            status_code=status_code,
+            code=code,
+            message=message,
+            request_id=request_id,
+            retryable=_is_retryable_failure(status_code, code),
+        )
+
+    def _failure_from_exception(self, error: Exception) -> FunAsrFailure:
+        code = type(error).__name__
+        return FunAsrFailure(
+            status_code=None,
+            code=code,
+            message=_safe_diagnostic_text(
+                str(error),
+                (self._options.api_key,),
+            ),
+            request_id='',
+            retryable=_is_retryable_failure(None, code),
+        )
 
     def _buffer_audio(self, data: bytes) -> None:
         was_full = len(self._pending_audio) == self._pending_audio.maxlen

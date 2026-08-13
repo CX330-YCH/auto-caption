@@ -72,6 +72,8 @@ Node.js 测试覆盖：
 - 旧协议中间字幕复用 `index` 和 `time_s` 的关联方式。
 - 翻译事件通过 `time_s` 关联字幕的当前行为。
 - 热词管理请求和 `text | weight | lang` 编辑格式的纯 TypeScript 校验，以及热词 UI 三语键结构一致性。
+- 本次启动 Debug 会话的初始化前缓冲、JSONL 持久化、完整导出、递归凭据脱敏，以及生产路由中 DEBUG 只持久化、不进入原有可见日志级别。
+- application 配置深度去重、Renderer 远端回填期间的反馈抑制和连续回填 revision；POSIX 独立进程组/负 PID 强杀、真实父子进程组无遗留进程，以及 Windows `taskkill /T /F` 选择逻辑。
 
 Python 测试覆盖：
 
@@ -83,7 +85,7 @@ Python 测试覆盖：
 - Python TCP 协议解码器的任意 `recv()` 分块、多消息、CRLF 和空行处理。
 - TCP UTF-8 字符跨块、非法 UTF-8/JSON 恢复、单行上限和连接关闭兼容行为。
 - `AudioFrame` 元数据校验和 `AudioPipeline` 帧构造。
-- `RecognitionProvider` 生命周期及 `RecognitionSession` 的音频队列调度和资源关闭。
+- `RecognitionProvider` 生命周期及 `RecognitionSession` 的音频队列调度和资源关闭；Provider 在 `start()` 上报 fatal 时不启动音频采集，运行中 fatal 也通过相同 Session finally 正常关闭资源。
 - partial 不触发翻译、重复 final 只提交一次翻译。
 - Provider 异常文本脱敏和 fatal stop 请求。
 - Vosk 适配器的 partial 去重、partial/final ID 关联和 16 kHz 单声道 PCM16 输入约束。
@@ -95,7 +97,7 @@ Python 测试覆盖：
 - SOSV backend partial/final 映射、重复 partial 抑制和输入格式约束。
 - GLM VAD 分段、异步 final、WAV 请求内容、URL 校验和错误正文脱敏。
 - Gummy SDK callback 的 partial/final、服务端翻译、usage 和累计发送失败策略。
-- Fun-ASR SDK callback 的 partial/final/heartbeat/usage 映射、服务端时间戳、final 去重、有界重连、缓冲溢出、错误脱敏、停止冲刷和 16 kHz 单声道 PCM16 输入约束；任务启动与重连会重复传入热词表 ID 和上下文。测试使用伪造 SDK 客户端，不建立网络连接。
+- Fun-ASR SDK callback 的 partial/final/heartbeat/usage 映射、服务端时间戳、final 去重、有界重连、永久/暂时错误分类、错误脱敏、停止冲刷和 16 kHz 单声道 PCM16 输入约束；同 generation 重复 `on_error` 及随后 `on_close → stop` 只处理一次，task-failed 后不再调用 SDK `stop()`。SDK 1.26.7 适配器会直接验证失败任务 timer 被取消。任务启动与重连会重复传入热词表 ID 和上下文。测试使用伪造 SDK 客户端，不建立网络连接。
 - `HotwordRuntimeConfig` 的模型/上下文限制、基于伪造 `VocabularyClient` 的完整 CRUD、修改前模型检查，以及一次性 worker 的错误脱敏。测试不创建、更新或删除真实云资源。
 
 ## 本阶段未覆盖范围
@@ -104,7 +106,7 @@ Python 测试覆盖：
 - Electron 窗口、热词管理 IPC/子进程超时和浏览器交互集成。
 - Ant Design Vue 通用引擎字段控件的浏览器交互、视觉布局和键盘可访问性。
 - Electron `userData/config.json` 的真实磁盘读写、V2→V3 迁移和无版本配置回退的桌面端流程。
-- Python 子进程启动、超时、停止和强杀。
+- 真实 Python/PyInstaller 子进程启动、超时和正常停止；POSIX 进程组强杀已用临时 Node 父子进程集成验证，但尚未使用 PyInstaller 包和 Windows/Linux 实机验证。
 - Electron 与真实 Python 子进程之间的端到端 Socket/stdio 集成。
 - 真实 Vosk/SOSV 模型文件以及实际 Gummy、GLM、Fun-ASR 或其他在线 Provider；阿里云远端热词表的 list/create/update/delete 也未执行。
 - Ollama、OpenAI、Google 或阿里云付费 API。

@@ -1,4 +1,4 @@
-import { exec, spawn } from 'child_process'
+import { execFile, spawn } from 'child_process'
 import * as net from 'net'
 import { controlWindow } from '../ControlWindow'
 import { allConfig } from './AllConfig'
@@ -24,6 +24,10 @@ import {
   getActiveBuiltinProvider,
   getActiveCustomEngine
 } from '../../shared/config/schema.ts'
+import {
+  forceKillProcessTree,
+  shouldCreateProcessGroup
+} from '../engine/EngineProcessControl.ts'
 
 export class CaptionEngine {
   appPath: string = ''
@@ -115,7 +119,9 @@ export class CaptionEngine {
     if(!this.getApp()){ return }
 
     this.protocol.reset()
-    this.process = spawn(this.appPath, this.command)
+    this.process = spawn(this.appPath, this.command, {
+      detached: shouldCreateProcessGroup(process.platform)
+    })
     this.process.once('error', (error: Error) => {
       Log.error('Caption engine process failed to start:', error)
       controlWindow.sendErrorMessage(
@@ -149,7 +155,7 @@ export class CaptionEngine {
       })
     });
 
-    this.process.on('close', (code: number | null) => {
+    this.process.on('close', (code: number | null, signal: NodeJS.Signals | null) => {
       this.handleProtocolBatch(this.protocol.finish())
       this.process = undefined;
       this.client = undefined
@@ -164,7 +170,7 @@ export class CaptionEngine {
         clearTimeout(this.startTimeoutID)
         this.startTimeoutID = undefined
       }
-      Log.info(`Engine exited with code ${code}`)
+      Log.info('Engine exited', { code, signal })
     });
   }
 
@@ -201,17 +207,27 @@ export class CaptionEngine {
       this.client = undefined
     }
     if (this.process.pid) {
-      let cmd = `kill -9 ${this.process.pid}`;
-      if (process.platform === "win32") {
-        cmd = `taskkill /pid ${this.process.pid} /t /f`
-      }
-      exec(cmd, (error) => {
+      forceKillProcessTree(
+        this.process.pid,
+        process.platform,
+        {
+          kill: process.kill,
+          taskkill: (pid, callback) => {
+            execFile(
+              'taskkill',
+              ['/pid', pid.toString(), '/t', '/f'],
+              (error) => callback(error)
+            )
+          }
+        },
+        (error) => {
         if (error) {
           Log.error('Failed to kill process:', error)
         } else {
           Log.info('Process killed successfully')
         }
-      })
+        }
+      )
     }
   }
 
@@ -254,6 +270,10 @@ function handleEngineData(data: EngineMessage): void {
       if (isContentEngineMessage(data)) Log.info('Engine Info:', data.content)
       else Log.error('Invalid info event received from caption engine')
       return
+    case 'debug':
+      if (isContentEngineMessage(data)) Log.debug('Engine Debug:', data)
+      else Log.error('Invalid debug event received from caption engine')
+      return
     case 'warn':
       if (isContentEngineMessage(data)) Log.warn('Engine Warn:', data.content)
       else Log.error('Invalid warn event received from caption engine')
@@ -261,6 +281,9 @@ function handleEngineData(data: EngineMessage): void {
     case 'error':
       if (isContentEngineMessage(data)) {
         Log.error('Engine Error:', data.content)
+        if ('diagnostic' in data) {
+          Log.debug('Engine Error Diagnostic:', data.diagnostic)
+        }
         controlWindow.sendErrorMessage(data.content)
       }
       else Log.error('Invalid error event received from caption engine')

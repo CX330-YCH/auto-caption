@@ -30,7 +30,9 @@ def run(options: CliOptions) -> None:
         output.warning,
     )
     audio_queue = Queue(maxsize=max(10, options.chunk_rate * 5))
-    request_stop = lambda: setattr(shared_data, 'status', 'kill')
+    # Provider failures are reported through the event sink, then use the
+    # normal cleanup path instead of asking Electron to kill the process.
+    request_stop = lambda: setattr(shared_data, 'status', 'stop')
     is_running = lambda: shared_data.status == 'running'
     capture = AudioCaptureWorker(
         source=audio_source,
@@ -60,8 +62,6 @@ def run(options: CliOptions) -> None:
         shared_data.status = 'stop'
         stdout('Keyboard interrupt detected. Exiting...')
 
-    if shared_data.status == 'kill':
-        stdout_cmd('kill')
 
 
 def _provider_config(options: CliOptions) -> ProviderConfig:

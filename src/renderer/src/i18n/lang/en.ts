@@ -301,6 +301,9 @@ export default {
     "all": "All",
     "copySuccess": "Subtitle copied to clipboard",
     "clear": "Clear Log",
-    "title2": "Software Log"
+    "title2": "Software Log",
+    "saveDebug": "Save Complete Debug Log",
+    "debugSaved": "Complete debug log saved",
+    "debugSaveFailed": "Failed to save debug log"
   }
 }

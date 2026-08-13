@@ -301,6 +301,9 @@ export default {
     "all": "全部",
     "copySuccess": "字幕已复制到剪贴板",
     "clear": "清空记录",
-    "title2": "日志记录"
+    "title2": "日志记录",
+    "saveDebug": "保存完整 Debug 日志",
+    "debugSaved": "完整 Debug 日志已保存",
+    "debugSaveFailed": "Debug 日志保存失败"
   }
 }

@@ -26,6 +26,7 @@ import { app, BrowserWindow } from 'electron'
 import * as path from 'path'
 import * as fs from 'fs'
 import * as os from 'os'
+import { hasApplicationConfigChanged } from '../config/ApplicationConfigChange.ts'
 
 interface CaptionTranslation {
   time_s: string
@@ -102,10 +103,14 @@ class AllConfig {
     }
   }
 
-  public setApplication(value: unknown): void {
+  public setApplication(value: unknown): boolean {
     const application = parseApplicationConfig(value)
+    if (!hasApplicationConfigChanged(this.document.application, application)) {
+      return false
+    }
     this.document = { ...this.document, application }
-    Log.info('Set application config')
+    Log.debug('Application config changed')
+    return true
   }
 
   public setCaptionWindowWidth(width: unknown): void {

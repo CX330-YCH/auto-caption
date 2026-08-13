@@ -1,6 +1,6 @@
 # Auto Caption User Manual
 
-Corresponding Version: v2.6.0
+Corresponding Version: v2.7.0
 
 **Note: Due to limited personal resources, the English and Japanese documentation files for this project (except for the README document) will no longer be maintained. The content of this document may not be consistent with the latest version of the project. If you are willing to help with translation, please submit relevant Pull Requests.**
 
@@ -137,6 +137,10 @@ The following image shows the caption display window, which displays the latest 
 ### Exporting Caption Records
 
 In the caption control window, you can see the records of all collected captions. Click the "Export Log" button to export the caption records as a JSON or SRT file.
+
+### Saving the Complete Debug Log
+
+The Software Log view continues to show the existing INFO, WARN, and ERROR entries and does not display DEBUG. For troubleshooting, click "Save Complete Debug Log" to export the complete session since this software launch as a `.jsonl` file. Clearing the visible Software Log does not erase that session file. Structured diagnostics and exception stacks are preserved, while API keys, tokens, passwords, and Authorization values are always redacted. The export contains records produced up to the time the button is clicked.
 
 ## Caption Engine
 
