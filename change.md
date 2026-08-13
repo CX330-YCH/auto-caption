@@ -1909,3 +1909,172 @@
 - 本地 `electron-builder.yml`：确认 macOS arm64 打包入口、产物命名和引擎资源复制位置。
 - macOS 本机 `codesign`、`hdiutil`、`ditto` 与 Electron Builder 输出：确认最终 `.app`、zip、DMG 的签名、镜像和压缩包完整性。
 - 根目录 `AGENTS.md`：遵循依赖边界、系统环境不修改、三语文档同步、构建产物记录和 `change.md` 追加记录要求。
+
+## 2026-08-13 - V2.5.0 小版本与 macOS arm64 构建
+
+### 授权与目标
+
+- 用户要求“编译一下Mac版本 并更新小版本号”。
+- 变更类型：构建、配置、文档、测试。
+- 目标：在不修改系统环境的前提下，将 V2 小版本从 `2.4.0` 提升到 `2.5.0`，并生成 macOS arm64 构建产物。
+- 明确非目标：本次用户未要求依赖检查或升级，因此不主动执行依赖治理；不创建 git tag、commit、branch、PR 或 Release；不做 Windows、Linux、macOS x64/universal 构建；不调用真实麦克风、识别云服务、翻译云服务或远端热词资源。
+- 修改前工作区已有未提交改动，包括 `electron-builder.yml`、`package.json`、`package-lock.json` 和 `change.md`；本批次保留这些改动，并基于当前工作区中的 `electron@43.4.0`、`electron-builder@26.15.3` 与平台化 `extraResources` 配置进行 macOS 打包。
+
+### 修改文件与原因
+
+- `package.json`
+  - 通过 `npm version minor --no-git-tag-version` 将应用版本更新为 `2.5.0`；未创建 git tag。
+- `package-lock.json`
+  - 同步根包版本到 `2.5.0`。
+- `README.md`、`README_en.md`、`README_ja.md`
+  - 同步版本徽章、发布提示和平台说明到 `v2.5.0`。
+- `docs/user-manual/zh.md`、`docs/user-manual/en.md`、`docs/user-manual/ja.md`
+  - 同步用户手册版本标识到 `v2.5.0`。
+- `docs/engine-manual/zh.md`、`docs/engine-manual/en.md`、`docs/engine-manual/ja.md`
+  - 同步引擎手册版本标识到 `v2.5.0`。
+- `src/renderer/index.html`
+  - 同步浏览器标题中的可见版本到 `Auto Caption v2.5.0`。
+- `src/renderer/src/components/EngineStatus.vue`
+  - 同步关于信息中的可见版本到 `v2.5.0`。
+- `docs/CHANGELOG.md`
+  - 新增 `v2.5.0` 条目，记录版本同步与 macOS arm64 构建。
+- `dist/latest-mac.yml`
+  - 在生成目录中同步最终签名后 zip 和 DMG 的 `2.5.0` 路径、大小、sha512 与 releaseDate。
+- `change.md`
+  - 追加本批次授权、修改范围、构建上下文、验证、风险和回滚记录。
+- 生成产物：
+  - `engine/dist/main`：PyInstaller 生成的 macOS arm64 Python 引擎可执行文件。
+  - `dist/mac-arm64/Auto Caption.app`：Electron Builder 生成并经本地 ad-hoc 签名的 macOS arm64 应用。
+  - `dist/Auto Caption-2.5.0-arm64-mac.zip` 与 `.blockmap`：签名后 `.app` 重新封装的 zip 和 Electron Builder 26 blockmap。
+  - `dist/auto-caption-2.5.0.dmg` 与 `.blockmap`：包含签名后 `.app` 的 APFS UDZO DMG 和 Electron Builder 26 blockmap。
+
+### 修改前后行为
+
+- 修改前：应用版本源、README、手册、关于窗口、浏览器标题和 macOS 构建元数据为 `2.4.0` / `v2.4.0`。
+- 修改后：应用版本源、可见版本文本、README、用户手册、引擎手册、CHANGELOG 与本次 macOS arm64 产物统一为 `2.5.0` / `v2.5.0`。
+- 本批次没有新增或删除用户配置字段，没有修改配置迁移、IPC、Python stdout/TCP 协议、命令行参数、字幕数据结构、热词语义或远端资源操作。
+- 未修改系统环境；构建使用项目本地 `node_modules` 与 `engine/.venv`，仅在项目目录生成和更新构建产物。
+
+### 兼容性、迁移与回滚
+
+- 本批次只更新发布版本和重新构建 macOS arm64 包，不涉及用户配置迁移。
+- macOS 产物为 arm64；未生成 Intel x64 或 universal 包。
+- 当前构建基于工作区已有的 Electron 43 / Electron Builder 26 大版本依赖状态；自动化测试与打包通过，但未在真实 GUI 中做 Electron 43 的安装后交互回归。
+- Electron Builder 26 不再提供旧的 `node_modules/app-builder-bin/mac/app-builder_arm64` 路径；本批次改用 `app-builder-lib/out/targets/blockmap/blockmap` 的 `buildBlockMap` API 刷新签名后 zip/DMG 的 blockmap。
+- 由于没有 Developer ID 证书，本次只做本地 ad-hoc 签名，未做 Apple Developer ID 签名或 notarization。首次打开可能仍需用户通过 macOS 安全提示手动允许。
+- 精确回滚：恢复本批次列出的版本/文档文件到 `2.4.0`；恢复 `package.json` 和 `package-lock.json` 根版本；删除或忽略 `dist/` 与 `engine/dist/` 中本次生成的 `2.5.0` 构建产物；如需恢复旧包，使用此前 `2.4.0` 产物或按旧版本号重新构建。
+
+### 验证记录
+
+- `git status --short --branch`：已执行；确认当前在 `main...origin/main`，且工作区开局已有未提交修改，需要保留。
+- `npm version minor --no-git-tag-version`：通过；版本提升到 `2.5.0`，没有创建 git tag；保留既有 npm mirror 配置弃用警告。
+- `npm run verify`：通过；TypeScript、ESLint、Node 41/41 和 Python 49/49 全部成功；保留既有 `MODULE_TYPELESS_PACKAGE_JSON` 性能警告。
+- `npm run build`：通过；Electron main、preload、renderer 生产构建成功，renderer 由 Vite 6.4.3 转换 3259 个模块。
+- `PYINSTALLER_CONFIG_DIR=/private/tmp/auto-caption-pyinstaller-config ./.venv/bin/pyinstaller --clean --noconfirm ./main.spec`：首次因工作目录已在 `engine/` 但命令误写为 `engine/.venv/bin/pyinstaller` 导致路径不存在；使用正确的 `./.venv/bin/pyinstaller` 重跑后通过，生成 `engine/dist/main`。保留既有 `pycparser` 可选隐藏导入警告和 `@rpath/libomp.dylib` 解析警告。
+- `engine/dist/main --help`：经用户授权在沙盒外运行后通过，CLI help 正常输出。
+- `./node_modules/.bin/electron-builder --mac`：沙盒内因 `npmmirror.com` DNS 失败；经用户授权沙盒外重试后通过，基于 `electron@43.4.0` 与 `electron-builder@26.15.3` 生成 `.app`、zip、DMG 和初始 blockmap。构建日志提示 duplicate dependency references，并提示缺少 Developer ID 签名证书；未导致构建失败。
+- `file dist/mac-arm64/Auto Caption.app/Contents/MacOS/Auto Caption dist/mac-arm64/Auto Caption.app/Contents/Resources/engine/main`：二者均为 Mach-O 64-bit executable arm64。
+- `plutil -p dist/mac-arm64/Auto Caption.app/Contents/Info.plist | rg 'CFBundleShortVersionString|CFBundleVersion'`：通过，两个版本字段均为 `2.5.0`。
+- `codesign --force --deep --sign - dist/mac-arm64/Auto Caption.app`：通过，本地 ad-hoc 签名完成。
+- `codesign --verify --deep --strict --verbose=2 dist/mac-arm64/Auto Caption.app`：通过，`.app` valid on disk 且 satisfies its Designated Requirement。
+- `ditto -c -k --sequesterRsrc --keepParent ...`：通过，重新封装签名后的 `Auto Caption-2.5.0-arm64-mac.zip`。
+- `node_modules/app-builder-bin/mac/app-builder_arm64 blockmap ...`：失败，原因是 Electron Builder 26 不再存在该旧路径；随后使用新的内部 blockmap API 生成最终 blockmap。
+- `node -e "const { buildBlockMap } = require('./node_modules/app-builder-lib/out/targets/blockmap/blockmap'); ..."`：通过，生成最终 zip 和 DMG blockmap；最终 zip size `224865885`、sha512 `hqnF0Hn3Q+DNOkmoXl57i0GIUocBAKUhIjjyXxXHyAhCSDklIeokYP0+/Kx4/3C4l2xmYlsWdhEdlXtpWZ6V8g==`；最终 DMG size `245134908`、sha512 `JOcArxFyI1i3aLP4e0ZAlWj6cKMUMJme9/Bh7BK0mml/ezP6QqtB0D7xs3PCFZUxgsnFz3FnEU11UidT3cNKbg==`。
+- `hdiutil create -volname 'Auto Caption' -fs APFS -format UDZO -srcfolder ... -ov dist/auto-caption-2.5.0.dmg`：通过，重新生成包含签名后 `.app` 的 DMG；hdiutil 提示该 create 用法已弃用，未影响产物生成。
+- `hdiutil verify dist/auto-caption-2.5.0.dmg`：通过，checksum VALID。
+- `unzip -tq dist/Auto Caption-2.5.0-arm64-mac.zip`：通过，无压缩数据错误。
+- `shasum -a 256 dist/auto-caption-2.5.0.dmg dist/Auto Caption-2.5.0-arm64-mac.zip`：
+  - DMG：`2715460ce58f237fe047f3a4a3325f822be519dbb6624298e75d91be87ae2f51`
+  - ZIP：`fe6a25c20ddcedb05708d65db58b22acc385b8f10a12b08ef185515311f72c30`
+- `rg -n "2\\.4\\.0|v2\\.4\\.0|auto-caption-2\\.4\\.0|Auto Caption-2\\.4\\.0" ...`：应用版本相关文件无旧版本残留；仅 `package-lock.json` 中存在依赖自身版本 `node-gyp@12.4.0`，与应用版本无关。
+- `git diff --check`：通过，无空白错误。
+
+### 未执行、风险与后续事项
+
+- 未启动安装后的真实 Electron GUI，也未测试麦克风、系统音频权限、真实识别、真实翻译 API 或热词远端资源；本批次验证到自动化测试、生产构建、引擎 help、签名和安装包完整性。
+- 未做 Apple Developer ID 签名和 notarization；若面向外部分发，建议使用正式证书重新签名、公证并再次生成/校验 DMG 与 zip。
+- 未执行 Windows、Linux、macOS x64 或 universal 构建；不能声明这些平台的 `2.5.0` 包已验证。
+- 当前工作区已有 Electron 43 / Electron Builder 26 大版本依赖状态；虽然本次测试和打包通过，仍建议在发布前做安装包级 GUI 回归，尤其关注窗口生命周期、权限提示、自动更新和内置 Python 引擎启动路径。
+
+### 关键外部文档或技术决策来源
+
+- 本地 `package.json`、`package-lock.json`：确认版本源、当前 Electron/Electron Builder 解析版本和 npm 脚本。
+- 本地 `electron-builder.yml`：确认当前平台化 `extraResources` 配置会把 macOS/Linux 引擎打包到 `Resources/engine/main`。
+- Electron Builder 26 本地模块 `app-builder-lib/out/targets/blockmap/blockmap`：用于替代旧 `app-builder-bin` 路径，刷新签名后产物 blockmap。
+- macOS 本机 `codesign`、`hdiutil`、`ditto` 与 Electron Builder 输出：确认最终 `.app`、zip、DMG 的签名、镜像和压缩包完整性。
+- 根目录 `AGENTS.md`：遵循修改前检查、系统环境不修改、三语文档同步、构建产物记录和 `change.md` 追加记录要求。
+
+## 2026-08-13 - Electron 安全升级与三平台构建测试
+
+### 授权与目标
+
+- 用户明确要求先升级依赖，再分别进行 Windows、macOS 和 Linux 构建测试；随后明确授权升级依赖、运行 npm 安装钩子，并要求安装在仓库根目录的项目环境中。
+- 变更类型：配置、构建、测试、修复。
+- 目标：将 npm audit 指向的 Electron 运行时与 electron-builder 构建链升级到修复版本，验证根目录安装、安装钩子、自动化测试、通用生产构建和三平台打包结果。
+- 明确非目标：不全局安装 npm/Python/系统依赖，不安装 Docker、Wine 或虚拟机，不修改 Python requirements 或 `engine/.venv`，不提交、推送、创建 PR/Release，不签名或发布测试包，不调用真实麦克风、付费 API 或远端热词资源。
+- 修改前 `git status --short --branch` 为 `main...origin/main` 且工作区干净；本批次没有需要绕开的用户未提交修改。
+
+### 修改文件与原因
+
+- `package.json`
+  - 将直接开发依赖 `electron` 从 `^35.1.5` 升级到 `^43.4.0`，修复 npm audit 报告的 Electron 运行时公告。
+  - 将直接开发依赖 `electron-builder` 从 `^25.1.8` 升级到 `^26.15.3`，带动修复 `app-builder-lib`、`builder-util-runtime`、`@electron/rebuild`、`node-gyp` 和 `tar` 构建链漏洞。
+- `package-lock.json`
+  - 由根目录 `npm install --save-dev electron@43.4.0 electron-builder@26.15.3` 重新解析并锁定依赖树；实际解析为 `electron@43.4.0`、`electron-builder@26.15.3`、`app-builder-lib@26.15.3`、`builder-util-runtime@9.7.0`、`@electron/rebuild@4.2.0`、`node-gyp@12.4.0` 和 `tar@7.5.22`。
+  - 安装位置为仓库根目录 `node_modules`，没有使用全局 npm 目录；Python 虚拟环境不参与 npm 安装。
+- `electron-builder.yml`
+  - 在 `files` 中显式排除 `dist/**`，避免使用临时输出目录测试时把仓库既有发布产物递归装入 `app.asar`。
+  - 将原顶层两条 `extraResources` 拆分到 `win`、`mac` 和 `linux` 平台配置，避免 macOS 包探测 Windows `main.exe`，也避免 Windows 包误复制 Unix `main`；Linux 与 macOS 仍使用各自原生环境生成的同名 `engine/dist/main`。
+- `change.md`
+  - 追加本次授权、依赖决策、配置兼容修复、真实验证结果、失败项、限制与回滚说明。
+
+### 修改前后行为
+
+- 修改前：根目录解析为 `electron@35.7.5` 和 `electron-builder@25.1.8`，`npm audit` 报告 13 个受影响包条目（12 high、1 critical）；生产范围审计仍报告 Electron 1 个 high。
+- 修改后：根目录解析为 `electron@43.4.0` 和 `electron-builder@26.15.3`，完整 `npm audit` 为 0 个漏洞；安装钩子使用 Electron 43.4.0/arm64 完成原生依赖检查。
+- 修改前：当 electron-builder 输出目录被改到仓库外部时，既有 `dist/` 不再由输出目录默认排除，测试 `.app` 的 `app.asar` 会递归包含历史安装包并膨胀至约 2.9GB。
+- 修改后：`dist/**` 始终显式排除；重建的 macOS `.app` 为约 477MB、DMG/ZIP 各约 215MB，三平台 `app.asar` 检查均确认不包含 `/dist`。
+- 修改前：顶层引擎资源规则在每个平台都尝试复制 `main.exe` 与 `main`。
+- 修改后：每个平台只声明自己的目标引擎文件；macOS 最终包包含 Mach-O arm64 `engine/main` 且不含 `main.exe`，Windows 包不再误带 macOS `main`。
+- 用户配置、schemaVersion、迁移、IPC、Python CLI、stdout/TCP 子进程协议、字幕数据结构、用户可见文本和远端服务行为均无变化；无需配置迁移或三语文案更新。
+
+### 依赖决策、兼容性与回滚
+
+- 选择 `electron@43.4.0` 和 `electron-builder@26.15.3` 是 npm audit 对当前依赖树给出的可修复版本；没有使用 `npm audit fix --force`，避免无边界修改其他直接依赖。
+- Electron 与 electron-builder 均为项目既有 MIT 许可工具的升级，不新增新的直接依赖类别；替代方案是停留旧主版本并接受已知漏洞，不能满足本次安全目标。
+- `npm ls` 未报告 peer/invalid/extraneous 错误；现有 `electron-vite@3.1.0`、Vue/Vite/TypeScript 组合通过类型检查、测试和生产构建。
+- Windows/Linux Electron 外壳可在 macOS 交叉打包，但 PyInstaller 不能从 macOS 生成 Windows PE 或 Linux ELF 引擎；完整平台包仍必须在目标系统（或合适的 VM/容器/CI runner）中先生成 `engine/dist/main.exe` 或原生 `engine/dist/main`。
+- 精确回滚：将 `package.json` 的 Electron/electron-builder 范围恢复为 `^35.1.5`/`^25.1.8` 并恢复旧锁文件；从 `electron-builder.yml` 移除 `!dist/**`，并把平台级 `extraResources` 恢复为原顶层两条规则。回滚会重新引入已知 audit 漏洞以及跨平台资源误复制风险。
+
+### 验证记录
+
+- `npm install --save-dev electron@43.4.0 electron-builder@26.15.3`：经用户授权后成功，在仓库根目录新增 58、移除 179、变更 36 个包；安装结果报告 0 个漏洞。
+- `npm ls electron electron-builder app-builder-lib builder-util-runtime @electron/rebuild node-gyp tar --all`：通过，确认上述修复版本及完整依赖链，无 npm ls 依赖错误。
+- `npm audit --json`：成功；info/low/moderate/high/critical/total 全部为 0。
+- `npm run postinstall`：成功；`electron-builder install-app-deps` 调用 `@electron/rebuild`，按 Electron 43.4.0、arm64 完成根项目原生依赖安装检查。
+- `npm run verify`：通过；Node 41/41、Python 49/49、Node/Web 类型检查和 ESLint 全部成功。
+- `npm run build`：通过；main/preload/renderer 生产构建成功，分别转换 23、1、3259 个模块。
+- 首次 `npm run build:mac -- --arm64 -c.directories.output=/private/tmp/auto-caption-build-test-20260813/mac`：命令完成但测试产物异常膨胀；检查发现 `app.asar` 包含仓库旧 `dist/`，由此新增显式排除规则。该首次结果不计为有效构建通过。
+- 修复后 `npm run build:mac -- --arm64 -c.directories.output=/private/tmp/auto-caption-build-test-20260813/mac-retry`：通过；生成 macOS arm64 `.app`、DMG、ZIP 与 blockmap。`hdiutil verify`、`unzip -tq`、Mach-O arm64 检查和 `/dist` 排除断言均通过；没有 Developer ID，因此 electron-builder 明确跳过正式签名。
+- 最终平台级资源配置执行 `electron-builder --mac --arm64 --dir -c.directories.output=/private/tmp/auto-caption-build-test-20260813/mac-final`：通过；确认 `.app` 与 Python 引擎均为 Mach-O arm64、Windows `main.exe` 未进入 macOS 包、`app.asar` 不含 `/dist`。
+- `npm run build:win -- --x64 -c.directories.output=/private/tmp/auto-caption-build-test-20260813/windows`：Electron/NSIS 命令退出 0，生成 109MB NSIS 安装器和 PE x64 unpacked 应用；随后资源断言退出 2，因为仓库没有 `engine/dist/main.exe`，完整 Windows 应用构建判定失败。
+- `npm run build:linux -- --x64 -c.directories.output=/private/tmp/auto-caption-build-test-20260813/linux`：electron-builder 命令退出 0，生成 215MB tar.gz；`gzip -t`、Electron ELF x64 和 `/dist` 排除断言通过，随后引擎格式断言退出 2，因为包内 `engine/main` 是 macOS Mach-O arm64 而非 Linux ELF x64，完整 Linux 应用构建判定失败。
+- `git diff --check`：通过，无空白错误；最终 `git status` 仅包含 `package.json`、`package-lock.json`、`electron-builder.yml` 和本条 `change.md` 记录。
+
+### 未执行、失败项、风险与后续事项
+
+- Windows 和 Linux 的“完整可运行应用”未通过：当前 macOS 主机无法原生生成对应 PyInstaller 引擎，本机也没有 Docker、Podman、Colima、Lima、Multipass、Parallels、VirtualBox、UTM、QEMU 或 Wine；未擅自安装系统级运行时。
+- Windows 后续必须在 Windows x64 环境使用项目虚拟环境安装 `engine/requirements.txt`、运行 PyInstaller、确认 `engine/dist/main.exe` 为 PE x64，再重新运行 `npm run build:win` 并做安装/启动验证。
+- Linux 后续必须在 Linux x64 环境生成 ELF x64 `engine/dist/main`，再重新运行 `npm run build:linux` 并做 tar.gz 解压/启动验证。macOS 上生成的同名文件不得用于 Linux 发布。
+- 未在 Windows/Linux 实机启动 Electron GUI，没有测试安装器权限、音频设备、Python 子进程启动或系统动态库；不得把本次交叉打包外壳描述为平台实机通过。
+- macOS 包未做 Developer ID 签名、公证或安装后 GUI/音频回归；仅验证原生格式、资源、归档完整性和生产构建。
+- 保留既有 npm 11 对 `.npmrc` 中 `electron_mirror`/`electron_builder_binaries_mirror` 的弃用警告，以及 Node 测试的 `MODULE_TYPELESS_PACKAGE_JSON` 性能警告；均未导致本次命令失败，本批次未扩大范围处理。
+- 所有测试产物位于 `/private/tmp/auto-caption-build-test-20260813/`，未加入 Git，也未覆盖仓库现有 `dist/` 发布产物。
+
+### 关键外部文档或技术决策来源
+
+- npm 官方 audit 数据库：升级前给出 Electron 43.4.0 与 electron-builder 26.15.3 修复路径；升级后复核为 0 个漏洞。
+- Electron Builder Multi Platform Build：明确不能期待在单一主机完成所有平台原生构建，原生依赖需要目标平台或预构建，Windows/Linux 可使用对应 Docker/CI 环境，`https://www.electron.build/docs/features/multi-platform-build/`。
+- Electron Builder Architecture：确认 macOS arm64、Windows x64、Linux x64 CLI 架构参数及原生模块的目标平台约束，`https://www.electron.build/docs/architecture/`。
+- 本地 `package.json`、`package-lock.json`、`electron-builder.yml`、构建日志和产物文件格式检查：作为实际解析版本、配置行为与平台构建结论的权威证据。
+- 根目录 `AGENTS.md`：遵循依赖升级授权、平台兼容、生成目录排除、真实失败记录与 `change.md` 追加制度。

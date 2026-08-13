@@ -13,18 +13,15 @@ files:
   - '!engine/*'
   - '!docs/*'
   - '!assets/*'
+  - '!dist/**'
   - '!.repomap/*'
   - '!.virtualme/*'
-extraResources:
-  # For Windows
-  - from: ./engine/dist/main.exe
-    to: ./engine/main.exe
-  # For macOS and Linux
-  - from: ./engine/dist/main
-    to: ./engine/main
 win:
   executableName: auto-caption
   icon: build/icon.png
+  extraResources:
+    - from: ./engine/dist/main.exe
+      to: ./engine/main.exe
 nsis:
   artifactName: ${name}-${version}-setup.${ext}
   shortcutName: ${productName}
@@ -34,6 +31,9 @@ nsis:
   perMachine: true
   allowToChangeInstallationDirectory: true
 mac:
+  extraResources:
+    - from: ./engine/dist/main
+      to: ./engine/main
   entitlementsInherit: build/entitlements.mac.plist
   extendInfo:
     - NSCameraUsageDescription: Application requests access to the device's camera.
@@ -44,6 +44,9 @@ mac:
 dmg:
   artifactName: ${name}-${version}.${ext}
 linux:
+  extraResources:
+    - from: ./engine/dist/main
+      to: ./engine/main
   target:
     # - AppImage
     # - snap
