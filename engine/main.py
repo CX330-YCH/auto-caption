@@ -39,6 +39,11 @@ def run(options: CliOptions) -> None:
         _provider_config(options),
         audio_source,
         output.warning,
+        lambda message, details: output.publish(ProviderDebug(
+            provider='translation',
+            message=message,
+            details=details,
+        )),
     )
     audio_queue = Queue(maxsize=max(10, options.chunk_rate * 5))
     # Provider failures are reported through the event sink, then use the
@@ -53,6 +58,13 @@ def run(options: CliOptions) -> None:
         request_stop=request_stop,
         info_handler=lambda message: stdout_cmd('info', message),
         error_handler=lambda message: stdout_cmd('error', message),
+        diagnostic_handler=lambda message, details: output.publish(
+            ProviderDebug(
+                provider='audio',
+                message=message,
+                details=details,
+            )
+        ),
         record=options.record,
         recording_path=options.record_path,
     )

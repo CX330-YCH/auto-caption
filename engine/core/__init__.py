@@ -12,6 +12,12 @@ from .events import (
 )
 from .provider import RecognitionProvider
 from .session import EventSink, RecognitionSession, TranslationService
+from .diagnostics import (
+    exception_diagnostic,
+    redact_diagnostic_text,
+    safe_diagnostic_value,
+    sdk_diagnostic,
+)
 
 __all__ = [
     'AudioCaptureWorker',
@@ -21,6 +27,7 @@ __all__ = [
     'CaptionFinal',
     'CaptionPartial',
     'EventSink',
+    'exception_diagnostic',
     'ProviderError',
     'ProviderDebug',
     'ProviderInfo',
@@ -29,6 +36,9 @@ __all__ = [
     'RecognitionEvent',
     'RecognitionProvider',
     'RecognitionSession',
+    'redact_diagnostic_text',
+    'safe_diagnostic_value',
+    'sdk_diagnostic',
     'TranslationService',
     'UsageUpdated',
 ]

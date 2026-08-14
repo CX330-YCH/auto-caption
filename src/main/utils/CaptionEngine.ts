@@ -1,10 +1,15 @@
 import { execFile, spawn } from 'child_process'
 import * as net from 'net'
+import { StringDecoder } from 'node:string_decoder'
 import { controlWindow } from '../ControlWindow'
 import { allConfig } from './AllConfig'
 import { i18n } from '../i18n'
 import { Log } from './Log'
-import { passwordMaskingForList } from './UtilsFunc'
+import {
+  passwordMaskingForList,
+  redactSensitiveText,
+  sensitiveArgumentValues
+} from './UtilsFunc'
 import {
   EngineProtocol,
   type EngineProtocolBatch
@@ -41,6 +46,8 @@ export class CaptionEngine {
   private readonly protocol = new EngineProtocol()
   private engineRunSequence: number = 0
   private activeEngineRunId: number = 0
+  private stderrDecoder = new StringDecoder('utf8')
+  private stderrSecrets: string[] = []
 
   private getApp(): boolean {
     const engineConfig = allConfig.engine
@@ -121,6 +128,11 @@ export class CaptionEngine {
     if(!this.getApp()){ return }
 
     this.protocol.reset()
+    this.stderrDecoder = new StringDecoder('utf8')
+    this.stderrSecrets = [
+      ...sensitiveArgumentValues(this.command),
+      process.env.DASHSCOPE_API_KEY || ''
+    ].filter(Boolean)
     this.engineRunSequence += 1
     this.activeEngineRunId = this.engineRunSequence
     this.process = spawn(this.appPath, this.command, {
@@ -151,15 +163,11 @@ export class CaptionEngine {
     });
 
     this.process.stderr.on('data', (data: Buffer) => {
-      const lines = data.toString().split('\n')
-      lines.forEach((line: string) => {
-        if(line.trim()){
-          Log.error(line)       
-        }
-      })
+      this.logEngineStderr(this.stderrDecoder.write(data))
     });
 
     this.process.on('close', (code: number | null, signal: NodeJS.Signals | null) => {
+      this.logEngineStderr(this.stderrDecoder.end())
       this.handleProtocolBatch(this.protocol.finish())
       this.process = undefined;
       this.client = undefined
@@ -246,6 +254,14 @@ export class CaptionEngine {
     for (const message of batch.messages) {
       handleEngineData(message, this.activeEngineRunId)
     }
+  }
+
+  private logEngineStderr(value: string): void {
+    if (!value) return
+    Log.error(
+      'Engine stderr:',
+      redactSensitiveText(value, this.stderrSecrets)
+    )
   }
 }
 

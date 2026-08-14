@@ -72,7 +72,7 @@
 - 发送：无数据
 - 接收：`"saved" | "canceled" | "unavailable" | "failed"`
 
-主进程从启动开始持续写入会话文件。`DEBUG` 仅存在于该文件，不进入原有日志记录页；原有 `INFO`、`WARN`、`ERROR` 显示行为不变。日志页的“清空”只清空当前可见表格，不清除会话文件。所有结构化字段和异常栈均保留，但 API Key、Token、密码、Authorization 和命令行凭据必须脱敏。
+主进程从启动开始持续写入会话文件。`DEBUG` 仅存在于该文件，不进入原有日志记录页；原有 `INFO`、`WARN`、`ERROR` 显示行为不变。日志页的“清空”只清空当前可见表格，不清除会话文件。Provider 诊断、SDK 回调字段、异常 cause/自定义属性/traceback、字幕引擎 stderr 和热词 Worker stderr 都会保留；stderr 使用跨 Buffer 的增量 UTF-8 解码。API Key、Token、密码、Authorization、Cookie、环境变量和命令行凭据必须递归脱敏，二进制音频不得写入日志正文。
 
 ### `control.engine.info`
 

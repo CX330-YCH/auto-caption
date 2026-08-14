@@ -44,7 +44,7 @@ JSON object + "\n" + JSON object + "\n" + ...
 
 > 方向：字幕引擎进程 → Electron 主进程
 
-字幕引擎不得把普通调试文本写入 stdout。调试信息应写入 stderr，或使用下列日志事件。每次写入一条完整事件后必须立即刷新 stdout。
+字幕引擎不得把普通调试文本写入 stdout。调试信息应写入 stderr，或使用下列日志事件。每次写入一条完整事件后必须立即刷新 stdout。Electron 使用增量 UTF-8 解码器完整接收 stderr；Python traceback、SDK 自有日志和多行诊断都会写入本次 Debug JSONL，不再按任意进程数据块截断字符或丢弃热词子进程 stderr。
 
 ### `connect`
 
@@ -136,17 +136,28 @@ Fun-ASR 的预编译热词表 ID 和上下文术语是任务启动参数，不�
   diagnostic: {
     version: 1,
     provider: "fun_asr",
+    operation: "fun_asr.callback.on_error",
     generation: 1,
     retryable: false,
     statusCode: 401,
     code: "InvalidApiKey",
     serviceMessage: "...",
-    requestId: "..."
+    requestId: "...",
+    sdkResult: { "...": "SDK callback fields" },
+    errorType: "RuntimeError",
+    errorModule: "builtins",
+    errorMessage: "...",
+    errorArgs: ["..."],
+    errorAttributes: { "...": "..." },
+    stackTrace: "Traceback ...",
+    cause: { "...": "nested exception diagnostic" }
   }
 }
 ```
 
-除 `version` 外的诊断字段均可缺省。`serviceMessage` 和所有 `details` 在 Python 与 Electron 两层再次脱敏；API Key、Token、密码或 Authorization 不得写入协议或日志。
+除 `version` 外的诊断字段均可缺省。内置 Gummy、Fun-ASR、GLM、Vosk 和 SOSV，以及音频采集、翻译服务、热词 SDK、Provider 启停和 Session 清理路径，都使用同一诊断序列化规则：普通异常保留类型、模块、消息、参数、自定义属性、完整 traceback、cause/context；SDK 回调对象保留可序列化公开字段和实例属性；二进制音频仅记录类型和长度。为防止失控响应撑爆日志，单个字符串最多保留 64 KiB、单个集合最多 256 项、嵌套最多 8 层，并明确写入截断标记。
+
+`serviceMessage`、`sdkResult`、异常属性、stderr 和所有 `details` 在 Python 与 Electron 两层再次脱敏。实际命令行中的 API Key、环境变量 Key、Token、密码、Authorization、Cookie 和其他凭据不得写入协议或日志；因此这里的“完整”指凭据脱敏及有界保护后的完整诊断，而不是原样保存秘密或音频正文。
 
 ## TCP 命令
 

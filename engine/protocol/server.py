@@ -1,6 +1,8 @@
 import socket
 import threading
+import json
 
+from core import exception_diagnostic
 from protocol import NDJSONDecoder
 from utils import shared_data, stderr, stdout_cmd
 
@@ -17,7 +19,7 @@ def handle_client(client_socket):
             if _handle_batch(decoder.push(chunk)):
                 break
     except OSError as error:
-        stderr(f'Communication error: {error}')
+        _stderr_exception('command_server.client', error)
     finally:
         shared_data.status = 'stop'
         client_socket.close()
@@ -54,7 +56,7 @@ def start_server(port: int):
         server.listen(1)
     except Exception as error:
         server.close()
-        stderr(str(error))
+        _stderr_exception('command_server.start', error)
         stdout_cmd('kill')
         return
     stdout_cmd('connect')
@@ -64,3 +66,13 @@ def start_server(port: int):
     client_handler = threading.Thread(target=handle_client, args=(client,))
     client_handler.daemon = True
     client_handler.start()
+
+
+def _stderr_exception(operation: str, error: Exception) -> None:
+    stderr(json.dumps({
+        'source': 'engine-command-server',
+        'diagnostic': exception_diagnostic(
+            error,
+            operation=operation,
+        ),
+    }, ensure_ascii=False))

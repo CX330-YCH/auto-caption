@@ -183,6 +183,7 @@ class HotwordManagerTests(unittest.TestCase):
             },
         }
         output = io.StringIO()
+        diagnostic_output = io.StringIO()
         with patch(
             'services.hotwords._build_vocabulary_client',
             return_value=FailingClient(),
@@ -190,6 +191,7 @@ class HotwordManagerTests(unittest.TestCase):
             code = run_hotword_worker(
                 io.StringIO(json.dumps(envelope)),
                 output,
+                diagnostic_output,
             )
 
         self.assertEqual(code, 1)
@@ -198,6 +200,18 @@ class HotwordManagerTests(unittest.TestCase):
             {'ok': False, 'errorCode': 'sdk_error'},
         )
         self.assertNotIn('dummy-credential', output.getvalue())
+        diagnostic = json.loads(diagnostic_output.getvalue())
+        self.assertEqual(diagnostic['source'], 'hotword-worker')
+        self.assertEqual(
+            diagnostic['diagnostic']['operation'],
+            'fun_asr.hotword.worker',
+        )
+        self.assertEqual(
+            diagnostic['diagnostic']['errorType'],
+            'RuntimeError',
+        )
+        self.assertIn('stackTrace', diagnostic['diagnostic'])
+        self.assertNotIn('dummy-credential', diagnostic_output.getvalue())
 
 
 if __name__ == '__main__':

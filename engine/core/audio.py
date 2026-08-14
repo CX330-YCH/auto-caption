@@ -6,6 +6,8 @@ from datetime import datetime
 from queue import Full, Queue
 from typing import Protocol
 
+from .diagnostics import exception_diagnostic
+
 
 @dataclass(frozen=True)
 class AudioFrame:
@@ -83,6 +85,9 @@ class AudioCaptureWorker:
         request_stop: Callable[[], None],
         info_handler: Callable[[str], None],
         error_handler: Callable[[str], None],
+        diagnostic_handler: Callable[
+            [str, dict[str, object]], None
+        ] | None = None,
         record: bool = False,
         recording_path: str = '',
     ) -> None:
@@ -93,6 +98,9 @@ class AudioCaptureWorker:
         self._request_stop = request_stop
         self._info_handler = info_handler
         self._error_handler = error_handler
+        self._diagnostic_handler = diagnostic_handler or (
+            lambda message, details: None
+        )
         self._record = record
         self._recording_path = recording_path
 
@@ -121,12 +129,33 @@ class AudioCaptureWorker:
             self._error_handler(
                 f'Audio capture failed ({type(error).__name__})'
             )
+            self._diagnostic_handler(
+                'Audio capture failed.',
+                exception_diagnostic(
+                    error,
+                    operation='audio.capture',
+                ),
+            )
             self._request_stop()
         finally:
             if recording is not None:
-                recording.close()
-                self._info_handler(f'Audio saved to {recording_name}')
-            self._source.close_stream_signal()
+                try:
+                    recording.close()
+                    self._info_handler(f'Audio saved to {recording_name}')
+                except Exception as error:
+                    self._report_cleanup_error(
+                        'Audio recording failed to close.',
+                        'audio.recording.close',
+                        error,
+                    )
+            try:
+                self._source.close_stream_signal()
+            except Exception as error:
+                self._report_cleanup_error(
+                    'Audio capture stream failed to signal close.',
+                    'audio.close_stream_signal',
+                    error,
+                )
 
     def _open_recording(self):
         path = self._recording_path.strip('"')
@@ -139,3 +168,15 @@ class AudioCaptureWorker:
         recording.setsampwidth(self._source.SAMP_WIDTH)
         recording.setframerate(self._source.RATE)
         return full_name, recording
+
+    def _report_cleanup_error(
+        self,
+        message: str,
+        operation: str,
+        error: Exception,
+    ) -> None:
+        self._error_handler(f'{message} ({type(error).__name__})')
+        self._diagnostic_handler(
+            message,
+            exception_diagnostic(error, operation=operation),
+        )

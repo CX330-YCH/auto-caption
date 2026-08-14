@@ -21,6 +21,8 @@ from core import (
     ProviderStopped,
     RecognitionProvider,
     UsageUpdated,
+    exception_diagnostic,
+    sdk_diagnostic,
 )
 
 
@@ -159,7 +161,14 @@ class FunAsrCallback:
         self._provider.handle_close(self._generation)
 
     def on_event(self, result: FunAsrResult) -> None:
-        self._provider.handle_event(self._generation, result)
+        try:
+            self._provider.handle_event(self._generation, result)
+        except Exception as error:
+            self._provider.handle_callback_exception(
+                self._generation,
+                'fun_asr.callback.on_event',
+                error,
+            )
 
 
 FunAsrClientFactory = Callable[
@@ -253,6 +262,7 @@ class FunAsrFailure:
     message: str
     request_id: str
     retryable: bool
+    diagnostic: dict[str, object] = field(default_factory=dict)
 
     def details(self, generation: int) -> dict[str, object]:
         details: dict[str, object] = {
@@ -268,6 +278,7 @@ class FunAsrFailure:
             details['serviceMessage'] = self.message
         if self.request_id:
             details['requestId'] = self.request_id
+        details.update(self.diagnostic)
         return details
 
 
@@ -369,7 +380,10 @@ class FunAsrProvider(RecognitionProvider):
         except Exception as error:
             self._handle_failure(
                 self._generation,
-                self._failure_from_exception(error),
+                self._failure_from_exception(
+                    error,
+                    operation='fun_asr.start',
+                ),
             )
 
     def accept_audio(self, frame: AudioFrame) -> None:
@@ -394,7 +408,10 @@ class FunAsrProvider(RecognitionProvider):
                 self._buffer_audio(frame.data)
             self._handle_failure(
                 generation,
-                self._failure_from_exception(error),
+                self._failure_from_exception(
+                    error,
+                    operation='fun_asr.send_audio_frame',
+                ),
             )
 
     def stop(self) -> None:
@@ -413,10 +430,16 @@ class FunAsrProvider(RecognitionProvider):
                 client.stop()
             except Exception as error:
                 if type(error).__name__ == 'InvalidParameter':
+                    details = exception_diagnostic(
+                        error,
+                        operation='fun_asr.stop',
+                        secrets=(self._options.api_key,),
+                    )
+                    details['generation'] = self._generation
                     self._emit(ProviderDebug(
                         provider=self.name,
                         message='Ignored stop for an SDK-stopped task.',
-                        details={'generation': self._generation},
+                        details=details,
                     ))
                 else:
                     self._emit(ProviderError(
@@ -426,6 +449,11 @@ class FunAsrProvider(RecognitionProvider):
                             f'({type(error).__name__})'
                         ),
                         fatal=False,
+                        details=exception_diagnostic(
+                            error,
+                            operation='fun_asr.stop',
+                            secrets=(self._options.api_key,),
+                        ),
                     ))
         elif client is not None:
             self._emit(ProviderDebug(
@@ -492,6 +520,17 @@ class FunAsrProvider(RecognitionProvider):
         result: FunAsrResult,
     ) -> None:
         self._handle_failure(generation, self._failure_from_result(result))
+
+    def handle_callback_exception(
+        self,
+        generation: int,
+        operation: str,
+        error: Exception,
+    ) -> None:
+        self._handle_failure(
+            generation,
+            self._failure_from_exception(error, operation=operation),
+        )
 
     def handle_event(
         self,
@@ -584,13 +623,16 @@ class FunAsrProvider(RecognitionProvider):
             try:
                 self._abort_failed_client(client)
             except Exception as error:
+                details = exception_diagnostic(
+                    error,
+                    operation='fun_asr.failed_client.abort',
+                    secrets=(self._options.api_key,),
+                )
+                details['generation'] = generation
                 self._emit(ProviderDebug(
                     provider=self.name,
                     message='Fun-ASR failed-client cleanup failed.',
-                    details={
-                        'generation': generation,
-                        'errorType': type(error).__name__,
-                    },
+                    details=details,
                 ))
         self._emit(ProviderDebug(
             provider=self.name,
@@ -634,7 +676,10 @@ class FunAsrProvider(RecognitionProvider):
         except Exception as error:
             self._handle_failure(
                 self._generation,
-                self._failure_from_exception(error),
+                self._failure_from_exception(
+                    error,
+                    operation='fun_asr.reconnect',
+                ),
             )
 
     def _emit_fatal(
@@ -687,9 +732,18 @@ class FunAsrProvider(RecognitionProvider):
             message=message,
             request_id=request_id,
             retryable=_is_retryable_failure(status_code, code),
+            diagnostic=sdk_diagnostic(
+                result,
+                operation='fun_asr.callback.on_error',
+                secrets=secrets,
+            ),
         )
 
-    def _failure_from_exception(self, error: Exception) -> FunAsrFailure:
+    def _failure_from_exception(
+        self,
+        error: Exception,
+        operation: str = 'fun_asr.sdk',
+    ) -> FunAsrFailure:
         code = type(error).__name__
         return FunAsrFailure(
             status_code=None,
@@ -700,6 +754,11 @@ class FunAsrProvider(RecognitionProvider):
             ),
             request_id='',
             retryable=_is_retryable_failure(None, code),
+            diagnostic=exception_diagnostic(
+                error,
+                operation=operation,
+                secrets=(self._options.api_key,),
+            ),
         )
 
     def _buffer_audio(self, data: bytes) -> None:

@@ -3,6 +3,9 @@
 import pyaudio
 from textwrap import dedent
 
+from core import exception_diagnostic
+from utils.sysout import stdout_obj
+
 
 def get_blackhole_device(mic: pyaudio.PyAudio):
     """
@@ -79,7 +82,20 @@ class AudioStream:
                 input = True,
                 input_device_index = int(self.INDEX)
             )
-        except OSError:
+        except OSError as error:
+            stdout_obj({
+                'command': 'debug',
+                'content': (
+                    'Audio device rejected 16000 Hz; using its default rate.'
+                ),
+                'details': {
+                    **exception_diagnostic(
+                        error,
+                        operation='audio.macos.open_16000hz',
+                    ),
+                    'fallbackSampleRate': self.DEFAULT_RATE,
+                },
+            })
             self.RATE = self.DEFAULT_RATE
             self.CHUNK = self.RATE // self.CHUNK_RATE
             self.stream = self.mic.open(

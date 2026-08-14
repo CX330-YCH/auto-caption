@@ -13,6 +13,7 @@ from core import (
     ProviderReady,
     ProviderStopped,
     RecognitionProvider,
+    exception_diagnostic,
 )
 from core.worker import BoundedWorkerPool
 
@@ -35,8 +36,7 @@ def _build_request(url: str, model: str, api_key: str) -> GlmRequest:
             files={'file': ('audio.wav', audio_content, 'audio/wav')},
             timeout=15,
         )
-        if response.status_code != 200:
-            raise RuntimeError(f'GLM HTTP status {response.status_code}')
+        response.raise_for_status()
         text = response.json().get('text', '')
         if not isinstance(text, str):
             raise ValueError('GLM response text must be a string')
@@ -91,11 +91,27 @@ class GlmProvider(RecognitionProvider):
         parsed_url = urlparse(self._url)
         if parsed_url.scheme not in {'http', 'https'} or not parsed_url.netloc:
             raise ValueError('GLM URL must use http or https')
-        self._request = self._request_factory(
-            self._url,
-            self._model,
-            self._api_key,
-        )
+        try:
+            self._request = self._request_factory(
+                self._url,
+                self._model,
+                self._api_key,
+            )
+        except Exception as error:
+            self._emit(ProviderError(
+                provider=self.name,
+                message=(
+                    'GLM-ASR client initialization failed '
+                    f'({type(error).__name__})'
+                ),
+                fatal=True,
+                details=exception_diagnostic(
+                    error,
+                    operation='glm.client.initialize',
+                    secrets=(self._api_key,),
+                ),
+            ))
+            return
         self._workers = BoundedWorkerPool(
             self._worker_count,
             self._max_pending_requests,
@@ -209,6 +225,11 @@ class GlmProvider(RecognitionProvider):
                     provider=self.name,
                     message=f'GLM-ASR request failed ({type(error).__name__})',
                     fatal=False,
+                    details=exception_diagnostic(
+                        error,
+                        operation='glm.request',
+                        secrets=(self._api_key,),
+                    ),
                 ))
 
     @staticmethod

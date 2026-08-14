@@ -1,6 +1,7 @@
 from collections.abc import Callable
 
 from core import CaptionFinal
+from core import exception_diagnostic
 from core.worker import BoundedWorkerPool
 
 
@@ -19,6 +20,10 @@ class QueuedTranslationService:
         self,
         translator: Callable[[CaptionFinal], None],
         warning_handler: Callable[[str], None],
+        diagnostic_handler: Callable[
+            [str, dict[str, object]], None
+        ] | None = None,
+        secrets: tuple[str, ...] = (),
         worker_count: int = 2,
         max_pending: int = 32,
     ) -> None:
@@ -28,6 +33,10 @@ class QueuedTranslationService:
             raise ValueError('max_pending must be positive')
         self._translator = translator
         self._warning_handler = warning_handler
+        self._diagnostic_handler = diagnostic_handler or (
+            lambda message, details: None
+        )
+        self._secrets = secrets
         self._workers = BoundedWorkerPool(worker_count, max_pending)
         self._closed = False
 
@@ -52,6 +61,14 @@ class QueuedTranslationService:
             self._warning_handler(
                 f'Translation failed ({type(error).__name__})'
             )
+            self._diagnostic_handler(
+                'Translation request failed.',
+                exception_diagnostic(
+                    error,
+                    operation='translation.request',
+                    secrets=self._secrets,
+                ),
+            )
 
 
 def build_legacy_translation_service(
@@ -61,6 +78,9 @@ def build_legacy_translation_service(
     url: str,
     api_key: str,
     warning_handler: Callable[[str], None],
+    diagnostic_handler: Callable[
+        [str, dict[str, object]], None
+    ] | None = None,
 ):
     if not target:
         return NoTranslationService()
@@ -88,4 +108,9 @@ def build_legacy_translation_service(
                 api_key,
             )
 
-    return QueuedTranslationService(translate, warning_handler)
+    return QueuedTranslationService(
+        translate,
+        warning_handler,
+        diagnostic_handler=diagnostic_handler,
+        secrets=(api_key,),
+    )

@@ -1,4 +1,5 @@
 import { spawn } from 'child_process'
+import { StringDecoder } from 'node:string_decoder'
 import type {
   HotwordErrorCode,
   HotwordRequest,
@@ -8,6 +9,7 @@ import { parseHotwordRequest } from '../../shared/hotwords.ts'
 import { resolveBundledEngineCommand } from '../engine/EngineExecutable'
 import { allConfig } from '../utils/AllConfig'
 import { Log } from '../utils/Log'
+import { redactSensitiveText } from '../utils/UtilsFunc'
 
 const MAX_RESPONSE_BYTES = 1024 * 1024
 const REQUEST_TIMEOUT_MS = 20000
@@ -61,7 +63,7 @@ export class HotwordService {
     }
     catch (error) {
       const errorName = error instanceof Error ? error.name : 'UnknownError'
-      Log.error(`Hotword operation failed (${errorName})`)
+      Log.error(`Hotword operation failed (${errorName})`, error)
       return failure('process_failed')
     }
     finally {
@@ -79,6 +81,17 @@ export class HotwordService {
     return new Promise((resolve) => {
       let stdout = Buffer.alloc(0)
       let settled = false
+      const stderrDecoder = new StringDecoder('utf8')
+      const apiKey = typeof envelope.apiKey === 'string'
+        ? envelope.apiKey
+        : ''
+      const logStderr = (value: string): void => {
+        if (!value) return
+        Log.debug(
+          'Hotword worker stderr:',
+          redactSensitiveText(value, [apiKey])
+        )
+      }
       const finish = (response: HotwordResponse): void => {
         if (settled) return
         settled = true
@@ -98,22 +111,26 @@ export class HotwordService {
         }
         stdout = Buffer.concat([stdout, chunk])
       })
-      child.stderr.on('data', () => {
-        // SDK stderr can contain remote diagnostics; never forward raw text.
+      child.stderr.on('data', (chunk: Buffer) => {
+        logStderr(stderrDecoder.write(chunk))
       })
       child.on('error', (error) => {
-        Log.error(`Hotword worker failed (${error.name})`)
+        Log.error(`Hotword worker failed (${error.name})`, error)
         finish(failure('process_failed'))
       })
       child.stdin.on('error', (error) => {
-        Log.error(`Hotword worker input failed (${error.name})`)
+        Log.error(`Hotword worker input failed (${error.name})`, error)
         finish(failure('process_failed'))
       })
       child.on('close', () => {
+        logStderr(stderrDecoder.end())
         try {
           finish(parseWorkerResponse(stdout.toString('utf8')))
         }
-        catch {
+        catch (error) {
+          Log.error('Invalid hotword worker response', error, {
+            response: stdout.toString('utf8')
+          })
           finish(failure('process_failed'))
         }
       })

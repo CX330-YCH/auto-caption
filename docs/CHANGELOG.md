@@ -1,5 +1,6 @@
 ## 未发布
 
+- 所有内置字幕引擎、SDK 回调、音频、翻译和热词 Worker 现在会把脱敏后的完整异常字段、traceback、cause/context 与 stderr 保存到本次 Debug JSONL；Gummy 不再丢弃服务端回调错误对象。
 - 修复流式字幕只停留在首个中间结果的问题：应用保留跨引擎运行唯一的 `captionId`，主进程和 Vue 均按稳定 ID 幂等更新；异步翻译优先按同一 ID 关联，并兼容旧自定义引擎的 `time_s` 格式。
 - 修复打包 Python 运行时未初始化系统 CA 的问题；所有 TLS 客户端在入口阶段统一使用 macOS Security、Windows CryptoAPI 或 Linux OpenSSL 系统信任，并新增 `truststore==0.10.4` 直接依赖和 PyInstaller 隐式导入。
 - 新增本次软件启动的隐式完整 Debug JSONL 会话和日志页保存按钮；原有日志页仍只显示 INFO、WARN、ERROR，凭据始终脱敏。
@@ -271,4 +272,11 @@
 ### 发布与构建
 
 - 更新应用版本号为 v2.9.0，并同步应用标题、关于窗口、README 与中英日用户/引擎文档版本标识。
+- 基于当前工作区依赖和打包配置生成 macOS arm64 构建产物，作为 V2 小版本的 Mac 版本验证包。
+
+## v2.10.0
+
+### 发布与构建
+
+- 更新应用版本号为 v2.10.0，并同步应用标题、关于窗口、README 与中英日用户/引擎文档版本标识。
 - 基于当前工作区依赖和打包配置生成 macOS arm64 构建产物，作为 V2 小版本的 Mac 版本验证包。

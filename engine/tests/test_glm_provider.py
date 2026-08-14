@@ -97,6 +97,10 @@ class GlmProviderTests(unittest.TestCase):
 
         self.assertFalse(error.fatal)
         self.assertNotIn('secret-response-body', error.message)
+        self.assertEqual(error.details['operation'], 'glm.request')
+        self.assertEqual(error.details['errorType'], 'RuntimeError')
+        self.assertIn('stackTrace', error.details)
+        self.assertNotIn('secret-response-body', str(error.details))
 
     def test_rejects_non_http_endpoint(self):
         provider = GlmProvider('file:///tmp/asr', 'glm-asr', 'test-key')

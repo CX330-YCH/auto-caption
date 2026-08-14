@@ -395,6 +395,10 @@ class FunAsrProviderTests(unittest.TestCase):
         self.assertEqual(len(fatal), 1)
         self.assertEqual(fatal[0].details['statusCode'], 401)
         self.assertEqual(fatal[0].details['requestId'], 'request-1')
+        sdk_attributes = fatal[0].details['sdkResult']['attributes']
+        self.assertEqual(sdk_attributes['status_code'], 401)
+        self.assertEqual(sdk_attributes['code'], 'InvalidApiKey')
+        self.assertEqual(sdk_attributes['request_id'], 'request-1')
         self.assertNotIn('dummy-credential', str(events))
         self.assertNotIn('sk-example', str(events))
         self.assertFalse(any(

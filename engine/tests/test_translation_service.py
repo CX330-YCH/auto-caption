@@ -84,6 +84,35 @@ class QueuedTranslationServiceTests(unittest.TestCase):
             '',
         )])
 
+    def test_preserves_sanitized_translation_exception_diagnostic(self):
+        finished = threading.Event()
+        warnings = []
+        diagnostics = []
+
+        def translate(item):
+            raise RuntimeError('API key translation-secret rejected')
+
+        def diagnostic_handler(message, details):
+            diagnostics.append((message, details))
+            finished.set()
+
+        service = QueuedTranslationService(
+            translator=translate,
+            warning_handler=warnings.append,
+            diagnostic_handler=diagnostic_handler,
+            secrets=('translation-secret',),
+            worker_count=1,
+        )
+        service.submit(caption(1))
+        self.assertTrue(finished.wait(timeout=1))
+        service.close()
+
+        self.assertEqual(len(warnings), 1)
+        self.assertEqual(diagnostics[0][1]['operation'], 'translation.request')
+        self.assertEqual(diagnostics[0][1]['errorType'], 'RuntimeError')
+        self.assertIn('stackTrace', diagnostics[0][1])
+        self.assertNotIn('translation-secret', str(diagnostics))
+
 
 if __name__ == '__main__':
     unittest.main()

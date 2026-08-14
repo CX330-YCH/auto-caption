@@ -64,6 +64,14 @@ class TranslationResult:
         return Translation(self.text)
 
 
+class SdkErrorResult:
+    def __init__(self):
+        self.status_code = 403
+        self.code = 'PermissionDenied'
+        self.message = 'Rejected test-key'
+        self.request_id = 'gummy-request-1'
+
+
 def make_frame(sample_rate=16000):
     return AudioFrame(
         data=b'\x00\x00',
@@ -158,6 +166,64 @@ class GummyProviderTests(unittest.TestCase):
         ][0]
         self.assertTrue(fatal.fatal)
         self.assertNotIn('secret-sdk-error', fatal.message)
+        self.assertEqual(
+            fatal.details['operation'],
+            'gummy.send_audio_frame',
+        )
+        self.assertEqual(fatal.details['errorType'], 'RetryableSendError')
+        self.assertIn('stackTrace', fatal.details)
+        self.assertNotIn('secret-sdk-error', str(fatal.details))
+
+    def test_preserves_sanitized_sdk_callback_error_details(self):
+        clients = []
+
+        def factory(rate, source, target, api_key, callback):
+            client = FakeClient(callback)
+            clients.append(client)
+            return GummyClientBinding(client, (RetryableSendError,))
+
+        provider = GummyProvider(
+            16000,
+            'zh',
+            'en',
+            'test-key',
+            client_factory=factory,
+        )
+        provider.start()
+        provider.drain_events()
+        clients[0].callback.on_error(SdkErrorResult())
+
+        error = provider.drain_events()[0]
+        sdk_attributes = error.details['sdkResult']['attributes']
+        self.assertEqual(error.details['operation'], 'gummy.callback.on_error')
+        self.assertEqual(sdk_attributes['status_code'], 403)
+        self.assertEqual(sdk_attributes['code'], 'PermissionDenied')
+        self.assertEqual(sdk_attributes['request_id'], 'gummy-request-1')
+        self.assertNotIn('test-key', str(error.details))
+
+    def test_preserves_non_retryable_sdk_send_exception(self):
+        class NonRetryableClient(FakeClient):
+            def send_audio_frame(self, data):
+                raise RuntimeError('SDK rejected test-key')
+
+        provider = GummyProvider(
+            16000,
+            'zh',
+            'en',
+            'test-key',
+            client_factory=lambda rate, source, target, key, callback: (
+                GummyClientBinding(NonRetryableClient(callback), ())
+            ),
+        )
+        provider.start()
+        provider.drain_events()
+        provider.accept_audio(make_frame())
+
+        error = provider.drain_events()[0]
+        self.assertTrue(error.fatal)
+        self.assertEqual(error.details['errorType'], 'RuntimeError')
+        self.assertEqual(error.details['operation'], 'gummy.send_audio_frame')
+        self.assertNotIn('test-key', str(error.details))
 
     def test_rejects_wrong_sample_rate(self):
         provider = GummyProvider(

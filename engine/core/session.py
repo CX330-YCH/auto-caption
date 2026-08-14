@@ -4,6 +4,7 @@ from typing import Protocol
 
 from .audio import AudioFrame, AudioSource
 from .events import CaptionFinal, ProviderError, RecognitionEvent
+from .diagnostics import exception_diagnostic
 from .provider import RecognitionProvider
 
 
@@ -66,6 +67,10 @@ class RecognitionSession:
                     f'({type(error).__name__})'
                 ),
                 fatal=True,
+                details=exception_diagnostic(
+                    error,
+                    operation='provider.session.run',
+                ),
             ))
             self._request_stop()
         finally:
@@ -79,14 +84,45 @@ class RecognitionSession:
                         f'({type(error).__name__})'
                     ),
                     fatal=False,
+                    details=exception_diagnostic(
+                        error,
+                        operation='provider.session.stop',
+                    ),
                 ))
             try:
                 self._publish_pending_events()
             finally:
                 try:
                     self._translation_service.close()
+                except Exception as error:
+                    self._event_sink.publish(ProviderError(
+                        provider='translation',
+                        message=(
+                            'Translation service failed to close '
+                            f'({type(error).__name__})'
+                        ),
+                        fatal=False,
+                        details=exception_diagnostic(
+                            error,
+                            operation='translation.close',
+                        ),
+                    ))
                 finally:
-                    self._audio_source.close_stream()
+                    try:
+                        self._audio_source.close_stream()
+                    except Exception as error:
+                        self._event_sink.publish(ProviderError(
+                            provider='audio',
+                            message=(
+                                'Audio stream failed to close '
+                                f'({type(error).__name__})'
+                            ),
+                            fatal=False,
+                            details=exception_diagnostic(
+                                error,
+                                operation='audio.close_stream',
+                            ),
+                        ))
 
     def _publish_pending_events(self) -> None:
         for event in self._provider.drain_events():

@@ -42,20 +42,43 @@ test('debug session preserves records written before and after initialization', 
 })
 
 test('recursive debug redaction preserves diagnostics but removes credentials', () => {
+  const cause = new Error('Bearer cause-secret')
+  const sdkError = new Error('request failed for runtime-key', { cause })
+  sdkError.code = 'SDK_FAILED'
+  sdkError.response = {
+    status: 403,
+    authorization: 'Bearer response-secret'
+  }
   const redacted = redactSensitiveValue({
     requestId: 'request-1',
     code: 'InvalidApiKey',
     apiKey: 'sk-example-secret-value',
+    sdkError,
     nested: {
       authorization: 'Bearer private-value',
       command: ['-e', 'fun_asr', '-fkey', 'plain-secret']
     }
-  })
+  }, ['runtime-key'])
 
   assert.deepEqual(redacted, {
     requestId: 'request-1',
     code: 'InvalidApiKey',
     apiKey: '<redacted>',
+    sdkError: {
+      name: 'Error',
+      message: 'request failed for <redacted>',
+      stack: redacted.sdkError.stack,
+      cause: {
+        name: 'Error',
+        message: 'Bearer <redacted>',
+        stack: redacted.sdkError.cause.stack
+      },
+      code: 'SDK_FAILED',
+      response: {
+        status: 403,
+        authorization: '<redacted>'
+      }
+    },
     nested: {
       authorization: '<redacted>',
       command: ['-e', 'fun_asr', '-fkey', '<redacted>']

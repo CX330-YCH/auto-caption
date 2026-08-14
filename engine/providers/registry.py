@@ -55,7 +55,12 @@ class ProviderRuntime:
 
 
 ProviderBuilder = Callable[
-    [ProviderConfig, AudioSource, Callable[[str], None]],
+    [
+        ProviderConfig,
+        AudioSource,
+        Callable[[str], None],
+        Callable[[str, dict[str, object]], None],
+    ],
     ProviderRuntime,
 ]
 
@@ -74,12 +79,20 @@ class ProviderRegistry:
         config: ProviderConfig,
         audio_source: AudioSource,
         warning_handler: Callable[[str], None],
+        diagnostic_handler: Callable[
+            [str, dict[str, object]], None
+        ] | None = None,
     ) -> ProviderRuntime:
         try:
             builder = self._builders[config.name]
         except KeyError as error:
             raise ValueError('Invalid caption engine specified.') from error
-        return builder(config, audio_source, warning_handler)
+        return builder(
+            config,
+            audio_source,
+            warning_handler,
+            diagnostic_handler or (lambda message, details: None),
+        )
 
     @property
     def names(self) -> tuple[str, ...]:
@@ -100,6 +113,7 @@ def _build_gummy(
     config: ProviderConfig,
     audio_source: AudioSource,
     warning_handler: Callable[[str], None],
+    diagnostic_handler: Callable[[str, dict[str, object]], None],
 ) -> ProviderRuntime:
     from utils.audioprcs import merge_chunk_channels
 
@@ -126,12 +140,14 @@ def _build_vosk(
     config: ProviderConfig,
     audio_source: AudioSource,
     warning_handler: Callable[[str], None],
+    diagnostic_handler: Callable[[str, dict[str, object]], None],
 ) -> ProviderRuntime:
     return _build_mono_16k_runtime(
         VoskProvider(config.vosk_model_path),
         config,
         audio_source,
         warning_handler,
+        diagnostic_handler,
     )
 
 
@@ -139,6 +155,7 @@ def _build_sosv(
     config: ProviderConfig,
     audio_source: AudioSource,
     warning_handler: Callable[[str], None],
+    diagnostic_handler: Callable[[str, dict[str, object]], None],
 ) -> ProviderRuntime:
     if config.sosv_model_path is None:
         raise ValueError('SOSV model path is required')
@@ -147,6 +164,7 @@ def _build_sosv(
         config,
         audio_source,
         warning_handler,
+        diagnostic_handler,
     )
 
 
@@ -154,12 +172,14 @@ def _build_glm(
     config: ProviderConfig,
     audio_source: AudioSource,
     warning_handler: Callable[[str], None],
+    diagnostic_handler: Callable[[str, dict[str, object]], None],
 ) -> ProviderRuntime:
     return _build_mono_16k_runtime(
         GlmProvider(config.glm_url, config.glm_model, config.glm_api_key),
         config,
         audio_source,
         warning_handler,
+        diagnostic_handler,
     )
 
 
@@ -167,6 +187,7 @@ def _build_fun_asr(
     config: ProviderConfig,
     audio_source: AudioSource,
     warning_handler: Callable[[str], None],
+    diagnostic_handler: Callable[[str, dict[str, object]], None],
 ) -> ProviderRuntime:
     return _build_mono_16k_runtime(
         FunAsrProvider(
@@ -193,6 +214,7 @@ def _build_fun_asr(
         config,
         audio_source,
         warning_handler,
+        diagnostic_handler,
     )
 
 
@@ -201,6 +223,7 @@ def _build_mono_16k_runtime(
     config: ProviderConfig,
     audio_source: AudioSource,
     warning_handler: Callable[[str], None],
+    diagnostic_handler: Callable[[str, dict[str, object]], None],
 ) -> ProviderRuntime:
     from utils.audioprcs import resample_chunk_mono
 
@@ -222,6 +245,7 @@ def _build_mono_16k_runtime(
             url=config.translation_url,
             api_key=config.translation_api_key,
             warning_handler=warning_handler,
+            diagnostic_handler=diagnostic_handler,
         ),
     )
 

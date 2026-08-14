@@ -7,12 +7,15 @@ from core import (
     AudioFrame,
     CaptionFinal,
     CaptionPartial,
+    ProviderDebug,
     ProviderError,
     ProviderInfo,
     ProviderReady,
     ProviderStopped,
     RecognitionProvider,
     UsageUpdated,
+    exception_diagnostic,
+    sdk_diagnostic,
 )
 
 
@@ -33,7 +36,7 @@ class GummyCallback:
         return
 
     def on_error(self, message) -> None:
-        self._provider.handle_error()
+        self._provider.handle_error(message)
 
     def on_close(self) -> None:
         self._provider.handle_close()
@@ -45,11 +48,17 @@ class GummyCallback:
         translation_result,
         usage,
     ) -> None:
-        self._provider.handle_event(
-            transcription_result,
-            translation_result,
-            usage,
-        )
+        try:
+            self._provider.handle_event(
+                transcription_result,
+                translation_result,
+                usage,
+            )
+        except Exception as error:
+            self._provider.handle_callback_exception(
+                'gummy.callback.on_event',
+                error,
+            )
 
 
 GummyClientFactory = Callable[
@@ -151,17 +160,33 @@ class GummyProvider(RecognitionProvider):
         return 'gummy'
 
     def start(self) -> None:
-        binding = self._client_factory(
-            self._sample_rate,
-            self._source,
-            self._target,
-            self._api_key,
-            self._callback,
-        )
-        self._client = binding.client
-        self._retryable_errors = binding.retryable_errors
-        self._started = True
-        self._client.start()
+        try:
+            binding = self._client_factory(
+                self._sample_rate,
+                self._source,
+                self._target,
+                self._api_key,
+                self._callback,
+            )
+            self._client = binding.client
+            self._retryable_errors = binding.retryable_errors
+            self._started = True
+            self._client.start()
+        except Exception as error:
+            self._started = False
+            self._emit(ProviderError(
+                provider=self.name,
+                message=(
+                    'Gummy start failed '
+                    f'({type(error).__name__})'
+                ),
+                fatal=True,
+                details=exception_diagnostic(
+                    error,
+                    operation='gummy.start',
+                    secrets=(self._api_key or '',),
+                ),
+            ))
 
     def accept_audio(self, frame: AudioFrame) -> None:
         if not self._started or self._client is None:
@@ -176,13 +201,25 @@ class GummyProvider(RecognitionProvider):
             raise ValueError('Gummy requires mono PCM16 audio')
         try:
             self._client.send_audio_frame(frame.data)
-        except self._retryable_errors:
+        except self._retryable_errors as error:
             self._send_failures += 1
+            details = exception_diagnostic(
+                error,
+                operation='gummy.send_audio_frame',
+                secrets=(self._api_key or '',),
+            )
+            details['attempt'] = self._send_failures
+            self._emit(ProviderDebug(
+                provider=self.name,
+                message='Gummy SDK rejected an audio frame.',
+                details=details,
+            ))
             if self._send_failures > 5:
                 self._emit(ProviderError(
                     provider=self.name,
                     message='Gummy audio send failed after 5 retries.',
                     fatal=True,
+                    details=details,
                 ))
             else:
                 self._emit(ProviderInfo(
@@ -192,6 +229,20 @@ class GummyProvider(RecognitionProvider):
                         f'{self._send_failures}...'
                     ),
                 ))
+        except Exception as error:
+            self._emit(ProviderError(
+                provider=self.name,
+                message=(
+                    'Gummy audio send failed '
+                    f'({type(error).__name__})'
+                ),
+                fatal=True,
+                details=exception_diagnostic(
+                    error,
+                    operation='gummy.send_audio_frame',
+                    secrets=(self._api_key or '',),
+                ),
+            ))
 
     def stop(self) -> None:
         if not self._started:
@@ -206,6 +257,11 @@ class GummyProvider(RecognitionProvider):
                 provider=self.name,
                 message=f'Gummy stop failed ({type(error).__name__})',
                 fatal=False,
+                details=exception_diagnostic(
+                    error,
+                    operation='gummy.stop',
+                    secrets=(self._api_key or '',),
+                ),
             ))
 
     def handle_open(self) -> None:
@@ -227,11 +283,35 @@ class GummyProvider(RecognitionProvider):
             value=self._usage,
         ))
 
-    def handle_error(self) -> None:
+    def handle_error(self, message) -> None:
         self._emit(ProviderError(
             provider=self.name,
             message='Gummy callback reported an error.',
             fatal=True,
+            details=sdk_diagnostic(
+                message,
+                operation='gummy.callback.on_error',
+                secrets=(self._api_key or '',),
+            ),
+        ))
+
+    def handle_callback_exception(
+        self,
+        operation: str,
+        error: Exception,
+    ) -> None:
+        self._emit(ProviderError(
+            provider=self.name,
+            message=(
+                'Gummy callback failed '
+                f'({type(error).__name__})'
+            ),
+            fatal=True,
+            details=exception_diagnostic(
+                error,
+                operation=operation,
+                secrets=(self._api_key or '',),
+            ),
         ))
 
     def handle_event(

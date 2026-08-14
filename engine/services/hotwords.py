@@ -1,8 +1,11 @@
 import json
 import re
+import sys
 from dataclasses import dataclass
 from typing import Any, Protocol, TextIO
 from urllib.parse import urlparse
+
+from core import exception_diagnostic
 
 
 SUPPORTED_FUN_ASR_MODELS = (
@@ -174,7 +177,13 @@ def _build_vocabulary_client(
     )
 
 
-def run_hotword_worker(input_stream: TextIO, output_stream: TextIO) -> int:
+def run_hotword_worker(
+    input_stream: TextIO,
+    output_stream: TextIO,
+    diagnostic_stream: TextIO | None = None,
+) -> int:
+    diagnostic_stream = diagnostic_stream or sys.stderr
+    connection: HotwordConnection | None = None
     try:
         payload = input_stream.read(1_048_577)
         if len(payload) > 1_048_576:
@@ -195,15 +204,35 @@ def run_hotword_worker(input_stream: TextIO, output_stream: TextIO) -> int:
             raise ValueError('Invalid hotword request')
         result = HotwordService(connection).execute(request)
         response = {'ok': True, 'data': result}
-    except HotwordModelMismatchError:
+    except HotwordModelMismatchError as error:
+        _write_worker_diagnostic(error, connection, diagnostic_stream)
         response = {'ok': False, 'errorCode': 'model_mismatch'}
-    except (TypeError, ValueError, json.JSONDecodeError):
+    except (TypeError, ValueError, json.JSONDecodeError) as error:
+        _write_worker_diagnostic(error, connection, diagnostic_stream)
         response = {'ok': False, 'errorCode': 'invalid_request'}
-    except Exception:
+    except Exception as error:
+        _write_worker_diagnostic(error, connection, diagnostic_stream)
         response = {'ok': False, 'errorCode': 'sdk_error'}
     output_stream.write(json.dumps(response, ensure_ascii=False) + '\n')
     output_stream.flush()
     return 0 if response['ok'] else 1
+
+
+def _write_worker_diagnostic(
+    error: Exception,
+    connection: HotwordConnection | None,
+    output: TextIO,
+) -> None:
+    details = exception_diagnostic(
+        error,
+        operation='fun_asr.hotword.worker',
+        secrets=((connection.api_key,) if connection is not None else ()),
+    )
+    output.write(json.dumps({
+        'source': 'hotword-worker',
+        'diagnostic': details,
+    }, ensure_ascii=False) + '\n')
+    output.flush()
 
 
 def _http_url(connection: HotwordConnection) -> str:

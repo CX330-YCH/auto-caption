@@ -216,6 +216,39 @@ class AudioCoreTests(unittest.TestCase):
         self.assertEqual(stop_requests, [])
         self.assertEqual(errors, [])
 
+    def test_capture_worker_reports_full_exception_diagnostic(self):
+        source = FakeAudioSource()
+        source.open_stream = lambda: (_ for _ in ()).throw(
+            OSError('audio device failed')
+        )
+        errors = []
+        diagnostics = []
+        stop_requests = []
+        worker = AudioCaptureWorker(
+            source=source,
+            pipeline=AudioPipeline(
+                converter=lambda chunk: chunk,
+                output_sample_rate=16000,
+            ),
+            output_queue=Queue(maxsize=1),
+            is_running=lambda: True,
+            request_stop=lambda: stop_requests.append(True),
+            info_handler=lambda message: None,
+            error_handler=errors.append,
+            diagnostic_handler=lambda message, details: (
+                diagnostics.append((message, details))
+            ),
+        )
+
+        worker.run()
+
+        self.assertEqual(errors, ['Audio capture failed (OSError)'])
+        self.assertEqual(stop_requests, [True])
+        self.assertEqual(diagnostics[0][1]['operation'], 'audio.capture')
+        self.assertEqual(diagnostics[0][1]['errorType'], 'OSError')
+        self.assertIn('stackTrace', diagnostics[0][1])
+        self.assertTrue(source.close_signaled)
+
 
 class RecognitionSessionTests(unittest.TestCase):
     def test_startup_fatal_skips_capture_and_closes_owned_resources(self):
@@ -360,6 +393,13 @@ class RecognitionSessionTests(unittest.TestCase):
         self.assertEqual(stop_requests, [True])
         self.assertEqual(len(errors), 1)
         self.assertNotIn('secret-token', errors[0].message)
+        self.assertEqual(
+            errors[0].details['operation'],
+            'provider.session.run',
+        )
+        self.assertEqual(errors[0].details['errorType'], 'RuntimeError')
+        self.assertIn('stackTrace', errors[0].details)
+        self.assertNotIn('secret-token', str(errors[0].details))
         self.assertTrue(audio_source.closed)
         self.assertTrue(translation.closed)
 

@@ -3,7 +3,7 @@
     <h1 align="center">auto-caption</h1>
     <p>Auto Caption is a cross-platform real-time caption display software.</p>
     <p>
-      <a href="https://github.com/HiMeditator/auto-caption/releases"><img src="https://img.shields.io/badge/release-2.9.0-blue"></a>
+      <a href="https://github.com/HiMeditator/auto-caption/releases"><img src="https://img.shields.io/badge/release-2.10.0-blue"></a>
       <a href="https://github.com/HiMeditator/auto-caption/issues"><img src="https://img.shields.io/github/issues/HiMeditator/auto-caption?color=orange"></a>
       <img src="https://img.shields.io/github/languages/top/HiMeditator/auto-caption?color=royalblue">
       <img src="https://img.shields.io/github/repo-size/HiMeditator/auto-caption?color=green">
@@ -14,7 +14,7 @@
         | <b>English</b>
         | <a href="./README_ja.md">日本語</a> |
     </p>
-    <p><i>v2.9.0 has been released with a macOS arm64 build...</i></p>
+    <p><i>v2.10.0 has been released with a macOS arm64 build...</i></p>
 </div>
 
 ![](./assets/media/main_en.png)
@@ -48,11 +48,11 @@ https://github.com/user-attachments/assets/9c188d78-9520-4397-bacf-4c8fdcc54874
 - Flexible caption engine selection (Aliyun Gummy cloud model,GLM-ASR cloud model, local Vosk model, local SOSV model, or you can develop your own model)
 - Multi-language recognition and translation (see below "⚙️ Built-in Subtitle Engines")
 - Subtitle record display and export (supports exporting `.srt` and `.json` formats)
-- Separate INFO/WARN/ERROR Software Log and hidden full Debug session, with redacted per-launch `.jsonl` diagnostic export
+- Separate INFO/WARN/ERROR Software Log and hidden full Debug session, with redacted per-launch `.jsonl` diagnostics for every caption engine, SDK callback, exception traceback, and stderr stream
 
 ## 📖 Basic Usage
 
-> ⚠️ Note: v2.9.0 currently provides Windows and macOS arm64 builds; Linux still needs verification from source or the existing build pipeline.
+> ⚠️ Note: v2.10.0 currently provides Windows and macOS arm64 builds; Linux still needs verification from source or the existing build pipeline.
 
 The software has been adapted for Windows, macOS, and Linux platforms. The tested platform information is as follows:
 

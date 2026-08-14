@@ -2004,6 +2004,7 @@
 - macOS 本机 `codesign`、`hdiutil`、`ditto` 与 Electron Builder 输出：确认最终 `.app`、zip、DMG 的签名、镜像和压缩包完整性。
 - 根目录 `AGENTS.md`：遵循修改前检查、系统环境不修改、三语文档同步、构建产物记录和 `change.md` 追加记录要求。
 
+
 ## 2026-08-13 - 初始化操作系统原生 CA 信任
 
 ### 用户授权与变更目标
@@ -2860,3 +2861,198 @@
 - Electron Builder 26 本地模块 `app-builder-lib/out/targets/blockmap/blockmap`：用于刷新签名后产物 blockmap。
 - macOS 本机 `codesign`、`hdiutil`、`ditto` 与 Electron Builder 输出：确认最终 `.app`、zip、DMG 的签名、镜像和压缩包完整性。
 - 根目录 `AGENTS.md`：遵循修改前检查、系统环境不修改、三语文档同步、构建产物记录和 `change.md` 追加记录要求。
+
+## 2026-08-15 - 全字幕引擎与 SDK 完整错误诊断日志
+
+### 用户授权与目标
+
+- 用户明确要求“fix，将所有错误详情都完整保留到 debug 日志中，包括所有的字幕引擎以及 SDK 的报错”。
+- 变更类型：修复、重构、测试、文档。
+- 目标：统一保留 Gummy、Fun-ASR、GLM、Vosk、SOSV、音频采集、异步翻译、热词 Worker、Provider/Session 清理和 Python/Electron 子进程错误的可诊断内容；错误通知继续保持简洁，完整详情只进入本次 Debug JSONL 或既有 stderr 错误记录。
+- 安全边界：用户要求的“完整”按项目安全约束解释为“凭据脱敏并有界保护后的完整诊断”。API Key、Token、密码、Authorization、Cookie 和二进制音频正文禁止进入日志；未调用真实云端 API，未安装或升级依赖，未修改远端资源。
+
+### 修改文件与原因
+
+- `engine/core/diagnostics.py`、`engine/core/__init__.py`
+  - 新增统一诊断序列化入口。异常保留类型、模块、消息、参数、自定义属性、完整 traceback、cause/context；SDK 对象保留实例属性及常见公开字段；字节数据只保留类型和长度。
+  - 递归脱敏显式运行凭据及敏感字段/文本，并对循环引用、非有限数值、不可访问属性和失败的 `repr` 做安全降级。单字符串、集合项数和嵌套深度采用 64 KiB、256 项和 8 层的明确上限及截断标记。
+- `engine/core/session.py`、`engine/core/audio.py`
+  - Provider 运行/停止、翻译关闭、音频流关闭、音频采集/录音关闭/关闭信号异常均附带结构化诊断，不再只保留异常类名或让清理异常覆盖原错误。
+- `engine/providers/gummy.py`
+  - 将 DashScope `on_error(message)` 原样送入安全 SDK 序列化，不再丢弃服务端状态、错误码、消息和 request ID 等字段。
+  - Gummy start、send_audio_frame、stop 和回调处理异常均记录 operation、异常属性与 traceback；每次 SDK 音频发送失败写隐藏 Debug 事件，最终 fatal 复用同一诊断。
+- `engine/providers/fun_asr.py`
+  - 在既有 status/code/message/requestId 之上保留完整 SDK result；start、send、reconnect、stop、失败 client 清理和回调解析异常均保留 traceback 和 SDK/异常属性，同时继续按 generation 幂等处理失败。
+- `engine/providers/glm.py`
+  - HTTP 非成功响应改用 `raise_for_status()`，使 requests 的 response/status/reason/headers/body 等可序列化诊断可由统一入口捕获；client 初始化和异步请求错误附带已脱敏的完整异常详情。
+- `engine/providers/registry.py`、`engine/main.py`
+  - 为 Provider runtime 增加内部 diagnostic handler，将翻译和音频的隐藏诊断统一映射为 `ProviderDebug`，避免各服务直接拼装 stdout。
+- `engine/services/translation.py`、`engine/utils/translation.py`
+  - 移除 Ollama/OpenAI 兼容/Google 翻译适配器内部吞错，让有界翻译服务统一生成简洁 warning 和脱敏完整诊断；稳定字幕 ID 和成功翻译输出格式不变。
+- `engine/services/hotwords.py`、`src/main/services/HotwordService.ts`
+  - 热词 Worker 对校验、模型不匹配和 SDK 异常向私有 stderr 写入脱敏 JSON 诊断，同时保持 stdout 的稳定 `HotwordResponse` 不变；Electron 使用增量 UTF-8 解码收集 Worker stderr，仅写 Debug 日志。
+  - Electron 侧 Worker spawn、stdin、响应解析错误保留完整 JavaScript Error name/message/stack/cause/自定义字段。
+- `engine/protocol/server.py`
+  - TCP command server 的 client/start 异常向 stderr 输出结构化 traceback，而不再只写 `str(error)`。
+- `engine/sysaudio/darwin.py`、`engine/sysaudio/win.py`
+  - 16 kHz 设备打开失败但可回退默认采样率时，写入隐藏 `debug` 诊断并记录 fallbackSampleRate；Windows WASAPI fatal 初始化异常保留结构化 stderr traceback。
+- `src/main/utils/UtilsFunc.ts`
+  - 扩展递归脱敏/序列化，完整保留 JavaScript Error stack、cause 和自定义属性，支持 Map、Set、BigInt、循环引用及显式运行密钥替换；新增从实际字幕引擎参数数组提取敏感值的安全工具。
+- `src/main/utils/CaptionEngine.ts`
+  - 字幕引擎 stderr 改用 `StringDecoder` 跨 Buffer 解码，保留 UTF-8 多字节字符、多行 Python traceback 和 SDK 自有日志；使用本次实际命令行密钥及 `DASHSCOPE_API_KEY` 做精确二次脱敏。
+- `engine/tests/test_diagnostics.py`
+  - 新增异常 traceback/cause/自定义属性、SDK callback 字段、二进制摘要和凭据脱敏的统一诊断测试。
+- `engine/tests/test_engine_core.py`、`engine/tests/test_gummy_provider.py`、`engine/tests/test_fun_asr_provider.py`、`engine/tests/test_glm_provider.py`、`engine/tests/test_hotword_service.py`、`engine/tests/test_translation_service.py`
+  - 覆盖 Session、音频、Gummy callback/send、Fun-ASR SDK result、GLM worker、热词私有 stderr 和翻译线程的完整诊断与凭据不泄漏；既有生命周期、字幕和重连测试继续回归。
+- `tests/node/debugLogSession.test.mjs`、`tests/node/utilsFunc.test.mjs`
+  - 覆盖 JavaScript Error cause/自定义 SDK response、递归字段、实际命令密钥提取和 SDK stderr 精确脱敏。
+- `docs/api-docs/caption-engine.md`、`docs/api-docs/electron-ipc.md`
+  - 记录可选 `error.diagnostic`/`debug.details` 的通用异常与 SDK 字段、stderr 增量解码、大小上限和凭据/二进制安全边界。
+- `docs/engine-manual/zh.md`、`docs/engine-manual/en.md`、`docs/engine-manual/ja.md`
+  - 同步中英日三语说明所有内置引擎及 SDK 的 Debug 诊断范围和脱敏限制。
+- `README.md`、`README_en.md`、`README_ja.md`、`docs/CHANGELOG.md`
+  - 同步中英日功能摘要和未发布变更说明。
+- `change.md`
+  - 追加本批次授权、范围、协议兼容、安全、验证和回滚记录。
+
+### 修改前后行为
+
+- 修改前：Gummy `on_error(message)` 在 Provider 边界被直接丢弃，日志只能看到 `Gummy callback reported an error`；Fun-ASR 只保留选定服务字段；GLM、Vosk、SOSV、音频、翻译和多个清理路径通常只记录异常类型，热词 SDK stderr 被完全丢弃。
+- 修改后：相同错误的用户可见 `content` 仍保持简洁；Debug JSONL 同时保存 `operation`、SDK result、服务字段、异常类型/模块/消息/参数/属性、traceback 和 cause/context，可直接定位服务端拒绝、HTTP 响应、SDK 状态和本地调用点。
+- 修改前：Electron 对 Python stderr 直接按任意 Buffer 调用 `toString().split('\n')`，UTF-8 字符和 traceback 行可能被进程数据块拆散；热词 Worker stderr 无条件忽略。
+- 修改后：字幕引擎和热词 Worker 均使用增量 UTF-8 解码；收到的 stderr 内容在凭据精确替换后完整进入当前 Debug 会话。热词 stdout 公共返回值仍只包含稳定错误码。
+- 修改前：Ollama/OpenAI/Google 适配器内部吞掉异常并输出不一致 warning，外层无法获得 traceback。
+- 修改后：翻译 Worker 统一捕获异常，保留简洁 warning，并将完整脱敏诊断写入隐藏 Debug 事件；翻译失败仍不删除原字幕。
+
+### 配置、IPC、协议、数据结构与兼容性
+
+- 配置 schemaVersion、持久化字段、默认值、配置迁移、命令行参数和 Electron IPC 均无变化，不需要用户配置迁移。
+- Python stdout 继续使用现有 `command` envelope。`error.diagnostic.version` 保持 `1`；本批次只扩展可选字段（如 `operation`、`sdkResult`、`errorType`、`errorModule`、`errorMessage`、`errorArgs`、`errorAttributes`、`stackTrace`、`cause`、`context`），不删除或改名旧字段。
+- 自定义字幕引擎不需要产生新字段；新 Electron 继续接受旧 `error`/`debug` 格式。热词 Worker stdout 的 `{ ok, data/errorCode }` 私有响应格式不变，诊断只走 stderr。
+- `ProviderRegistry.create`、`AudioCaptureWorker` 和翻译服务增加可选内部 diagnostic handler；默认 no-op 保持既有测试和第三方内部调用兼容。
+- 没有新增、删除或升级依赖；没有远端资源、计费调用或凭据存储变化。
+- 精确回滚：恢复本条列出的 Python、TypeScript、测试和文档文件，并删除新增的 `engine/core/diagnostics.py`、`engine/tests/test_diagnostics.py`。回滚无需配置迁移，但会恢复 Gummy/SDK 根因丢失和 stderr 不完整问题。
+
+### 验证记录
+
+- `engine/.venv/bin/python3 -m unittest engine.tests.test_gummy_provider engine.tests.test_fun_asr_provider engine.tests.test_glm_provider engine.tests.test_engine_core engine.tests.test_translation_service engine.tests.test_hotword_service -v`：通过，32/32；实现中途验证 Gummy/Fun-ASR/GLM/Session/翻译/热词链路。
+- `npm run test:python && npm run test:node`：通过，Python 66/66、Node 59/59。
+- `npm run typecheck`：通过；Node TypeScript 与 Vue TypeScript 均无错误。
+- `npm run verify`：通过；typecheck、ESLint、Node 59/59 和 Python 66/66 全部成功。
+- `npm run build`：通过；包含 typecheck，Electron main、preload、renderer 生产构建成功，分别转换 27、1、3261 个模块。
+- `git diff --check`：实现和文档完成后通过；追加本记录后最终审计再次执行。
+- 验证保留 npm 既有 mirror 配置弃用警告与 Node `MODULE_TYPELESS_PACKAGE_JSON` 性能警告；均未导致测试、Lint、类型检查或构建失败，本批次未扩大范围修改包管理配置。
+
+### 未执行、风险与后续事项
+
+- 未调用真实 Gummy、Fun-ASR、GLM、OpenAI/Ollama、Google 翻译或热词 API，未使用真实麦克风/系统音频，也未产生费用；离线 fake SDK/result/exception 覆盖字段保存和脱敏，但发布前仍建议分别触发一次真实服务失败并确认服务商实际对象字段。
+- 未重新运行 PyInstaller 或 Electron 安装包打包，未在 Windows/Linux 实机验证 WASAPI/PulseAudio；当前 macOS 完成 Python/Node 自动化和 Electron 生产构建，不能据此声明三平台安装包已经实机回归。
+- 诊断对单字符串限制 64 KiB、单集合限制 256 项、嵌套限制 8 层，超限处带明确截断标记；这是避免异常响应或循环对象无限放大 Debug 文件的安全边界，因此不承诺保存无限大小的响应正文。
+- SDK 自己直接写 stderr 的内容会由 Electron 使用本次已知命令凭据再次脱敏；无法识别且没有任何敏感字段标签/常见格式的未知第三方秘密理论上仍可能出现在供应商自由文本中。项目已对实际 API Key 值、常见 Key/Token/Bearer/Authorization/Cookie 格式和结构化敏感字段做双层处理。
+
+### 关键外部文档或技术决策来源
+
+- 用户提供的新 Gummy Debug 日志：确认原始 `on_error` 详情丢失后只剩通用 callback/stop 错误，直接决定优先修复 SDK callback 透传和 traceback。
+- 阿里云百炼官方实时语音 Demo：其 `on_error` 显式保留 request ID 和服务消息，作为 Gummy/Fun-ASR SDK 回调诊断字段的对照；`https://github.com/aliyun/alibabacloud-bailian-speech-demo`。
+- 当前锁定 DashScope SDK 1.26.7、本地 Provider 实现和现有 `error.diagnostic.version: 1` 协议：决定复用可选诊断 envelope，而不破坏旧自定义引擎 command。
+- 根目录 `AGENTS.md`：决定凭据禁止写日志、协议增量兼容、中英日文档同步、测试和本记录范围。
+
+## 2026-08-15 - V2.10.0 小版本与 macOS arm64 构建
+
+### 用户授权与变更目标
+
+- 用户明确要求“编译一下Mac版本 并更新小版本号”。
+- 目标：在不修改系统环境的前提下，将 V2 小版本从 `2.9.0` 提升到 `2.10.0`，并基于当前工作区生成 macOS arm64 构建产物。
+- 非目标：不提交 Git、不推送、不发布 Release、不执行 Windows/Linux/macOS x64 或 universal 打包；不升级或安装新的项目依赖。
+- 修改前检查：已阅读根目录 `AGENTS.md`；`rg --files -g 'AGENTS.md'` 确认无子目录补充规则；`git status --short --branch` 显示当前分支 `main...origin/main` 且已有多项未提交修改，本批次只追加版本与构建相关改动并保留既有改动。
+
+### 变更类型
+
+- 构建、配置、文档。
+
+### 修改文件与原因
+
+- `package.json`
+  - 通过 `npm version minor --no-git-tag-version` 将应用版本更新为 `2.10.0`；未创建 git tag。
+- `package-lock.json`
+  - 同步根包版本和 lock 根条目到 `2.10.0`。
+- `README.md`、`README_en.md`、`README_ja.md`
+  - 同步版本徽章、发布提示和平台说明到 `v2.10.0`。
+- `docs/user-manual/zh.md`、`docs/user-manual/en.md`、`docs/user-manual/ja.md`
+  - 同步用户手册对应版本标识到 `v2.10.0`。
+- `docs/engine-manual/zh.md`、`docs/engine-manual/en.md`、`docs/engine-manual/ja.md`
+  - 同步引擎手册对应版本标识到 `v2.10.0`。
+- `src/renderer/index.html`
+  - 同步浏览器标题中的可见版本到 `Auto Caption v2.10.0`。
+- `src/renderer/src/components/EngineStatus.vue`
+  - 同步关于信息中的可见版本到 `v2.10.0`。
+- `docs/CHANGELOG.md`
+  - 新增 `v2.10.0` 条目，记录版本同步与 macOS arm64 构建。
+- `dist/latest-mac.yml`
+  - 在生成目录中同步最终签名后 zip 和 DMG 的 `2.10.0` 路径、大小、sha512 与 releaseDate。
+- 构建产物：
+  - `engine/dist/main`：本地 `.venv` 内 PyInstaller 生成的 macOS arm64 Python 字幕引擎。
+  - `dist/mac-arm64/Auto Caption.app`：Electron Builder 生成并经本地 ad-hoc 签名的 macOS arm64 应用包。
+  - `dist/Auto Caption-2.10.0-arm64-mac.zip` 与 `.blockmap`：签名后 `.app` 重新封装的 zip 和 Electron Builder 26 blockmap。
+  - `dist/auto-caption-2.10.0.dmg` 与 `.blockmap`：包含签名后 `.app` 的 APFS UDZO DMG 和 Electron Builder 26 blockmap。
+
+### 修改前后行为
+
+- 修改前：应用版本源、README、手册、关于窗口、浏览器标题和 macOS 构建元数据为 `2.9.0` / `v2.9.0`。
+- 修改后：应用版本源、可见版本文本、README、用户手册、引擎手册、CHANGELOG 与本次 macOS arm64 产物统一为 `2.10.0` / `v2.10.0`。
+- 运行时业务逻辑、配置默认值、Provider 行为、字幕协议、热词协议、翻译行为和 IPC 均不因本批次版本构建变更而改变。
+
+### 配置、IPC、协议、命令行与数据结构
+
+- `package.json` 和 `package-lock.json` 根版本变化为 `2.10.0`。
+- 没有新增、删除或升级依赖；锁文件中仅根包版本随 npm version 更新。
+- 没有修改持久化配置 schemaVersion、配置迁移、Electron IPC、Python stdout 协议、本地 TCP 命令协议、命令行参数或数据结构。
+- `dist/latest-mac.yml` 只描述本次 macOS arm64 最终产物，不影响源码层配置。
+
+### 兼容性、迁移与回滚
+
+- 兼容性：版本号与 macOS arm64 产物更新不需要用户配置迁移；现有配置文件、字幕日志和自定义引擎协议保持兼容。
+- 平台范围：本批次只实际验证 macOS arm64 构建；不声明 Windows、Linux、macOS x64 或 universal 产物已经验证。
+- 签名范围：`Auto Caption.app` 使用本地 ad-hoc 签名；没有 Apple Developer ID 签名或 notarization，首次打开仍可能触发 macOS 安全确认。
+- 精确回滚：恢复本批次列出的版本/文档文件到 `2.9.0`；恢复 `package.json` 与 `package-lock.json` 根版本；删除或忽略 `dist/` 与 `engine/dist/` 中本次生成的 `2.10.0` 构建产物；如需恢复旧包，使用此前 `2.9.0` 产物或按旧版本号重新构建。
+
+### 验证记录
+
+- `npm version minor --no-git-tag-version`：通过；版本提升到 `2.10.0`，没有创建 git tag；保留既有 npm mirror 配置弃用警告。
+- `rg -n "2\\.9\\.0|v2\\.9\\.0|auto-caption-2\\.9\\.0|Auto Caption-2\\.9\\.0" ...`：应用版本相关文件无旧版本残留；仅剩历史 `docs/CHANGELOG.md` 条目、依赖自身版本 `birpc@2.9.0` 和 Node engine 条件 `>=22.9.0`，与应用版本无关；`dist/latest-mac.yml` 在最终产物生成后更新为 `2.10.0`。
+- `npm run verify`：通过；包含 typecheck、ESLint、Node 59/59 和 Python 66/66。
+- `npm run build`：通过；包含 typecheck，Electron main、preload、renderer 生产构建成功，分别转换 27、1、3261 个模块。
+- `PYINSTALLER_CONFIG_DIR=/private/tmp/auto-caption-pyinstaller-config ./.venv/bin/pyinstaller --clean --noconfirm ./main.spec`（在 `engine/` 内）：通过，生成 `engine/dist/main`；保留既有 `pycparser.lextab/yacctab` hidden import warning 与 `@rpath/libomp.dylib` warning。
+- `./dist/main --help`：沙箱内因 PyInstaller semaphore 权限失败；按规则在沙箱外重跑同一项目本地可执行文件，通过并输出 CLI 帮助。
+- `npx electron-builder --mac`：沙箱内因 `npmmirror.com` DNS 失败；按规则在沙箱外重跑同一项目打包命令，通过，生成 `dist/mac-arm64`、zip、DMG 与初始 blockmap；保留重复依赖引用 warning 与缺少 Developer ID 导致跳过 Apple 正式签名的 warning。
+- `file dist/mac-arm64/Auto Caption.app/Contents/MacOS/Auto Caption dist/mac-arm64/Auto Caption.app/Contents/Resources/engine/main`：通过，两个可执行文件均为 Mach-O arm64。
+- `plutil -p dist/mac-arm64/Auto Caption.app/Contents/Info.plist | rg 'CFBundleShortVersionString|CFBundleVersion'`：通过，两个版本字段均为 `2.10.0`。
+- `codesign --force --deep --sign - dist/mac-arm64/Auto Caption.app`：通过，完成本地 ad-hoc 签名。
+- `codesign --verify --deep --strict --verbose=2 dist/mac-arm64/Auto Caption.app`：通过，签名验证有效。
+- `ditto -c -k --sequesterRsrc --keepParent ...`：通过，重新封装签名后的 `Auto Caption-2.10.0-arm64-mac.zip`。
+- `hdiutil create -volname 'Auto Caption' -fs APFS -format UDZO -srcfolder ... -ov dist/auto-caption-2.10.0.dmg`：沙箱内失败为“设备未配置”；按规则在沙箱外重跑，通过，重新生成包含签名后 `.app` 的 DMG；hdiutil 提示该 create 用法已弃用，未影响产物生成。
+- `node -e "... buildBlockMap ..."`：通过，为签名后 zip 和 DMG 重建 `.blockmap`，并计算最终 sha512、size 与 releaseDate。
+- `hdiutil verify dist/auto-caption-2.10.0.dmg`：通过，checksum VALID。
+- `unzip -tq dist/Auto Caption-2.10.0-arm64-mac.zip`：通过，无压缩数据错误。
+- `shasum -a 256 dist/auto-caption-2.10.0.dmg dist/Auto Caption-2.10.0-arm64-mac.zip`：
+  - DMG：`4f4b6a20d3c03533821383c32e96b7983dae3d3a8ade17d11265e1cc66ccbe06`
+  - ZIP：`38645f7dd56e3decb08862fc5fec122857863fecae253c0eb62830c873f2a050`
+- 最终产物大小：
+  - `dist/auto-caption-2.10.0.dmg`：约 234 MB。
+  - `dist/Auto Caption-2.10.0-arm64-mac.zip`：约 214 MB。
+  - `engine/dist/main`：约 83 MB。
+- `git diff --check`：追加本记录后执行，结果记录在最终交付中。
+
+### 未执行、风险与后续事项
+
+- 未执行 Windows、Linux、macOS x64 或 universal 构建；不能声明这些平台的 `2.10.0` 包已验证。
+- 未执行 Apple Developer ID 签名、notarization 或 GitHub Release 发布；当前 DMG/ZIP 适合作为本地验证包，正式发布前仍建议使用开发者证书签名并公证。
+- 未访问真实麦克风、系统音频、Gummy、Fun-ASR、GLM、翻译或热词 API；本批次只验证自动化测试、生产构建、Python 引擎 CLI 冒烟和 macOS 安装包完整性。
+- 未升级依赖或安装新依赖；如果后续需要“检查并使用新依赖”，建议单独授权依赖升级批次，以便分别记录必要性、锁文件变化、许可证/兼容性和回归结果。
+- 既有 npm mirror 配置弃用警告、Node `MODULE_TYPELESS_PACKAGE_JSON` 性能警告、PyInstaller hidden import/libomp warning、Electron Builder 重复依赖引用 warning 和 hdiutil create 用法弃用提示仍存在；本批次未扩大范围修复。
+
+### 关键外部文档或技术决策来源
+
+- 本地 `package.json` 与 `electron-builder.yml`：确认 macOS 产物版本来自 npm 包版本，DMG artifact 使用 `${name}-${version}.${ext}`。
+- Electron Builder 26 本地 `app-builder-lib` blockmap API：用于重新生成签名后 zip/DMG 的 blockmap，避免自动更新元数据指向签名前哈希。
+- 根目录 `AGENTS.md`：决定版本构建必须同步中英日文档、记录 `change.md`、避免系统环境修改、如实记录沙箱外打包步骤与未验证平台。

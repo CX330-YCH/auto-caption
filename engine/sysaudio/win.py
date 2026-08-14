@@ -1,7 +1,11 @@
 """获取 Windows 系统音频输入/输出流"""
 
 import pyaudiowpatch as pyaudio
+import json
 from textwrap import dedent
+
+from core import exception_diagnostic
+from utils.sysout import stderr, stdout_obj
 
 
 def get_default_loopback_device(mic: pyaudio.PyAudio, info = True)->dict:
@@ -16,7 +20,14 @@ def get_default_loopback_device(mic: pyaudio.PyAudio, info = True)->dict:
     """
     try:
         WASAPI_info = mic.get_host_api_info_by_type(pyaudio.paWASAPI)
-    except OSError:
+    except OSError as error:
+        stderr(json.dumps({
+            'source': 'audio-device',
+            'diagnostic': exception_diagnostic(
+                error,
+                operation='audio.windows.get_wasapi',
+            ),
+        }, ensure_ascii=False))
         print("Looks like WASAPI is not available on the system. Exiting...")
         exit()
 
@@ -103,7 +114,20 @@ class AudioStream:
                 input = True,
                 input_device_index = self.INDEX
             )
-        except OSError:
+        except OSError as error:
+            stdout_obj({
+                'command': 'debug',
+                'content': (
+                    'Audio device rejected 16000 Hz; using its default rate.'
+                ),
+                'details': {
+                    **exception_diagnostic(
+                        error,
+                        operation='audio.windows.open_16000hz',
+                    ),
+                    'fallbackSampleRate': self.DEFAULT_RATE,
+                },
+            })
             self.RATE = self.DEFAULT_RATE
             self.CHUNK = self.RATE // self.CHUNK_RATE
             self.stream = self.mic.open(

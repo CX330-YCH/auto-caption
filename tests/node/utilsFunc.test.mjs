@@ -3,7 +3,9 @@ import test from 'node:test'
 
 import {
   passwordMaskingForList,
-  passwordMaskingForObject
+  passwordMaskingForObject,
+  redactSensitiveText,
+  sensitiveArgumentValues
 } from '../../src/main/utils/UtilsFunc.ts'
 
 test('masks every supported command-line secret without mutating the input', () => {
@@ -25,6 +27,20 @@ test('masks every supported command-line secret without mutating the input', () 
     '-s', 'zh'
   ])
   assert.equal(command[3], 'dashscope-secret')
+})
+
+test('extracts runtime secrets and redacts exact values from SDK stderr', () => {
+  const command = ['-e', 'gummy', '-k', 'plain-runtime-key', '-s', 'zh']
+  const secrets = sensitiveArgumentValues(command)
+
+  assert.deepEqual(secrets, ['plain-runtime-key'])
+  assert.equal(
+    redactSensitiveText(
+      'SDK rejected plain-runtime-key with Authorization: Bearer abc123',
+      secrets
+    ),
+    'SDK rejected <redacted> with Authorization: Bearer <redacted>'
+  )
 })
 
 test('masks API key fields case-insensitively and preserves other fields', () => {
