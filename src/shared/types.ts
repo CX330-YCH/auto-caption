@@ -26,6 +26,7 @@ export interface Styles {
 }
 
 export interface CaptionItem {
+  captionId: string
   index: number
   time_s: string
   time_t: string

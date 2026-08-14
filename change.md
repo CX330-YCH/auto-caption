@@ -2685,3 +2685,178 @@
 - Electron Builder 26 本地模块 `app-builder-lib/out/targets/blockmap/blockmap`：用于刷新签名后产物 blockmap。
 - macOS 本机 `codesign`、`hdiutil`、`ditto` 与 Electron Builder 输出：确认最终 `.app`、zip、DMG 的签名、镜像和压缩包完整性。
 - 根目录 `AGENTS.md`：遵循修改前检查、系统环境不修改、三语文档同步、构建产物记录和 `change.md` 追加记录要求。
+
+## 2026-08-13 - 字幕稳定 ID 与幂等实时更新
+
+### 授权与目标
+
+- 用户确认 Vue 实时更新按 `time_s` 匹配失败，并要求采用稳定 `captionId` 方案完成修复。
+- 变更类型：修复、协议、测试、文档。
+- 目标：把字幕永久身份与显示序号分离；同一句 partial/final 即使时间戳变化也更新同一条记录；翻译优先按稳定 ID 关联；旧自定义引擎缺少新字段时仍可按 `time_s` 回退。
+- 明确非目标：不修改 Fun-ASR 音频采集、分帧、VAD 或服务端流式参数；不升级依赖；不调用真实云端 API；不创建分支、commit、PR 或发布包。
+
+### 修改文件与原因
+
+- `src/shared/types.ts`、`src/shared/captions.ts`
+  - 为 `CaptionItem` 增加永久 `captionId`，并提供 Renderer 可复用的按 ID 幂等 upsert；`index` 继续仅作为用户可见行号。
+- `src/main/engine/captions/CaptionLog.ts`
+  - 新增主进程字幕模型，维护 `captionId -> position` 映射；使用 `${engineRunId}:${engineCaptionId}` 组合身份；清空时同步清除数组和映射；翻译优先使用 ID，只有缺少 ID 时才回退扫描 `time_s`。
+- `src/main/utils/CaptionEngine.ts`
+  - 每次引擎启动递增运行序号，并把当前 `engineRunId` 传入字幕和翻译处理，避免 Python 重启后复用 sentence ID 造成碰撞。
+- `src/main/utils/AllConfig.ts`、`src/main/ControlWindow.ts`
+  - 用新的主进程字幕模型替代“只比较最后一条”和按时间戳更新翻译的逻辑；字幕与翻译统一广播完整的 `both.captionLog.upsert`；清空操作改为同时清除位置映射。
+- `src/main/engine/protocol/messages.ts`
+  - 翻译消息新增可选数值 `caption_id` 并执行运行时类型校验；保留原 `time_s` 字段和旧格式兼容。
+- `src/renderer/src/stores/captionLog.ts`
+  - 合并旧的 add/upd 监听为幂等 upsert；更新目标只按 `captionId` 查找，找不到时插入，以便窗口漏过首次事件后由后续事件自愈。
+- `src/renderer/src/views/CaptionPage.vue`、`src/renderer/src/components/CaptionStyle.vue`、`src/renderer/src/components/CaptionLog.vue`
+  - Vue 列表和表格行键统一改用 `captionId`，不再使用可变时间戳或显示序号作为身份。
+- `engine/services/translation.py`、`engine/utils/translation.py`
+  - 内置翻译链路把 `CaptionFinal.caption_id` 原样写入 translation 事件；仍同时输出 `time_s` 供旧 Electron/兼容诊断使用。
+- `tests/node/captionLog.test.mjs`、`tests/node/engineProtocol.test.mjs`
+  - 覆盖同 ID 时间戳变化、时间戳碰撞、跨引擎运行 ID 重复、翻译 ID/旧格式回退、清空映射、Renderer 漏 add 自愈，以及可选字段协议校验。
+- `engine/tests/test_translation_service.py`
+  - 覆盖内置翻译适配器向翻译事件传递稳定 caption ID。
+- `docs/api-docs/caption-engine.md`、`docs/api-docs/electron-ipc.md`、`docs/CHANGELOG.md`
+  - 记录 Python/Electron 稳定 ID 语义、可选翻译字段、旧引擎回退策略、统一 IPC upsert 和用户可见修复说明。
+- `change.md`
+  - 追加本批次授权、协议兼容、验证、风险和回滚记录。
+
+### 修改前后行为
+
+- 修改前：Electron 只在新消息 `index` 等于上一条时替换数组末项；Renderer 的 upd 再按 `time_s` 查找。Fun-ASR 修正 partial 的开始时间后，同一句后续文本找不到首个记录，表现为每句话只保留第一个字或产生碎片。
+- 修改后：引擎一次运行内的原始 `index` 与 `engineRunId` 组合成永久 `captionId`。主进程与 Renderer 都只按该 ID upsert；`time_s`、`time_t`、正文和翻译可变化而身份不变。
+- 修改前：翻译异步结果只按 `time_s` 从后向前扫描，时间修正或碰撞时会漏更新或更新错句。
+- 修改后：内置翻译携带原句 `caption_id`，Electron 加入运行作用域后精确更新；旧自定义引擎没有该字段时才使用原有 `time_s` 回退。
+- 修改前：清空字幕只清数组，若引入位置映射会留下陈旧状态。
+- 修改后：清空操作由字幕模型统一处理，数组与 ID 映射原子清空；下一个字幕重新从显示序号 1 开始。
+
+### 配置、IPC、协议、数据结构与兼容性
+
+- 配置 schemaVersion、持久化字段、默认值和迁移函数均无变化；无需用户配置迁移。
+- `CaptionItem` 新增必填内部字段 `captionId: string`；原 `index`、时间、正文和翻译字段保留，`index` 的公开含义收窄为显示序号。
+- Python stdout 的 `translation` command 新增可选数值 `caption_id`；原 command 名称及 `time_s`、`text`、`translation` 字段均保留。内置引擎产生新字段，旧自定义引擎不产生时由 Electron 兼容回退。
+- Electron→Renderer 的增量字幕 IPC 由 `both.captionLog.add` / `both.captionLog.upd` 合并为 `both.captionLog.upsert`；全量初始化数据仍由现有配置快照提供，清空 IPC 名称不变。
+- 回退兼容层的删除条件：当自定义引擎协议完成明确版本迁移、文档和生态确认全部提供稳定字幕 ID 后，才可在独立变更中移除 `time_s` 回退；本批次不删除旧协议字段。
+- 没有新增、删除或升级依赖；没有修改命令行参数、TCP command、热词、凭据或远端资源行为。
+- 精确回滚：恢复本条列出的 TypeScript、Vue、Python、测试和文档文件，并删除新增的 `CaptionLog.ts`、`captions.ts`、`captionLog.test.mjs`。回滚不需要配置迁移，但会恢复按可变时间戳关联导致的实时字幕缺字风险。
+
+### 验证记录
+
+- `node --test --experimental-strip-types tests/node/captionLog.test.mjs tests/node/engineProtocol.test.mjs`：通过，9/9。
+- `engine/.venv/bin/python -m pytest engine/tests/test_translation_service.py engine/tests/test_caption_runtime.py`：通过，6/6。
+- `npm run typecheck`：通过；Node TypeScript 与 Vue TypeScript 均无错误。
+- `npm run lint`：通过，无新增 ESLint 错误。
+- `npm run test:node`：通过，58/58；覆盖新增字幕模型、协议与既有主进程行为。
+- `npm run test:python`：通过，60/60；覆盖新增翻译 ID 传递与既有引擎行为。
+- `npm run build`：通过；包含 typecheck，Electron main、preload、renderer 生产构建成功，分别转换 27、1、3261 个模块。
+- `npm run verify`：最终通过；typecheck、Lint、Node 58/58 与 Python 60/60 全部成功。
+- `rg -n "both\\.captionLog\\.(add|upd|upsert)|captionLog\\[.*time_s|:key=.*time_s|row-key" src tests docs engine`：确认活动代码和文档只保留统一 upsert，Vue key 不再依赖 `time_s`。
+- `git diff --check`：代码与文档修改完成后通过；追加本记录后在最终审计再次执行。
+- 验证保留 npm 既有 mirror 配置弃用警告与 Node `MODULE_TYPELESS_PACKAGE_JSON` 性能警告；均未导致测试或构建失败，本批次未扩大范围修改包管理配置。
+
+### 未执行、风险与后续事项
+
+- 未连接真实 Fun-ASR、麦克风、QuickTime、Loopback 或 BlackHole，未产生云端费用；本批次用固定协议事件离线覆盖 partial/final、翻译和重启碰撞。发布前建议用用户本次音频重复一次 GUI 回归，确认表格、字幕浮窗与导出均只形成完整句子。
+- 未在 Windows/Linux 实机运行 GUI，也未重新打包 Python/Electron 安装包；TypeScript、Python 自动化测试和当前 macOS 上的生产构建已通过，不能据此声称三平台安装包已实机验证。
+- 手工“修改时间”目前仍是 Renderer 本地编辑；稳定 ID 保证晚到翻译关联到正确字幕，但若编辑期间仍有同一句完整字幕事件到达，服务端最新时间仍会覆盖本地尚未持久化的显示时间。若要把手工时间编辑提升为跨窗口主状态，应作为独立功能定义提交/冲突语义和 IPC 校验。
+- 旧自定义引擎的 `time_s` 回退只能保持既有能力，时间碰撞本身仍存在歧义；要获得完整可靠性，自定义引擎也应按更新后的协议输出稳定 `index` 和 translation `caption_id`。
+
+### 关键技术决策来源
+
+- 用户提供的 Debug JSONL、字幕 JSON、音频波形和多轮截图：确认音频中段空白来自原文件无声，而“每句仅首字”来自 UI 增量更新关联失败，不是 Fun-ASR 音频流断裂。
+- 当前 Python Provider 的 `CaptionFinal.caption_id` 与 Fun-ASR sentence ID：确认 partial/final 已有可复用的句级稳定身份，不需要再用回调时间构造 ID。
+- 根目录 `AGENTS.md`：决定主进程保持稳定字幕 ID、翻译只关联稳定 ID、协议增量兼容、清空映射、测试和文档记录范围。
+
+## 2026-08-14 - V2.9.0 小版本与 macOS arm64 构建
+
+### 授权与目标
+
+- 用户要求“编译一下Mac版本 并更新小版本号”。
+- 变更类型：构建、配置、文档、测试。
+- 目标：在不修改系统环境的前提下，将 V2 小版本从 `2.8.0` 提升到 `2.9.0`，并生成 macOS arm64 构建产物。
+- 明确非目标：本次用户未要求依赖检查或升级，因此不主动执行依赖治理；不创建 git tag、commit、branch、PR 或 Release；不做 Windows、Linux、macOS x64/universal 构建；不调用真实麦克风、识别云服务、翻译云服务或远端热词资源。
+- 修改前工作区已有未提交改动，包含字幕稳定 ID、翻译关联、协议、主进程/Renderer 字幕模型、测试和文档；本批次保留这些改动，只在当前工作区基础上叠加版本号、文档版本标识和 macOS arm64 构建产物。
+
+### 修改文件与原因
+
+- `package.json`
+  - 通过 `npm version minor --no-git-tag-version` 将应用版本更新为 `2.9.0`；未创建 git tag。
+- `package-lock.json`
+  - 同步根包版本到 `2.9.0`。
+- `README.md`、`README_en.md`、`README_ja.md`
+  - 同步版本徽章、发布提示和平台说明到 `v2.9.0`。
+- `docs/user-manual/zh.md`、`docs/user-manual/en.md`、`docs/user-manual/ja.md`
+  - 同步用户手册版本标识到 `v2.9.0`。
+- `docs/engine-manual/zh.md`、`docs/engine-manual/en.md`、`docs/engine-manual/ja.md`
+  - 同步引擎手册版本标识到 `v2.9.0`。
+- `src/renderer/index.html`
+  - 同步浏览器标题中的可见版本到 `Auto Caption v2.9.0`。
+- `src/renderer/src/components/EngineStatus.vue`
+  - 同步关于信息中的可见版本到 `v2.9.0`。
+- `docs/CHANGELOG.md`
+  - 新增 `v2.9.0` 条目，记录版本同步与 macOS arm64 构建。
+- `dist/latest-mac.yml`
+  - 在生成目录中同步最终签名后 zip 和 DMG 的 `2.9.0` 路径、大小、sha512 与 releaseDate。
+- `change.md`
+  - 追加本批次授权、修改范围、构建上下文、验证、风险和回滚记录。
+- 生成产物：
+  - `engine/dist/main`：PyInstaller 生成的 macOS arm64 Python 引擎可执行文件。
+  - `dist/mac-arm64/Auto Caption.app`：Electron Builder 生成并经本地 ad-hoc 签名的 macOS arm64 应用。
+  - `dist/Auto Caption-2.9.0-arm64-mac.zip` 与 `.blockmap`：签名后 `.app` 重新封装的 zip 和 Electron Builder 26 blockmap。
+  - `dist/auto-caption-2.9.0.dmg` 与 `.blockmap`：包含签名后 `.app` 的 APFS UDZO DMG 和 Electron Builder 26 blockmap。
+
+### 修改前后行为
+
+- 修改前：应用版本源、README、手册、关于窗口、浏览器标题和 macOS 构建元数据为 `2.8.0` / `v2.8.0`。
+- 修改后：应用版本源、可见版本文本、README、用户手册、引擎手册、CHANGELOG 与本次 macOS arm64 产物统一为 `2.9.0` / `v2.9.0`。
+- 本批次没有新增或删除用户配置字段，没有修改配置迁移、IPC、Python stdout/TCP 协议、命令行参数、字幕数据结构、热词语义或远端资源操作。
+- 未修改系统环境；构建使用项目本地 `node_modules` 与 `engine/.venv`，仅在项目目录生成和更新构建产物。
+
+### 兼容性、迁移与回滚
+
+- 本批次只更新发布版本并重新构建 macOS arm64 包，不涉及用户配置迁移。
+- macOS 产物为 arm64；未生成 Intel x64 或 universal 包。
+- 当前构建基于工作区已有的 `electron@43.4.0` 与 `electron-builder@26.15.3`；自动化测试与打包通过，但未在真实安装后的 GUI 中做 Electron 43 交互回归。
+- Electron Builder 26 不再提供旧的 `node_modules/app-builder-bin/mac/app-builder_arm64` 路径；本批次继续使用 `app-builder-lib/out/targets/blockmap/blockmap` 的 `buildBlockMap` API 刷新签名后 zip/DMG 的 blockmap。
+- 由于没有 Developer ID 证书，本次只做本地 ad-hoc 签名，未做 Apple Developer ID 签名或 notarization。首次打开可能仍需用户通过 macOS 安全提示手动允许。
+- 精确回滚：恢复本批次列出的版本/文档文件到 `2.8.0`；恢复 `package.json` 和 `package-lock.json` 根版本；删除或忽略 `dist/` 与 `engine/dist/` 中本次生成的 `2.9.0` 构建产物；如需恢复旧包，使用此前 `2.8.0` 产物或按旧版本号重新构建。
+
+### 验证记录
+
+- `git status --short --branch`：已执行；确认当前在 `main...origin/main`，且工作区开局已有未提交修改，需要保留。
+- `npm version minor --no-git-tag-version`：通过；版本提升到 `2.9.0`，没有创建 git tag；保留既有 npm mirror 配置弃用警告。
+- `rg -n "2\\.8\\.0|v2\\.8\\.0|auto-caption-2\\.8\\.0|Auto Caption-2\\.8\\.0" ...`：应用版本相关文件无旧版本残留；历史 `docs/CHANGELOG.md` 条目和 `package-lock.json` 中依赖自身版本 `@peculiar/asn1-schema@2.8.0` 与应用版本无关。
+- `npm run verify`：通过；TypeScript、ESLint、Node 58/58 和 Python 60/60 全部成功；保留既有 `MODULE_TYPELESS_PACKAGE_JSON` 性能警告。
+- `npm run build`：通过；Electron main、preload、renderer 生产构建成功，分别转换 27、1、3261 个模块。
+- `PYINSTALLER_CONFIG_DIR=/private/tmp/auto-caption-pyinstaller-config ./.venv/bin/pyinstaller --clean --noconfirm ./main.spec`：通过，生成 `engine/dist/main`；保留既有 `pycparser` 可选隐藏导入警告和 `@rpath/libomp.dylib` 解析警告。
+- `engine/dist/main --help`：经用户授权在沙盒外运行后通过，CLI help 正常输出。
+- `./node_modules/.bin/electron-builder --mac`：沙盒内因 `npmmirror.com` DNS 失败；经用户授权沙盒外重试后通过，基于 `electron@43.4.0` 与 `electron-builder@26.15.3` 生成 `.app`、zip、DMG 和初始 blockmap。构建日志提示 duplicate dependency references，并提示缺少 Developer ID 签名证书；未导致构建失败。
+- `file dist/mac-arm64/Auto Caption.app/Contents/MacOS/Auto Caption dist/mac-arm64/Auto Caption.app/Contents/Resources/engine/main`：二者均为 Mach-O 64-bit executable arm64。
+- `plutil -p dist/mac-arm64/Auto Caption.app/Contents/Info.plist | rg 'CFBundleShortVersionString|CFBundleVersion'`：通过，两个版本字段均为 `2.9.0`。
+- `codesign --force --deep --sign - dist/mac-arm64/Auto Caption.app`：通过，本地 ad-hoc 签名完成。
+- `codesign --verify --deep --strict --verbose=2 dist/mac-arm64/Auto Caption.app`：通过，`.app` valid on disk 且 satisfies its Designated Requirement。
+- `ditto -c -k --sequesterRsrc --keepParent ...`：通过，重新封装签名后的 `Auto Caption-2.9.0-arm64-mac.zip`。
+- `hdiutil create -volname 'Auto Caption' -fs APFS -format UDZO -srcfolder ... -ov dist/auto-caption-2.9.0.dmg`：通过，重新生成包含签名后 `.app` 的 DMG；hdiutil 提示该 create 用法已弃用，未影响产物生成。
+- `node -e "const { buildBlockMap } = require('./node_modules/app-builder-lib/out/targets/blockmap/blockmap'); ..."`：通过，生成最终 zip 和 DMG blockmap；最终 zip size `224898981`、sha512 `+1lw3Izl++neIsXi0+nX06bH9iPDpim0GZ8qtaDPPTTTqEE4cUZWY0EP6iC0GooDKGD1NFAgfM5eTZiJ/yM0hw==`；最终 DMG size `244694849`、sha512 `HOuqOViYy0O8Eg6PVV/Z5Xhb/++KHoPd4kERtQ6UtPW7t6bBxyrPxoCz+AWIjt6jVSfkwc9Z20M0xJPafYNI7g==`。
+- `hdiutil verify dist/auto-caption-2.9.0.dmg`：通过，checksum VALID。
+- `unzip -tq dist/Auto Caption-2.9.0-arm64-mac.zip`：通过，无压缩数据错误。
+- `shasum -a 256 dist/auto-caption-2.9.0.dmg dist/Auto Caption-2.9.0-arm64-mac.zip`：
+  - DMG：`17247485c4d55b0d708c3b503d6cf7968d6dd65b54c550a84fe3c1ab4d2ffcf3`
+  - ZIP：`929098bc166617906c223088df835b7ba4d5abb2d30fc4909cc7e3aaed61c673`
+- `git diff --check`：通过，无空白错误。
+
+### 未执行、风险与后续事项
+
+- 未启动安装后的真实 Electron GUI，也未测试麦克风、系统音频权限、真实识别、真实翻译 API 或热词远端资源；本批次验证到自动化测试、生产构建、引擎 help、签名和安装包完整性。
+- 未做 Apple Developer ID 签名和 notarization；若面向外部分发，建议使用正式证书重新签名、公证并再次生成/校验 DMG 与 zip。
+- 未执行 Windows、Linux、macOS x64 或 universal 构建；不能声明这些平台的 `2.9.0` 包已验证。
+- 当前工作区已有 Electron 43 / Electron Builder 26 大版本依赖状态，并且包含本批次前已有的字幕稳定 ID 和翻译关联改动；虽然本次测试和打包通过，仍建议在发布前做安装包级 GUI 回归，尤其关注字幕浮窗、字幕记录表格、导出文件、异步翻译关联和内置 Python 引擎启动路径。
+
+### 关键外部文档或技术决策来源
+
+- 本地 `package.json`、`package-lock.json`：确认版本源、当前 Electron/Electron Builder 解析版本和 npm 脚本。
+- 本地 `electron-builder.yml`：确认当前平台化 `extraResources` 配置会把 macOS/Linux 引擎打包到 `Resources/engine/main`。
+- Electron Builder 26 本地模块 `app-builder-lib/out/targets/blockmap/blockmap`：用于刷新签名后产物 blockmap。
+- macOS 本机 `codesign`、`hdiutil`、`ditto` 与 Electron Builder 输出：确认最终 `.app`、zip、DMG 的签名、镜像和压缩包完整性。
+- 根目录 `AGENTS.md`：遵循修改前检查、系统环境不修改、三语文档同步、构建产物记录和 `change.md` 追加记录要求。

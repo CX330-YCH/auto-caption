@@ -317,25 +317,30 @@
 
 **数据类型：** `CaptionConfig`
 
-### `both.captionLog.add`
+### `both.captionLog.upsert`
 
-**介绍：** 添加一条新的字幕数据
-
-**发起方：** 后端
-
-**接收方：** 前端
-
-**数据类型：** `CaptionItem`
-
-### `both.captionLog.upd`
-
-**介绍：** 更新最后一条字幕数据
+**介绍：** 按稳定 `captionId` 新增或替换一条字幕数据。Renderer 必须把该事件作为幂等 upsert；即使首次事件遗漏，后续 partial/final 或翻译更新也能补齐记录。
 
 **发起方：** 后端
 
 **接收方：** 前端
 
 **数据类型：** `CaptionItem`
+
+`CaptionItem` 的结构为：
+
+```ts
+interface CaptionItem {
+  captionId: string
+  index: number
+  time_s: string
+  time_t: string
+  text: string
+  translation: string
+}
+```
+
+`captionId` 是 `${engineRunId}:${engineCaptionId}`，只用于身份与更新；`index` 是从 1 开始的显示序号。Vue 列表 key 和更新查找必须使用 `captionId`，不得使用可能被识别服务校正或被用户修改的时间字段。
 
 ### `both.captionLog.set`
 
@@ -346,3 +351,5 @@
 **接收方：** 前端
 
 **数据类型：** `CaptionItem[]`
+
+窗口首次挂载时，完整字幕数组也包含稳定 `captionId`。清空字幕记录会同时清除主进程的字幕数组与 ID→位置映射。

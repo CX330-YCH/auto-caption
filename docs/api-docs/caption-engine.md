@@ -81,9 +81,11 @@ JSON object + "\n" + JSON object + "\n" + ...
 }
 ```
 
-字幕引擎产生的字幕数据。`index` 必须是有限数值，其余列出的字段必须是字符串。
+字幕引擎产生的字幕数据。`index` 必须是有限数值，并且在一次引擎进程运行期间稳定标识同一句字幕；其余列出的字段必须是字符串。同一句的中间结果和最终结果必须复用 `index`，不同句不得复用。
 
-Python 内部已经区分 `CaptionPartial` 和 `CaptionFinal`，但为保持现有协议兼容，两者目前都映射为 `caption`。同一句的 partial/final 复用 `index` 和 `time_s`；外部协议暂不提供 final 标记。Provider 自带的翻译（当前为 Gummy）会直接写入 `translation`；包括 Fun-ASR 在内的其他 Provider 只在 final 后通过独立 `translation` 消息补充一次翻译。
+Python 内部已经区分 `CaptionPartial` 和 `CaptionFinal`，但为保持现有协议兼容，两者目前都映射为 `caption`。同一句的 partial/final 只保证复用 `index`；服务端可以校正 `time_s`/`time_t`，时间字段不得用作字幕身份。外部协议暂不提供 final 标记。Provider 自带的翻译（当前为 Gummy）会直接写入 `translation`；包括 Fun-ASR 在内的其他 Provider 只在 final 后通过独立 `translation` 消息补充一次翻译。
+
+Electron 为每次引擎启动分配单调递增的运行 ID，并将 `运行 ID:index` 组合为应用内部 `captionId`。因此引擎重启后可以从原有 `index` 起点重新计数，而不会覆盖上一次运行保留的字幕。
 
 Fun-ASR 的 `sentence_end: false/true` 分别映射为内部 partial/final。服务端 `begin_time`/`end_time` 毫秒偏移会基于本次任务起始时间转换为协议中的 `time_s`/`time_t`，不会用回调到达时间冒充音频时间；缺少 partial 结束时间时才以已发送音频时长作为保守上界。服务端心跳不形成 stdout 消息；任务用量映射为 `usage`，失败映射为已脱敏的 `error`，外部 command envelope 没有变化。
 
@@ -96,13 +98,14 @@ Fun-ASR 的预编译热词表 ID 和上下文术语是任务启动参数，不�
 ```js
 {
   command: "translation",
+  caption_id?: number,
   time_s: string,
   text: string,
   translation: string
 }
 ```
 
-异步翻译结果。现有实现通过 `time_s` 关联字幕；该字段和文本字段必须是字符串。
+异步翻译结果。新引擎应提供 `caption_id`，其值必须与对应 `caption.index` 相同，Electron 会优先通过运行 ID 与该字段关联原句。为兼容旧自定义引擎，`caption_id` 暂时可省略；缺失时 Electron 才回退到 `time_s`，该兼容层的删除条件是公开协议下一个明确废弃旧翻译格式的版本。`time_s`、`text` 和 `translation` 继续为必需字符串字段。
 
 ### `print`、`debug`、`info`、`warn`、`error`、`usage`
 

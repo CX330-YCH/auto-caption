@@ -74,6 +74,7 @@ def build_legacy_translation_service(
                 target,
                 caption.text,
                 caption.started_at,
+                caption.caption_id,
             )
     else:
         def translate(caption: CaptionFinal) -> None:
@@ -82,6 +83,7 @@ def build_legacy_translation_service(
                 target,
                 caption.text,
                 caption.started_at,
+                caption.caption_id,
                 url,
                 api_key,
             )

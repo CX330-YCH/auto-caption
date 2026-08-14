@@ -14,6 +14,7 @@ export interface CaptionEngineMessage extends EngineMessage {
 
 export interface TranslationEngineMessage extends EngineMessage {
   command: 'translation'
+  caption_id?: number
   time_s: string
   text: string
   translation: string
@@ -47,6 +48,10 @@ export function isTranslationEngineMessage(
   value: EngineMessage
 ): value is TranslationEngineMessage {
   return value.command === 'translation' &&
+    (value.caption_id === undefined || (
+      typeof value.caption_id === 'number' &&
+      Number.isFinite(value.caption_id)
+    )) &&
     typeof value.time_s === 'string' &&
     typeof value.text === 'string' &&
     typeof value.translation === 'string'

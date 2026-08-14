@@ -44,12 +44,21 @@ test('validates caption event fields', () => {
 test('validates translation and content event fields', () => {
   const translation = {
     command: 'translation',
+    caption_id: 1,
     time_s: '00:00:00.000',
     text: 'hello',
     translation: '你好'
   }
 
   assert.equal(isTranslationEngineMessage(translation), true)
+  assert.equal(
+    isTranslationEngineMessage({ ...translation, caption_id: undefined }),
+    true
+  )
+  assert.equal(
+    isTranslationEngineMessage({ ...translation, caption_id: '1' }),
+    false
+  )
   assert.equal(isTranslationEngineMessage({ ...translation, time_s: 0 }), false)
   assert.equal(isContentEngineMessage({ command: 'info', content: 'ready' }), true)
   assert.equal(isContentEngineMessage({ command: 'info' }), false)

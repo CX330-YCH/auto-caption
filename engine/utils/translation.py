@@ -21,7 +21,15 @@ lang_map = {
     'zh-cn': 'Chinese'
 }
 
-def ollama_translate(model: str, target: str, text: str, time_s: str, url: str = '', key: str = ''):
+def ollama_translate(
+    model: str,
+    target: str,
+    text: str,
+    time_s: str,
+    caption_id: int,
+    url: str = '',
+    key: str = '',
+):
     content = ""
     try:
         if url:
@@ -64,17 +72,25 @@ def ollama_translate(model: str, target: str, text: str, time_s: str, url: str =
             content = content[index+8:]
     stdout_obj({
         "command": "translation",
+        "caption_id": caption_id,
         "time_s": time_s,
         "text": text,
         "translation": content.strip()
     })
 
-def google_translate(model: str, target: str, text: str, time_s: str):
+def google_translate(
+    model: str,
+    target: str,
+    text: str,
+    time_s: str,
+    caption_id: int,
+):
     translator = Translator()
     try:
         res = asyncio.run(translator.translate(text, dest=target))
         stdout_obj({
             "command": "translation",
+            "caption_id": caption_id,
             "time_s": time_s,
             "text": text,
             "translation": res.text

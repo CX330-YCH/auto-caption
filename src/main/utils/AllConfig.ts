@@ -27,11 +27,11 @@ import * as path from 'path'
 import * as fs from 'fs'
 import * as os from 'os'
 import { hasApplicationConfigChanged } from '../config/ApplicationConfigChange.ts'
-
-interface CaptionTranslation {
-  time_s: string
-  translation: string
-}
+import { CaptionLog } from '../engine/captions/CaptionLog.ts'
+import type {
+  CaptionEngineMessage,
+  TranslationEngineMessage
+} from '../engine/protocol/messages.ts'
 
 function getDesktopPath(): string {
   return path.join(os.homedir(), 'Desktop')
@@ -39,10 +39,13 @@ function getDesktopPath(): string {
 
 class AllConfig {
   private document: ConfigDocumentV3 = createDefaultConfig(getDesktopPath())
+  private readonly captions = new CaptionLog()
 
   public engineEnabled: boolean = false
-  public lastLogIndex: number = -1
-  public captionLog: CaptionItem[] = []
+
+  public get captionLog(): CaptionItem[] {
+    return this.captions.items
+  }
 
   public get config(): ConfigDocumentV3 {
     return this.document
@@ -160,54 +163,32 @@ class AllConfig {
     window.webContents.send('control.engineState.set', this.engineEnabled)
   }
 
-  public updateCaptionLog(log: CaptionItem): void {
-    let command: 'add' | 'upd' = 'add'
-    if (
-      this.captionLog.length &&
-      this.lastLogIndex === log.index
-    ) {
-      this.captionLog.splice(this.captionLog.length - 1, 1, log)
-      command = 'upd'
-    }
-    else {
-      this.captionLog.push(log)
-      this.lastLogIndex = log.index
-    }
-    this.captionLog[this.captionLog.length - 1].index = this.captionLog.length
-    for (const window of BrowserWindow.getAllWindows()) {
-      this.sendCaptionLog(window, command)
-    }
-  }
-
-  public updateCaptionTranslation(trans: CaptionTranslation): void {
-    for (let i = this.captionLog.length - 1; i >= 0; i--) {
-      if (this.captionLog[i].time_s === trans.time_s) {
-        this.captionLog[i].translation = trans.translation
-        for (const window of BrowserWindow.getAllWindows()) {
-          this.sendCaptionLog(window, 'upd', i)
-        }
-        break
-      }
-    }
-  }
-
-  public sendCaptionLog(
-    window: BrowserWindow,
-    command: 'add' | 'upd' | 'set',
-    index: number | undefined = undefined
+  public updateCaptionLog(
+    log: CaptionEngineMessage,
+    engineRunId: number
   ): void {
-    if (command === 'add') {
-      window.webContents.send('both.captionLog.add', this.captionLog.at(-1))
+    const change = this.captions.upsert(engineRunId, log)
+    for (const window of BrowserWindow.getAllWindows()) {
+      window.webContents.send('both.captionLog.upsert', change.item)
     }
-    else if (command === 'upd') {
-      const item = index === undefined
-        ? this.captionLog.at(-1)
-        : this.captionLog[index]
-      window.webContents.send('both.captionLog.upd', item)
+  }
+
+  public updateCaptionTranslation(
+    translation: TranslationEngineMessage,
+    engineRunId: number
+  ): void {
+    const change = this.captions.applyTranslation(engineRunId, translation)
+    if (!change) {
+      Log.warn('Translation target caption was not found')
+      return
     }
-    else {
-      window.webContents.send('both.captionLog.set', this.captionLog)
+    for (const window of BrowserWindow.getAllWindows()) {
+      window.webContents.send('both.captionLog.upsert', change.item)
     }
+  }
+
+  public clearCaptionLog(): void {
+    this.captions.clear()
   }
 
   private getConfigPath(): string {

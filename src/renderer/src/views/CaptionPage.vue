@@ -15,7 +15,7 @@
       <template v-if="captionData.length">
         <template
           v-for="val in revArr[Math.min(captionStyle.lineNumber, captionData.length)]"
-          :key="captionData[captionData.length - val].time_s"
+          :key="captionData[captionData.length - val].captionId"
         >
           <p :class="[captionStyle.lineBreak?'':'left-ellipsis']" :style="{
             fontFamily: captionStyle.fontFamily,

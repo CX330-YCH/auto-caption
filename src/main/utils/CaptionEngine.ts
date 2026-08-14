@@ -39,6 +39,8 @@ export class CaptionEngine {
   timerID: NodeJS.Timeout | undefined
   startTimeoutID: NodeJS.Timeout | undefined
   private readonly protocol = new EngineProtocol()
+  private engineRunSequence: number = 0
+  private activeEngineRunId: number = 0
 
   private getApp(): boolean {
     const engineConfig = allConfig.engine
@@ -119,6 +121,8 @@ export class CaptionEngine {
     if(!this.getApp()){ return }
 
     this.protocol.reset()
+    this.engineRunSequence += 1
+    this.activeEngineRunId = this.engineRunSequence
     this.process = spawn(this.appPath, this.command, {
       detached: shouldCreateProcessGroup(process.platform)
     })
@@ -239,11 +243,13 @@ export class CaptionEngine {
       )
     }
 
-    for (const message of batch.messages) handleEngineData(message)
+    for (const message of batch.messages) {
+      handleEngineData(message, this.activeEngineRunId)
+    }
   }
 }
 
-function handleEngineData(data: EngineMessage): void {
+function handleEngineData(data: EngineMessage, engineRunId: number): void {
   switch (data.command) {
     case 'connect':
       captionEngine.connect()
@@ -255,11 +261,15 @@ function handleEngineData(data: EngineMessage): void {
       }
       return
     case 'caption':
-      if (isCaptionEngineMessage(data)) allConfig.updateCaptionLog(data)
+      if (isCaptionEngineMessage(data)) {
+        allConfig.updateCaptionLog(data, engineRunId)
+      }
       else Log.error('Invalid caption event received from caption engine')
       return
     case 'translation':
-      if (isTranslationEngineMessage(data)) allConfig.updateCaptionTranslation(data)
+      if (isTranslationEngineMessage(data)) {
+        allConfig.updateCaptionTranslation(data, engineRunId)
+      }
       else Log.error('Invalid translation event received from caption engine')
       return
     case 'print':

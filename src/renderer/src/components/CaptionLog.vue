@@ -112,6 +112,7 @@
   <a-table
     :columns="columns"
     :data-source="captionData"
+    row-key="captionId"
     v-model:pagination="pagination"
     :scroll="{ x: 560 }"
     class="caption-table"

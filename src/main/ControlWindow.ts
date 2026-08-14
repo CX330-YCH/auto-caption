@@ -187,7 +187,7 @@ class ControlWindow {
     })
 
     ipcMain.on('control.captionLog.clear', () => {
-      allConfig.captionLog.splice(0)
+      allConfig.clearCaptionLog()
     })
   }
 
