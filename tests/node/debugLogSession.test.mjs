@@ -90,6 +90,25 @@ test('recursive debug redaction preserves diagnostics but removes credentials', 
   )
 })
 
+test('config validation diagnostics preserve the error reason and stack', () => {
+  const error = new Error('Invalid engine.providers.gummy.apiKey')
+  error.name = 'InvalidConfigError'
+
+  const diagnostic = redactSensitiveValue({
+    version: 1,
+    operation: 'config.read',
+    error
+  })
+
+  assert.equal(diagnostic.error.name, 'InvalidConfigError')
+  assert.equal(
+    diagnostic.error.message,
+    'Invalid engine.providers.gummy.apiKey'
+  )
+  assert.match(diagnostic.error.stack, /InvalidConfigError/)
+  assert.match(diagnostic.error.stack, /Invalid engine\.providers\.gummy\.apiKey/)
+})
+
 test('debug is file-only while existing user-facing levels remain visible', () => {
   assert.equal(isVisibleLogLevel('DEBUG'), false)
   assert.equal(isVisibleLogLevel('INFO'), true)

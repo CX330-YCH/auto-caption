@@ -2,7 +2,7 @@ function passwordMasking(pwd: string) {
   return pwd.replace(/./g, '*')
 }
 
-const SENSITIVE_KEY = /(api.?key|token|password|secret|authorization|credential|cookie)/i
+const SENSITIVE_KEY = /(?:api.?key|(?:access|refresh|auth|id)?token|password|secret|authorization|credentials?|cookie)$/i
 const SENSITIVE_ARGUMENTS = new Set(['-k', '-okey', '-gkey', '-fkey'])
 
 export function redactSensitiveText(
@@ -23,8 +23,12 @@ export function redactSensitiveText(
       '$1<redacted>'
     )
     .replace(
-      /\b(?:api.?key|token|password|secret|credential)[-_:=\s]+[A-Za-z0-9._-]{4,}/gi,
-      '<redacted>'
+      /(\b(?:api.?key|token|password|secret|credential)\b["']?\s*[:=]\s*["']?)[^\s"',;}]+/gi,
+      '$1<redacted>'
+    )
+    .replace(
+      /(\b(?:api.?key|token|password|secret|credential)\b\s+)[A-Za-z0-9._-]{8,}/gi,
+      '$1<redacted>'
     )
 }
 

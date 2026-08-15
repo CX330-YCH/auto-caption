@@ -5,6 +5,7 @@ import {
   passwordMaskingForList,
   passwordMaskingForObject,
   redactSensitiveText,
+  redactSensitiveValue,
   sensitiveArgumentValues
 } from '../../src/main/utils/UtilsFunc.ts'
 
@@ -41,6 +42,32 @@ test('extracts runtime secrets and redacts exact values from SDK stderr', () => 
     ),
     'SDK rejected <redacted> with Authorization: Bearer <redacted>'
   )
+})
+
+test('preserves token usage metrics while redacting actual token credentials', () => {
+  assert.equal(
+    redactSensitiveText('Engine Token Usage: 0'),
+    'Engine Token Usage: 0'
+  )
+  assert.equal(
+    redactSensitiveText('access token: private-token-value'),
+    'access token: <redacted>'
+  )
+  assert.deepEqual(redactSensitiveValue({
+    tokenUsage: 17,
+    tokenCount: 23,
+    maxTokens: 1024,
+    token: 'private-token-value',
+    accessToken: 'private-access-token',
+    providerApiKey: 'private-api-key'
+  }), {
+    tokenUsage: 17,
+    tokenCount: 23,
+    maxTokens: 1024,
+    token: '<redacted>',
+    accessToken: '<redacted>',
+    providerApiKey: '<redacted>'
+  })
 })
 
 test('masks API key fields case-insensitively and preserves other fields', () => {

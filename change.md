@@ -3056,3 +3056,169 @@
 - 本地 `package.json` 与 `electron-builder.yml`：确认 macOS 产物版本来自 npm 包版本，DMG artifact 使用 `${name}-${version}.${ext}`。
 - Electron Builder 26 本地 `app-builder-lib` blockmap API：用于重新生成签名后 zip/DMG 的 blockmap，避免自动更新元数据指向签名前哈希。
 - 根目录 `AGENTS.md`：决定版本构建必须同步中英日文档、记录 `change.md`、避免系统环境修改、如实记录沙箱外打包步骤与未验证平台。
+
+## 2026-08-15 - 补全配置拒绝诊断并修正 Token Usage 误脱敏
+
+### 用户授权与变更目标
+
+- 用户明确要求修复两项 Debug 日志问题：`Config rejected` 只有 `InvalidConfigError`、缺少具体字段/原因/堆栈，以及 `Engine Token Usage: 0` 被错误记录为 `Engine <redacted>: 0`。
+- 目标：配置读取失败时保留安全、可定位的异常摘要和隐藏结构化诊断；将日志脱敏限制到凭据语义，保留 token 用量/计数等非敏感指标。
+- 非目标：不修改配置内容或迁移策略，不修复触发配置拒绝的用户配置，不改字幕 Provider、IPC、进程协议、界面、依赖或打包配置，不提交或发布。
+- 修改前检查：完整阅读根目录 `AGENTS.md`；`rg --files -g 'AGENTS.md'` 确认无子目录补充规则；`git status --short --branch` 显示 `main...origin/main` 且工作区干净。
+
+### 变更类型
+
+- 修复、测试。
+
+### 修改文件与原因
+
+- `src/main/utils/AllConfig.ts`
+  - 配置读取失败的 ERROR 摘要由仅记录异常类型改为记录 `name: message`，直接显示具体拒绝原因。
+  - 同时新增仅写 Debug JSONL 的 `Config Error Diagnostic`，包含诊断版本、`config.read` operation、配置路径和完整 Error 序列化结果，因此保留 name、message、stack、cause 和自定义属性；所有字段继续经过统一脱敏入口。
+- `src/main/utils/UtilsFunc.ts`
+  - 将结构化敏感字段匹配从“字段名任意位置包含 token 等词”收窄为凭据型字段结尾，避免 `tokenUsage`、`tokenCount`、`maxTokens` 被误判，同时继续覆盖 `token`、`accessToken`、Provider API Key、password、secret、authorization、credential 和 cookie。
+  - 将自由文本规则拆分为显式 `:`/`=` 赋值和至少 8 字符的自然语言凭据值两类，不再把 `Token Usage` 中的普通单词 `Usage` 当成密钥；Bearer、URL 查询参数、常见 `sk-` Key 和运行时已知密钥替换规则保持不变。
+- `tests/node/debugLogSession.test.mjs`
+  - 新增配置校验诊断回归测试，确认 `InvalidConfigError` 的具体原因和 stack 在递归安全序列化后仍然存在。
+- `tests/node/utilsFunc.test.mjs`
+  - 新增文本与结构化回归测试，确认 `Engine Token Usage: 0` 和 token 统计字段保持原值，而真实 token、access token 与 Provider API Key 仍被脱敏。
+- `change.md`
+  - 追加本次授权、行为、安全边界、验证结果、兼容性与回滚记录。
+
+### 修改前后行为
+
+- 修改前：配置文件无效时只产生 `Config rejected; V3 defaults will be used (InvalidConfigError)`，无法从导出的 Debug 日志判断具体校验失败字段，也没有 JavaScript stack。
+- 修改后：ERROR 行包含异常类型和具体 message；紧随其后的隐藏 Debug 诊断包含 `operation: config.read`、配置路径以及已脱敏的完整 Error 对象和 stack。配置仍安全回退到 V3 默认值。
+- 修改前：自由文本规则将 `Token Usage` 匹配为“token + 凭据值”，结构化规则也会遮蔽任何包含 `token` 的统计字段。
+- 修改后：`Engine Token Usage: 0` 原样记录，`tokenUsage`、`tokenCount` 和 `maxTokens` 保持可诊断数值；真正的 token/API Key/password/secret 等凭据仍输出 `<redacted>`。
+
+### 配置、IPC、协议、数据结构与兼容性
+
+- 配置 schemaVersion、默认值、持久化字段、解析规则和迁移函数均无变化；无配置迁移要求。
+- Electron IPC、Python stdout NDJSON、本地 TCP 命令、字幕事件结构和命令行参数均无变化。
+- 新增内容仅是 Debug JSONL 中一条 `DEBUG` 级配置诊断记录；现有日志记录 envelope 与字段类型不变，不影响旧日志读取或自定义字幕引擎。
+- 脱敏逻辑为跨平台纯 TypeScript 行为，不依赖 Windows、macOS 或 Linux 平台 API。
+- 没有新增、删除或升级依赖，也没有外部 API、远端资源、计费或凭据存储变化。
+- 精确回滚：恢复本条列出的两个 TypeScript 文件和两个 Node 测试文件，并删除本条 `change.md` 记录；无需配置迁移，但会恢复配置错误详情缺失和 Token Usage 误脱敏问题。
+
+### 验证记录
+
+- `node --experimental-strip-types --test tests/node/utilsFunc.test.mjs tests/node/debugLogSession.test.mjs`：通过，9/9；覆盖 Token Usage/统计字段保留、真实凭据脱敏，以及配置异常原因和 stack 保留。
+- `npm run typecheck:node`：通过，Electron 主进程 TypeScript 无错误。
+- `npm run verify`：通过；Node/Web 类型检查、ESLint、Node 61/61 和 Python 66/66 全部成功。
+- `npm run build`：通过；包含完整类型检查，Electron main、preload、renderer 生产构建成功，分别转换 27、1、3261 个模块。
+- `git diff --check`：修改测试完成后通过；追加本记录后执行最终审计并在交付中如实报告。
+- 验证保留项目既有 npm mirror 配置弃用警告与 Node `MODULE_TYPELESS_PACKAGE_JSON` 性能警告；均未导致类型检查、Lint、测试或构建失败，本批次未扩大范围修改包管理配置。
+
+### 未执行、风险与后续事项
+
+- 未重新打包或安装 Electron/PyInstaller 应用，也未通过 GUI 导出真实 Debug 日志；自动化测试直接覆盖共用日志脱敏/异常序列化函数，生产构建验证调用可编译，但发布包仍需下一次正常打包后才能包含本修复。
+- 未调用真实字幕、翻译或热词 API，未访问麦克风/系统音频，也未产生费用；本修改不涉及这些运行路径。
+- 自由文本中仅以空格分隔、少于 8 字符且没有 `:`/`=`、Bearer、查询参数、常见 Key 前缀或运行时精确值可供识别的未知短凭据，仍无法仅凭文本可靠区分于普通术语；结构化凭据字段和实际进程参数密钥仍会无条件脱敏。
+- 配置异常 stack 会包含本地代码路径，这是 Debug 日志用于定位错误的预期行为；不会显示在普通软件日志 UI 的 DEBUG 过滤层中。
+
+### 关键外部文档或技术决策来源
+
+- 用户提供的 `auto-caption-debug-2026-08-14T16-36-56-793Z.jsonl`：直接确认配置异常只有类型名，以及 `Engine Token Usage: 0` 被文本脱敏规则误伤。
+- 本地 `src/main/utils/Log.ts` 与 `src/main/logging/DebugLogSession.ts`：决定复用既有“ERROR 简洁可见、DEBUG 完整落盘”和递归安全序列化机制，不新增日志协议。
+- 根目录 `AGENTS.md`：决定完整错误诊断仍必须脱敏凭据、补充回归测试、执行类型/Lint/测试/构建并追加本记录。
+
+## 2026-08-15 - V2.11.0 小版本与 macOS arm64 构建
+
+### 用户授权与变更目标
+
+- 用户明确要求“编译一下Mac版本 并更新小版本号”。
+- 目标：在不修改系统环境的前提下，将 V2 小版本从 `2.10.0` 提升到 `2.11.0`，并基于当前工作区生成 macOS arm64 构建产物。
+- 非目标：不提交 Git、不推送、不发布 Release、不执行 Windows/Linux/macOS x64 或 universal 打包；不升级、安装或替换项目依赖。
+- 修改前检查：已阅读根目录 `AGENTS.md`；`rg --files -g 'AGENTS.md'` 确认无子目录补充规则；`git status --short --branch` 显示当前分支 `main...origin/main` 且已有 `change.md`、`src/main/utils/AllConfig.ts`、`src/main/utils/UtilsFunc.ts`、`tests/node/debugLogSession.test.mjs`、`tests/node/utilsFunc.test.mjs` 未提交修改。本批次保留这些既有改动，只追加版本与构建相关变更。
+
+### 变更类型
+
+- 构建、配置、文档。
+
+### 修改文件与原因
+
+- `package.json`
+  - 通过 `npm version minor --no-git-tag-version` 将应用版本更新为 `2.11.0`；未创建 git tag。
+- `package-lock.json`
+  - 同步根包版本和 lock 根条目到 `2.11.0`。
+- `README.md`、`README_en.md`、`README_ja.md`
+  - 同步版本徽章、发布提示和平台说明到 `v2.11.0`。
+- `docs/user-manual/zh.md`、`docs/user-manual/en.md`、`docs/user-manual/ja.md`
+  - 同步用户手册对应版本标识到 `v2.11.0`。
+- `docs/engine-manual/zh.md`、`docs/engine-manual/en.md`、`docs/engine-manual/ja.md`
+  - 同步引擎手册对应版本标识到 `v2.11.0`。
+- `src/renderer/index.html`
+  - 同步浏览器标题中的可见版本到 `Auto Caption v2.11.0`。
+- `src/renderer/src/components/EngineStatus.vue`
+  - 同步关于信息中的可见版本到 `v2.11.0`。
+- `docs/CHANGELOG.md`
+  - 新增 `v2.11.0` 条目，记录版本同步与 macOS arm64 构建。
+- `dist/latest-mac.yml`
+  - 在生成目录中同步最终签名后 zip 和 DMG 的 `2.11.0` 路径、大小、sha512 与 releaseDate。
+- 构建产物：
+  - `engine/dist/main`：本地 `.venv` 内 PyInstaller 生成的 macOS arm64 Python 字幕引擎。
+  - `dist/mac-arm64/Auto Caption.app`：Electron Builder 生成并经本地 ad-hoc 签名的 macOS arm64 应用包。
+  - `dist/Auto Caption-2.11.0-arm64-mac.zip` 与 `.blockmap`：签名后 `.app` 重新封装的 zip 和 Electron Builder 26 blockmap。
+  - `dist/auto-caption-2.11.0.dmg` 与 `.blockmap`：包含签名后 `.app` 的 APFS UDZO DMG 和 Electron Builder 26 blockmap。
+
+### 修改前后行为
+
+- 修改前：应用版本源、README、手册、关于窗口、浏览器标题和 macOS 构建元数据为 `2.10.0` / `v2.10.0`。
+- 修改后：应用版本源、可见版本文本、README、用户手册、引擎手册、CHANGELOG 与本次 macOS arm64 产物统一为 `2.11.0` / `v2.11.0`。
+- 运行时业务逻辑、配置默认值、Provider 行为、字幕协议、热词协议、翻译行为和 IPC 均不因本批次版本构建变更而改变。
+
+### 配置、IPC、协议、命令行与数据结构
+
+- `package.json` 和 `package-lock.json` 根版本变化为 `2.11.0`。
+- 没有新增、删除或升级依赖；锁文件中仅根包版本随 npm version 更新。
+- 没有修改持久化配置 schemaVersion、配置迁移、Electron IPC、Python stdout 协议、本地 TCP 命令协议、命令行参数或数据结构。
+- `dist/latest-mac.yml` 只描述本次 macOS arm64 最终产物，不影响源码层配置。
+
+### 兼容性、迁移与回滚
+
+- 兼容性：版本号与 macOS arm64 产物更新不需要用户配置迁移；现有配置文件、字幕日志和自定义引擎协议保持兼容。
+- 平台范围：本批次只实际验证 macOS arm64 构建；不声明 Windows、Linux、macOS x64 或 universal 产物已经验证。
+- 签名范围：`Auto Caption.app` 使用本地 ad-hoc 签名；没有 Apple Developer ID 签名或 notarization，首次打开仍可能触发 macOS 安全确认。
+- 精确回滚：恢复本批次列出的版本/文档文件到 `2.10.0`；恢复 `package.json` 与 `package-lock.json` 根版本；删除或忽略 `dist/` 与 `engine/dist/` 中本次生成的 `2.11.0` 构建产物；如需恢复旧包，使用此前 `2.10.0` 产物或按旧版本号重新构建。
+
+### 验证记录
+
+- `npm version minor --no-git-tag-version`：通过；版本提升到 `2.11.0`，没有创建 git tag；保留既有 npm mirror 配置弃用警告。
+- `rg -n "2\\.10\\.0|v2\\.10\\.0|auto-caption-2\\.10\\.0|Auto Caption-2\\.10\\.0" ...`：应用版本相关文件无旧版本残留；初次扫描仅剩历史 `docs/CHANGELOG.md` 条目和待本次打包后更新的 `dist/latest-mac.yml`。
+- `npm run verify`：通过；包含 typecheck、ESLint、Node 61/61 和 Python 66/66。
+- `npm run build`：通过；包含 typecheck，Electron main、preload、renderer 生产构建成功，分别转换 27、1、3261 个模块。
+- `PYINSTALLER_CONFIG_DIR=/private/tmp/auto-caption-pyinstaller-config ./.venv/bin/pyinstaller --clean --noconfirm ./main.spec`（在 `engine/` 内）：通过，生成 `engine/dist/main`；保留既有 `pycparser.lextab/yacctab` hidden import warning 与 `@rpath/libomp.dylib` warning。
+- `./dist/main --help`：沙箱内因 PyInstaller semaphore 权限失败；按规则在沙箱外重跑同一项目本地可执行文件，通过并输出 CLI 帮助。
+- `npx electron-builder --mac`：沙箱内因 `npmmirror.com` DNS 失败；按规则在沙箱外重跑同一项目打包命令，通过，生成 `dist/mac-arm64`、zip、DMG 与初始 blockmap；保留重复依赖引用 warning 与缺少 Developer ID 导致跳过 Apple 正式签名的 warning。
+- `file dist/mac-arm64/Auto Caption.app/Contents/MacOS/Auto Caption dist/mac-arm64/Auto Caption.app/Contents/Resources/engine/main`：通过，两个可执行文件均为 Mach-O arm64。
+- `plutil -p dist/mac-arm64/Auto Caption.app/Contents/Info.plist | rg 'CFBundleShortVersionString|CFBundleVersion'`：通过，两个版本字段均为 `2.11.0`。
+- `codesign --force --deep --sign - dist/mac-arm64/Auto Caption.app`：通过，完成本地 ad-hoc 签名。
+- `codesign --verify --deep --strict --verbose=2 dist/mac-arm64/Auto Caption.app`：通过，签名验证有效。
+- `ditto -c -k --sequesterRsrc --keepParent ...`：通过，重新封装签名后的 `Auto Caption-2.11.0-arm64-mac.zip`。
+- `hdiutil create -volname 'Auto Caption' -fs APFS -format UDZO -srcfolder ... -ov dist/auto-caption-2.11.0.dmg`：沙箱内失败为“设备未配置”；按规则在沙箱外重跑，通过，重新生成包含签名后 `.app` 的 DMG；hdiutil 提示该 create 用法已弃用，未影响产物生成。
+- `node -e "... buildBlockMap ..."`：通过，为签名后 zip 和 DMG 重建 `.blockmap`，并计算最终 sha512、size 与 releaseDate。
+- `hdiutil verify dist/auto-caption-2.11.0.dmg`：通过，checksum VALID。
+- `unzip -tq dist/Auto Caption-2.11.0-arm64-mac.zip`：通过，无压缩数据错误。
+- `shasum -a 256 dist/auto-caption-2.11.0.dmg dist/Auto Caption-2.11.0-arm64-mac.zip`：
+  - DMG：`7a2eb68ffb3282b536f4b78593d48b23091ab9312da9386dbd9757d4d11ce560`
+  - ZIP：`651e57d008723464e16b502bd1d95b7a347afb6d624487591c89c3fee19886f3`
+- 最终产物大小：
+  - `dist/auto-caption-2.11.0.dmg`：约 234 MB。
+  - `dist/Auto Caption-2.11.0-arm64-mac.zip`：约 215 MB。
+  - `engine/dist/main`：约 83 MB。
+- `git diff --check`：追加本记录后执行，结果记录在最终交付中。
+
+### 未执行、风险与后续事项
+
+- 未执行 Windows、Linux、macOS x64 或 universal 构建；不能声明这些平台的 `2.11.0` 包已验证。
+- 未执行 Apple Developer ID 签名、notarization 或 GitHub Release 发布；当前 DMG/ZIP 适合作为本地验证包，正式发布前仍建议使用开发者证书签名并公证。
+- 未访问真实麦克风、系统音频、Gummy、Fun-ASR、GLM、翻译或热词 API；本批次只验证自动化测试、生产构建、Python 引擎 CLI 冒烟和 macOS 安装包完整性。
+- 未升级依赖或安装新依赖；如后续需要依赖升级，应单独授权依赖升级批次，以便分别记录必要性、锁文件变化、许可证/兼容性和回归结果。
+- 既有 npm mirror 配置弃用警告、Node `MODULE_TYPELESS_PACKAGE_JSON` 性能警告、PyInstaller hidden import/libomp warning、Electron Builder 重复依赖引用 warning 和 hdiutil create 用法弃用提示仍存在；本批次未扩大范围修复。
+
+### 关键外部文档或技术决策来源
+
+- 本地 `package.json` 与 `electron-builder.yml`：确认 macOS 产物版本来自 npm 包版本，DMG artifact 使用 `${name}-${version}.${ext}`。
+- Electron Builder 26 本地 `app-builder-lib` blockmap API：用于重新生成签名后 zip/DMG 的 blockmap，避免自动更新元数据指向签名前哈希。
+- 根目录 `AGENTS.md`：决定版本构建必须同步中英日文档、记录 `change.md`、避免系统环境修改、如实记录沙箱外打包步骤与未验证平台。

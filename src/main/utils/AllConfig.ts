@@ -85,8 +85,14 @@ class AllConfig {
     catch (error) {
       this.document = createDefaultConfig(getDesktopPath())
       Log.error(
-        `Config rejected; V3 defaults will be used (${errorName(error)})`
+        `Config rejected; V3 defaults will be used (${errorSummary(error)})`
       )
+      Log.debug('Config Error Diagnostic:', {
+        version: 1,
+        operation: 'config.read',
+        configPath,
+        error
+      })
     }
   }
 
@@ -196,8 +202,9 @@ class AllConfig {
   }
 }
 
-function errorName(error: unknown): string {
-  return error instanceof Error ? error.name : 'UnknownError'
+function errorSummary(error: unknown): string {
+  if (error instanceof Error) return `${error.name}: ${error.message}`
+  return `UnknownError: ${String(error)}`
 }
 
 export const allConfig = new AllConfig()
