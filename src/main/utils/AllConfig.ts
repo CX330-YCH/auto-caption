@@ -173,9 +173,11 @@ class AllConfig {
     log: CaptionEngineMessage,
     engineRunId: number
   ): void {
-    const change = this.captions.upsert(engineRunId, log)
-    for (const window of BrowserWindow.getAllWindows()) {
-      window.webContents.send('both.captionLog.upsert', change.item)
+    const changes = this.captions.upsert(engineRunId, log)
+    for (const change of changes) {
+      for (const window of BrowserWindow.getAllWindows()) {
+        window.webContents.send('both.captionLog.upsert', change.item)
+      }
     }
   }
 

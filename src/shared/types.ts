@@ -32,7 +32,10 @@ export interface CaptionItem {
   time_t: string
   text: string
   translation: string
+  phase: CaptionPhase
 }
+
+export type CaptionPhase = 'partial' | 'final' | 'unknown'
 
 export interface SoftwareLogItem {
   type: 'INFO' | 'WARN' | 'ERROR'

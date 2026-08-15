@@ -37,6 +37,17 @@ test('validates caption event fields', () => {
   }
 
   assert.equal(isCaptionEngineMessage(valid), true)
+  assert.equal(isCaptionEngineMessage({
+    ...valid,
+    event_version: 1,
+    phase: 'partial'
+  }), true)
+  assert.equal(isCaptionEngineMessage({ ...valid, phase: 'final' }), false)
+  assert.equal(isCaptionEngineMessage({
+    ...valid,
+    event_version: 2,
+    phase: 'final'
+  }), false)
   assert.equal(isCaptionEngineMessage({ ...valid, index: Number.NaN }), false)
   assert.equal(isCaptionEngineMessage({ ...valid, translation: null }), false)
 })

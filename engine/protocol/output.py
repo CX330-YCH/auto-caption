@@ -34,6 +34,10 @@ class ProtocolEventSink:
         if isinstance(event, (CaptionPartial, CaptionFinal)):
             self._object_writer({
                 'command': 'caption',
+                'event_version': 1,
+                'phase': (
+                    'partial' if isinstance(event, CaptionPartial) else 'final'
+                ),
                 'index': event.caption_id,
                 'time_s': event.started_at,
                 'time_t': event.ended_at,

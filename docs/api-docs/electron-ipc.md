@@ -197,7 +197,7 @@
 
 ### `caption.windowHeight.change`
 
-**介绍：** 字幕窗口宽度发生改变
+**介绍：** 字幕内容精确换行或样式变化后，字幕窗口高度发生改变
 
 **发起方：** 前端字幕窗口
 
@@ -337,10 +337,11 @@ interface CaptionItem {
   time_t: string
   text: string
   translation: string
+  phase: 'partial' | 'final' | 'unknown'
 }
 ```
 
-`captionId` 是 `${engineRunId}:${engineCaptionId}`，只用于身份与更新；`index` 是从 1 开始的显示序号。Vue 列表 key 和更新查找必须使用 `captionId`，不得使用可能被识别服务校正或被用户修改的时间字段。
+`captionId` 是 `${engineRunId}:${engineCaptionId}`，只用于身份与更新；`index` 是从 1 开始的显示序号。Vue 列表 key 和更新查找必须使用 `captionId`，不得使用可能被识别服务校正或被用户修改的时间字段。`phase` 表示字幕生命周期；`unknown` 只用于没有发送版本化 phase 的旧自定义引擎。公共增量模型会拒绝 `final -> partial` 回退，并在下一条新字幕出现时把仍为 `unknown` 的上一条隐式固化。
 
 ### `both.captionLog.set`
 

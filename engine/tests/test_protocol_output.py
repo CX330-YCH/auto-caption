@@ -19,7 +19,7 @@ from protocol.output import ProtocolEventSink  # noqa: E402
 
 
 class ProtocolEventSinkTests(unittest.TestCase):
-    def test_maps_partial_and_final_to_legacy_caption_messages(self):
+    def test_maps_partial_and_final_to_versioned_caption_messages(self):
         commands = []
         objects = []
         sink = ProtocolEventSink(
@@ -36,6 +36,8 @@ class ProtocolEventSinkTests(unittest.TestCase):
         self.assertEqual(objects, [
             {
                 'command': 'caption',
+                'event_version': 1,
+                'phase': 'partial',
                 'index': 3,
                 'time_s': 'start',
                 'time_t': 'partial',
@@ -44,6 +46,8 @@ class ProtocolEventSinkTests(unittest.TestCase):
             },
             {
                 'command': 'caption',
+                'event_version': 1,
+                'phase': 'final',
                 'index': 3,
                 'time_s': 'start',
                 'time_t': 'final',

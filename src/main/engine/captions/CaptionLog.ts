@@ -1,48 +1,37 @@
 import type { CaptionItem } from '../../../shared/types.ts'
+import {
+  IncrementalCaptionCollection,
+  type CaptionCollectionChange
+} from '../../../shared/captions.ts'
 import type {
   CaptionEngineMessage,
   TranslationEngineMessage
 } from '../protocol/messages.ts'
 
-export interface CaptionLogChange {
-  item: CaptionItem
-  position: number
-}
+export type CaptionLogChange = CaptionCollectionChange
 
 export class CaptionLog {
-  private readonly entries: CaptionItem[] = []
-  private readonly positions = new Map<string, number>()
+  private readonly captions = new IncrementalCaptionCollection()
 
   public get items(): CaptionItem[] {
-    return this.entries
+    return this.captions.items
   }
 
   public upsert(
     engineRunId: number,
     message: CaptionEngineMessage
-  ): CaptionLogChange {
+  ): CaptionLogChange[] {
     const captionId = this.captionId(engineRunId, message.index)
-    const existingPosition = this.positions.get(captionId)
-    const position = existingPosition ?? this.entries.length
-    const existing = this.entries[position]
     const item: CaptionItem = {
       captionId,
-      index: position + 1,
+      index: this.displayIndex(captionId),
       time_s: message.time_s,
       time_t: message.time_t,
       text: message.text,
-      translation: message.translation || existing?.translation || ''
+      translation: message.translation,
+      phase: message.phase ?? 'unknown'
     }
-
-    if (existingPosition === undefined) {
-      this.entries.push(item)
-      this.positions.set(captionId, position)
-    }
-    else {
-      this.entries.splice(position, 1, item)
-    }
-
-    return { item, position }
+    return this.captions.upsert(item)
   }
 
   public applyTranslation(
@@ -51,21 +40,18 @@ export class CaptionLog {
   ): CaptionLogChange | undefined {
     const position = message.caption_id === undefined
       ? this.findLegacyPosition(message.time_s)
-      : this.positions.get(this.captionId(engineRunId, message.caption_id))
+      : this.findPosition(this.captionId(engineRunId, message.caption_id))
 
     if (position === undefined) return undefined
 
-    const item = {
-      ...this.entries[position],
-      translation: message.translation
-    }
-    this.entries.splice(position, 1, item)
-    return { item, position }
+    return this.captions.updateTranslation(
+      this.items[position].captionId,
+      message.translation
+    )
   }
 
   public clear(): void {
-    this.entries.splice(0)
-    this.positions.clear()
+    this.captions.clear()
   }
 
   private captionId(engineRunId: number, engineCaptionId: number): string {
@@ -73,9 +59,18 @@ export class CaptionLog {
   }
 
   private findLegacyPosition(timeStart: string): number | undefined {
-    for (let position = this.entries.length - 1; position >= 0; position--) {
-      if (this.entries[position].time_s === timeStart) return position
+    for (let position = this.items.length - 1; position >= 0; position--) {
+      if (this.items[position].time_s === timeStart) return position
     }
     return undefined
+  }
+
+  private displayIndex(captionId: string): number {
+    const position = this.findPosition(captionId)
+    return (position ?? this.items.length) + 1
+  }
+
+  private findPosition(captionId: string): number | undefined {
+    return this.captions.findPosition(captionId)
   }
 }

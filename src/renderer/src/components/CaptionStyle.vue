@@ -184,83 +184,31 @@
       v-if="currentPreview"
       class="preview-container"
       :style="{
-        backgroundColor: addOpicityToColor(currentBackground, currentOpacity),
-        textShadow: currentTextShadow ? `${currentOffsetX}px ${currentOffsetY}px ${currentBlur}px ${currentTextShadowColor}` : 'none'
+        backgroundColor: addOpicityToColor(currentBackground, currentOpacity)
       }"
     >
-      <template v-if="captionData.length">
-        <template
-          v-for="val in revArr[Math.min(currentLineNumber, captionData.length)]"
-          :key="captionData[captionData.length - val].captionId"
-        >
-          <p :class="[currentLineBreak?'':'left-ellipsis']"
-            :style="{
-              fontFamily: currentFontFamily,
-              fontSize: currentFontSize + 'px',
-              color: currentFontColor,
-              fontWeight: currentFontWeight * 100
-          }">
-            <span>{{ captionData[captionData.length - val].text }}</span>
-          </p>
-          <p :class="[currentLineBreak?'':'left-ellipsis']"
-            v-if="currentTransDisplay && captionData[captionData.length - val].translation"
-            :style="{
-              fontFamily: currentTransFontFamily,
-              fontSize: currentTransFontSize + 'px',
-              color: currentTransFontColor,
-              fontWeight: currentTransFontWeight * 100
-            }"
-          >
-            <span>{{ captionData[captionData.length - val].translation }}</span>
-          </p>
-        </template>
-      </template>
-      <template v-else>
-        <template v-for="val in currentLineNumber" :key="val">
-          <p :class="[currentLineBreak?'':'left-ellipsis']"
-            :style="{
-              fontFamily: currentFontFamily,
-              fontSize: currentFontSize + 'px',
-              color: currentFontColor,
-              fontWeight: currentFontWeight * 100
-          }">
-            <span>{{ $t('example.original') }}</span>
-          </p>
-          <p :class="[currentLineBreak?'':'left-ellipsis']"
-            v-if="currentTransDisplay"
-            :style="{
-              fontFamily: currentTransFontFamily,
-              fontSize: currentTransFontSize + 'px',
-              color: currentTransFontColor,
-              fontWeight: currentTransFontWeight * 100
-            }"
-          >
-            <span>{{ $t('example.translation') }}</span>
-          </p>
-        </template>
-      </template>
+      <CaptionViewport
+        :captions="captionData"
+        :fallback-captions="fallbackCaptions"
+        :styles="previewStyles"
+      />
     </div>
   </Teleport>
 
 </template>
 
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useCaptionStyleStore } from '@renderer/stores/captionStyle'
 import { storeToRefs } from 'pinia'
 import { notification } from 'ant-design-vue'
 import { useI18n } from 'vue-i18n'
-import { useCaptionLogStore } from '@renderer/stores/captionLog';
+import { useCaptionLogStore } from '@renderer/stores/captionLog'
+import CaptionViewport from './caption/CaptionViewport.vue'
+import type { CaptionItem, Styles } from '../../../shared/types'
 
-const revArr = {
-  1: [1],
-  2: [2, 1],
-  3: [3, 2, 1],
-  4: [4, 3, 2, 1],
-}
-
-const captionLog = useCaptionLogStore();
-const { captionData } = storeToRefs(captionLog);
+const captionLog = useCaptionLogStore()
+const { captionData } = storeToRefs(captionLog)
 
 const { t } = useI18n()
 
@@ -287,79 +235,113 @@ const currentOffsetY = ref<number>(2)
 const currentBlur = ref<number>(0)
 const currentTextShadowColor = ref<string>('#ffffff')
 
-function addOpicityToColor(color: string, opicity: number) {
-  const opicityValue = Math.round(opicity * 255 / 100);
-  const opicityHex = opicityValue.toString(16).padStart(2, '0');
-  return `${color}${opicityHex}`;
+const previewStyles = computed<Styles>(() => ({
+  lineNumber: currentLineNumber.value,
+  lineBreak: currentLineBreak.value,
+  fontFamily: currentFontFamily.value,
+  fontSize: currentFontSize.value,
+  fontColor: currentFontColor.value,
+  fontWeight: currentFontWeight.value,
+  background: currentBackground.value,
+  opacity: currentOpacity.value,
+  showPreview: currentPreview.value,
+  transDisplay: currentTransDisplay.value,
+  transFontFamily: currentTransFontFamily.value,
+  transFontSize: currentTransFontSize.value,
+  transFontColor: currentTransFontColor.value,
+  transFontWeight: currentTransFontWeight.value,
+  textShadow: currentTextShadow.value,
+  offsetX: currentOffsetX.value,
+  offsetY: currentOffsetY.value,
+  blur: currentBlur.value,
+  textShadowColor: currentTextShadowColor.value
+}))
+
+const fallbackCaptions = computed<CaptionItem[]>(() =>
+  Array.from({ length: 4 }, (_, index) => ({
+    captionId: `style-preview:${index}`,
+    index: index + 1,
+    time_s: '',
+    time_t: '',
+    text: t('example.original'),
+    translation: t('example.translation'),
+    phase: 'final'
+  }))
+)
+
+function addOpicityToColor(color: string, opicity: number): string {
+  const opicityValue = Math.round(opicity * 255 / 100)
+  const opicityHex = opicityValue.toString(16).padStart(2, '0')
+  return `${color}${opicityHex}`
 }
 
-function useSameStyle(){
-  currentTransFontFamily.value = currentFontFamily.value;
-  currentTransFontSize.value = currentFontSize.value;
-  currentTransFontColor.value = currentFontColor.value;
-  currentTransFontWeight.value = currentFontWeight.value;
+function useSameStyle(): void {
+  currentTransFontFamily.value = currentFontFamily.value
+  currentTransFontSize.value = currentFontSize.value
+  currentTransFontColor.value = currentFontColor.value
+  currentTransFontWeight.value = currentFontWeight.value
 }
 
-function applyStyle(){
-  captionStyle.lineNumber = currentLineNumber.value;
-  captionStyle.lineBreak = currentLineBreak.value;
-  captionStyle.fontFamily = currentFontFamily.value;
-  captionStyle.fontSize = currentFontSize.value;
-  captionStyle.fontColor = currentFontColor.value;
-  captionStyle.fontWeight = currentFontWeight.value;
-  captionStyle.background = currentBackground.value;
-  captionStyle.opacity = currentOpacity.value;
-  captionStyle.showPreview = currentPreview.value;
-  captionStyle.transDisplay = currentTransDisplay.value;
-  captionStyle.transFontFamily = currentTransFontFamily.value;
-  captionStyle.transFontSize = currentTransFontSize.value;
-  captionStyle.transFontColor = currentTransFontColor.value;
-  captionStyle.transFontWeight = currentTransFontWeight.value;
-  captionStyle.textShadow = currentTextShadow.value;
-  captionStyle.offsetX = currentOffsetX.value;
-  captionStyle.offsetY = currentOffsetY.value;
-  captionStyle.blur = currentBlur.value;
-  captionStyle.textShadowColor = currentTextShadowColor.value;
+function applyStyle(): void {
+  captionStyle.lineNumber = currentLineNumber.value
+  captionStyle.lineBreak = currentLineBreak.value
+  captionStyle.fontFamily = currentFontFamily.value
+  captionStyle.fontSize = currentFontSize.value
+  captionStyle.fontColor = currentFontColor.value
+  captionStyle.fontWeight = currentFontWeight.value
+  captionStyle.background = currentBackground.value
+  captionStyle.opacity = currentOpacity.value
+  captionStyle.showPreview = currentPreview.value
+  captionStyle.transDisplay = currentTransDisplay.value
+  captionStyle.transFontFamily = currentTransFontFamily.value
+  captionStyle.transFontSize = currentTransFontSize.value
+  captionStyle.transFontColor = currentTransFontColor.value
+  captionStyle.transFontWeight = currentTransFontWeight.value
+  captionStyle.textShadow = currentTextShadow.value
+  captionStyle.offsetX = currentOffsetX.value
+  captionStyle.offsetY = currentOffsetY.value
+  captionStyle.blur = currentBlur.value
+  captionStyle.textShadowColor = currentTextShadowColor.value
 
-  captionStyle.sendCaptionConfigChange();
+  captionStyle.sendCaptionConfigChange()
 
   notification.open({
     placement: 'topLeft',
     message: t('noti.styleChange'),
     description: t('noti.styleInfo')
-  });
+  })
 }
 
-function backStyle(){
-  currentLineNumber.value = captionStyle.lineNumber;
-  currentLineBreak.value = captionStyle.lineBreak;
-  currentFontFamily.value = captionStyle.fontFamily;
-  currentFontSize.value = captionStyle.fontSize;
-  currentFontColor.value = captionStyle.fontColor;
-  currentFontWeight.value = captionStyle.fontWeight;
-  currentBackground.value = captionStyle.background;
-  currentOpacity.value = captionStyle.opacity;
-  currentPreview.value = captionStyle.showPreview;
-  currentTransDisplay.value = captionStyle.transDisplay;
-  currentTransFontFamily.value = captionStyle.transFontFamily;
-  currentTransFontSize.value = captionStyle.transFontSize;
-  currentTransFontColor.value = captionStyle.transFontColor;
-  currentTransFontWeight.value = captionStyle.transFontWeight;
-  currentTextShadow.value = captionStyle.textShadow;
-  currentOffsetX.value = captionStyle.offsetX;
-  currentOffsetY.value = captionStyle.offsetY;
-  currentBlur.value = captionStyle.blur;
-  currentTextShadowColor.value = captionStyle.textShadowColor;
+function backStyle(): void {
+  currentLineNumber.value = captionStyle.lineNumber
+  currentLineBreak.value = captionStyle.lineBreak
+  currentFontFamily.value = captionStyle.fontFamily
+  currentFontSize.value = captionStyle.fontSize
+  currentFontColor.value = captionStyle.fontColor
+  currentFontWeight.value = captionStyle.fontWeight
+  currentBackground.value = captionStyle.background
+  currentOpacity.value = captionStyle.opacity
+  currentPreview.value = captionStyle.showPreview
+  currentTransDisplay.value = captionStyle.transDisplay
+  currentTransFontFamily.value = captionStyle.transFontFamily
+  currentTransFontSize.value = captionStyle.transFontSize
+  currentTransFontColor.value = captionStyle.transFontColor
+  currentTransFontWeight.value = captionStyle.transFontWeight
+  currentTextShadow.value = captionStyle.textShadow
+  currentOffsetX.value = captionStyle.offsetX
+  currentOffsetY.value = captionStyle.offsetY
+  currentBlur.value = captionStyle.blur
+  currentTextShadowColor.value = captionStyle.textShadowColor
 }
 
-function resetStyle() {
-  captionStyle.resetCaptionConfig();
+function resetStyle(): void {
+  captionStyle.resetCaptionConfig()
 }
 
-watch(changeSignal, (val) => {
+watch(changeSignal, (val): void => {
   if(val === true) {
-    backStyle();
-    captionStyle.changeSignal = false;
+    backStyle()
+    captionStyle.changeSignal = false
   }
 })
 </script>
@@ -401,21 +383,4 @@ watch(changeSignal, (val) => {
   overflow-wrap: anywhere;
 }
 
-.preview-container p {
-  text-align: center;
-  margin: 0;
-  line-height: 1.6em;
-}
-
-.left-ellipsis {
-  white-space: nowrap;
-  overflow: hidden;
-  direction: rtl;
-  text-align: left;
-}
-
-.left-ellipsis > span {
-  direction: ltr;
-  display: inline-block;
-}
 </style>

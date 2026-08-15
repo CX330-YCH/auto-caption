@@ -1,6 +1,6 @@
 # Caption Engine Documentation
 
-Corresponding version: v2.11.0
+Corresponding version: v2.12.0
 
 ![](../../assets/media/structure_en.png)
 
@@ -162,6 +162,8 @@ The transmitted content must be a JSON string, where the JSON object needs to co
 ```typescript
 export interface CaptionItem {
   command: "caption",
+  event_version: 1,    // Lifecycle metadata version
+  phase: "partial" | "final",
   index: number,        // Caption sequence number
   time_s: string,       // Current caption start time
   time_t: string,       // Current caption end time
@@ -169,6 +171,8 @@ export interface CaptionItem {
   translation: string   // Caption translation
 }
 ```
+
+Partial and final results for the same sentence must reuse `index`. `partial` remains updateable, while `final` is sealed. New engines should provide `event_version: 1` and `phase` together. For legacy custom-engine compatibility, both may be omitted as a pair, but only one of them is invalid; see the process protocol for the complete rules.
 
 **Note that the buffer must be flushed after each caption JSON data output to ensure that the Electron main process receives strings that can be interpreted as JSON objects each time.** It is recommended to use the project's existing `stdout_obj` function for transmission.
 

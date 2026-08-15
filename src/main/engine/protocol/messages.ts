@@ -5,6 +5,8 @@ export interface EngineMessage {
 
 export interface CaptionEngineMessage extends EngineMessage {
   command: 'caption'
+  event_version?: 1
+  phase?: 'partial' | 'final'
   index: number
   time_s: string
   time_t: string
@@ -35,7 +37,14 @@ export function isEngineMessage(value: unknown): value is EngineMessage {
 export function isCaptionEngineMessage(
   value: EngineMessage
 ): value is CaptionEngineMessage {
+  const hasEventVersion = value.event_version !== undefined
+  const hasPhase = value.phase !== undefined
+  const validLifecycleMetadata = !hasEventVersion && !hasPhase ||
+    value.event_version === 1 &&
+    (value.phase === 'partial' || value.phase === 'final')
+
   return value.command === 'caption' &&
+    validLifecycleMetadata &&
     typeof value.index === 'number' &&
     Number.isFinite(value.index) &&
     typeof value.time_s === 'string' &&

@@ -3057,6 +3057,178 @@
 - Electron Builder 26 本地 `app-builder-lib` blockmap API：用于重新生成签名后 zip/DMG 的 blockmap，避免自动更新元数据指向签名前哈希。
 - 根目录 `AGENTS.md`：决定版本构建必须同步中英日文档、记录 `change.md`、避免系统环境修改、如实记录沙箱外打包步骤与未验证平台。
 
+## 2026-08-16 - V2.12.0 小版本与 macOS arm64 构建
+
+### 用户授权与变更目标
+
+- 用户明确要求“编译一下Mac版本 并更新小版本号”。
+- 目标：在不修改系统环境的前提下，将 V2 小版本从 `2.11.0` 提升到 `2.12.0`，并基于当前工作区（包含用户已有的字幕展示、协议与诊断修改）生成 macOS arm64 构建产物。
+- 非目标：不提交或推送 Git，不创建 PR 或 Release，不安装、删除或升级依赖，不修改系统 Python/Node、全局包或 shell 配置，不执行 Windows、Linux、macOS x64 或 universal 打包。
+- 修改前检查：完整阅读根目录 `AGENTS.md`，`rg --files -g 'AGENTS.md'` 确认没有子目录补充规则；`git status --short --branch` 显示 `main...origin/main`，并已有字幕生命周期、精确换行、工具栏、协议、日志诊断、测试和文档等未提交修改。本批次先阅读目标文件现有 diff，仅更新可明确区分的版本标识并保留全部既有内容。
+
+### 变更类型
+
+- 构建、配置、文档。
+
+### 修改文件与原因
+
+- `package.json`、`package-lock.json`：将应用、锁文件和根包条目的版本从 `2.11.0` 同步为 `2.12.0`；依赖声明和解析版本没有变化。
+- `README.md`、`README_en.md`、`README_ja.md`：同步中英日版本徽章、发布提示和平台说明到 `v2.12.0`。
+- `docs/user-manual/zh.md`、`en.md`、`ja.md`：在保留用户已有字幕显示说明的同时，将对应版本更新为 `v2.12.0`。
+- `docs/engine-manual/zh.md`、`en.md`、`ja.md`：在保留用户已有生命周期协议说明的同时，将对应版本更新为 `v2.12.0`。
+- `src/renderer/index.html`、`src/renderer/src/components/EngineStatus.vue`：同步窗口标题和关于界面的可见版本。
+- `docs/CHANGELOG.md`：增加 `v2.12.0` 发布条目，记录版本同步和 macOS arm64 产物；保留当前工作区已有的未发布功能记录。
+- `change.md`：追加本次授权范围、工作区保护、构建命令、真实验证结果、风险和回滚信息。
+- 生成产物（位于 Git 忽略的构建目录，不加入版本控制）：`engine/dist/main`、`dist/mac-arm64/Auto Caption.app`、`dist/Auto Caption-2.12.0-arm64-mac.zip`、`dist/auto-caption-2.12.0.dmg`、对应 `.blockmap` 和 `dist/latest-mac.yml`。签名后重新封装 ZIP/DMG，并重建 blockmap/更新元数据，确保哈希对应最终内容。
+
+### 修改前后行为
+
+- 修改前：版本源、可见版本文本和上一批 macOS 构建为 `2.11.0`；当前工作区新增功能尚未包含在新的安装包中。
+- 修改后：版本源、README、手册、窗口标题、关于界面、CHANGELOG、Info.plist 和 macOS arm64 产物统一为 `2.12.0`；本次产物包含当前工作区已有改动。
+- 本批次自身不改变配置默认值、Provider 行为、字幕/翻译/热词业务语义、Electron IPC 或 Python 子进程协议；产物中出现的相关功能变化来自构建前已存在的用户修改，并未被本批次覆盖。
+
+### 配置、IPC、协议、命令行、数据结构与依赖
+
+- 仅 `package.json` 与 `package-lock.json` 根版本变为 `2.12.0`；没有新增、删除或升级直接/间接依赖，没有运行安装命令。
+- 持久化配置 schemaVersion、配置迁移、Electron IPC 通道、Python stdout/TCP 协议、CLI 参数和数据结构均未因版本构建步骤变化。
+- `dist/latest-mac.yml` 更新为最终签名后 ZIP/DMG 的路径、大小、SHA-512 与时间戳，供通用更新元数据消费；不改变源码配置。
+
+### 兼容性、迁移与回滚
+
+- 版本号更新不需要配置迁移；现有用户配置和自定义引擎继续使用当前工作区所实现的兼容规则。
+- 只在当前 macOS arm64 环境完成自动化、生产和安装包验证；未声明 Windows、Linux、macOS x64 或 universal 已验证。
+- 应用使用本机 ad-hoc 签名，未使用 Apple Developer ID、未 notarize；首次分发打开仍可能受到 Gatekeeper 提示。
+- 回滚本批次时，可将上述版本文件中的 `2.12.0` 恢复为 `2.11.0`，移除本条 CHANGELOG/change 记录，并忽略或删除 Git 忽略目录中的 `2.12.0` 生成产物；不需要配置回迁。用户在本次开始前的未提交功能改动不属于回滚范围。
+
+### 验证记录
+
+- 版本一致性检查：`package.json`、`package-lock.json` 和 lock 根包均为 `2.12.0`；版本入口扫描未发现非历史 `2.11.0` 残留。
+- `npm run verify`：通过；Node/Web TypeScript、ESLint、Node 66/66 和 Python 66/66 全部成功。
+- `npm run build`：通过；Electron main、preload、renderer 生产构建分别转换 28、1、3268 个模块。
+- `PYINSTALLER_CONFIG_DIR=/private/tmp/auto-caption-pyinstaller-config ./.venv/bin/pyinstaller --clean --noconfirm ./main.spec`：通过；使用项目内 `engine/.venv` 生成 arm64 `engine/dist/main`。保留 `pycparser.lextab/yacctab` hidden import 与 `@rpath/libomp.dylib` 既有 warning。
+- `./dist/main --help`：沙箱内因 PyInstaller semaphore 权限失败；沙箱外首次调用未返回可判定状态，第二次明确以退出码 0 输出完整 CLI 帮助，冒烟通过。
+- `npx electron-builder --mac`：沙箱内因 `npmmirror.com` DNS 受限失败；沙箱外重跑通过，生成 arm64 `.app`、ZIP、DMG 和初始 blockmap。保留重复依赖引用以及缺少 Developer ID、跳过正式 Apple 签名的 warning。
+- `file ...`：应用主程序和打包内 Python 引擎均为 Mach-O 64-bit arm64。
+- `plutil -p .../Info.plist`：`CFBundleShortVersionString` 与 `CFBundleVersion` 均为 `2.12.0`。
+- `codesign --force --deep --sign - ...` 与 `codesign --verify --deep --strict --verbose=2 ...`：通过，本地 ad-hoc 签名有效。
+- `ditto -c -k --sequesterRsrc --keepParent ...`：通过，重新封装签名后的 ZIP。
+- `hdiutil create ...`：沙箱内以“设备未配置”失败；沙箱外重跑通过，生成签名后 DMG；保留该 create 用法已弃用 warning。
+- Electron Builder 26 本地 `buildBlockMap(..., 'gzip', ...)`：通过，为最终 ZIP/DMG 重建 blockmap，并据此更新 `latest-mac.yml`。
+- `hdiutil verify dist/auto-caption-2.12.0.dmg`：通过，checksum VALID。
+- `unzip -tq 'dist/Auto Caption-2.12.0-arm64-mac.zip'`：通过，无压缩数据错误。
+- 最终 SHA-256：DMG `0e5fc07f73550570c5702fba8d43c5655a6a3cedcfa4f304ab9a4646008a3444`；ZIP `f2e000c7a195c908f1ebcf48c9c180d3b1ca5a5e4e10e8ca74f378e09a7cd1a2`。
+- 最终大小：DMG 约 234 MB，ZIP 约 215 MB，Python 引擎约 83 MB；最终 `git diff --check` 和工作区审计在交付前执行。
+
+### 未执行、风险与后续事项
+
+- 未进行 Developer ID 签名、Apple notarization、真实安装拖拽/首次启动 GUI 冒烟、真实麦克风/系统音频或付费 Provider 测试，也未发布远端 Release；这些不属于本次本地 macOS 编译授权。
+- 未执行 Windows、Linux、macOS x64 或 universal 构建；跨平台源码仍由本次自动化测试和生产编译覆盖，但不能替代对应平台实机验证。
+- npm mirror 配置弃用警告、Node `MODULE_TYPELESS_PACKAGE_JSON` 性能警告、PyInstaller hidden import/libomp warning、Electron Builder 重复依赖 warning 和 hdiutil create 弃用提示仍存在；均未导致最终构建或完整性检查失败，本批次未扩大范围修复。
+- 当前工作区包含用户既有未提交功能修改；本次产物有意基于该状态生成。正式发布前应审阅整份 diff，并决定是否提交这些功能修改。
+
+### 关键外部文档或技术决策来源
+
+- 本地 `package.json`、`package-lock.json`、`electron-builder.yml` 与 `engine/main.spec`：确定版本来源、macOS arm64 打包目标、引擎资源路径和项目内虚拟环境构建方式。
+- Electron Builder 26 本地 `app-builder-lib` blockmap API：用于重建签名后产物的增量更新元数据，避免 `latest-mac.yml` 指向签名前哈希。
+- 根目录 `AGENTS.md`：决定保护用户已有修改、同步中英日版本文本、完整记录失败与沙箱外重跑、禁止系统环境/依赖变更并如实限定已验证平台。
+
+## 2026-08-15 - 公共增量字幕、精确换行与自动隐藏工具栏
+
+### 用户授权与变更目标
+
+- 用户明确要求先实现“增量字幕模型、精确换行、自动隐藏工具栏”，并要求前两项成为以后新增字幕显示方式可以调用的公共方案。
+- 目标：为字幕建立稳定 ID 驱动的 partial/final 生命周期；用 Chromium 实际排版结果生成精确视觉行；让字幕窗口和样式预览共享显示组件；将右侧工具栏改为不占字幕宽度的自动隐藏覆盖层。
+- 非目标：本批次不实现逐行滚动动画，不修改识别 Provider 的翻译触发规则，不增加字幕样式配置项，不升级或安装依赖，不打包发布，不提交、推送或创建 PR。
+- 修改前检查：完整阅读根目录 `AGENTS.md`；`rg --files -g 'AGENTS.md'` 确认目标目录没有更具体规则；`git status --short --branch` 显示 `main...origin/main` 且工作区干净；随后阅读共享类型、主进程字幕日志与协议、Python 输出层、Renderer store、字幕窗口、样式预览、配置、IPC、测试和相关文档。
+
+### 变更类型
+
+- 功能、重构、协议、测试、文档。
+
+### 修改文件与原因
+
+- 公共增量模型与主进程接入：
+  - `src/shared/types.ts`：为 `CaptionItem` 增加必需的 `phase`，定义 `CaptionPhase = 'partial' | 'final' | 'unknown'`。
+  - `src/shared/captions.ts`：新增公共 `IncrementalCaptionCollection`、变化结果和 phase 规范化；集中处理稳定 ID upsert、final 防回退、旧引擎隐式固化、翻译保留、完整替换和清空。
+  - `src/main/engine/captions/CaptionLog.ts`：改为组合公共增量模型，保留运行 ID 与 Provider index 组成的稳定 `captionId`，按模型变化结果更新字幕和翻译。
+  - `src/main/utils/AllConfig.ts`：一次字幕写入可能同时产生“旧活跃句固化”和“新句加入”两项变化，按顺序向所有窗口分发全部变化。
+- 字幕引擎进程协议：
+  - `src/main/engine/protocol/messages.ts`：为 `caption` 增加成对出现的可选 `event_version: 1` 与 `phase`，拒绝半套元数据、未知版本和未知 phase，同时继续接受完全省略两者的旧引擎消息。
+  - `engine/protocol/output.py`：内置引擎把 `CaptionPartial`/`CaptionFinal` 映射为版本 1 的 `partial`/`final` stdout 事件。
+  - `engine/tests/test_protocol_output.py`：验证两种内部事件输出正确的版本和生命周期字段。
+- 公共精确换行与显示：
+  - `src/renderer/src/captions/visualLines.ts`：新增 grapheme 分段、测量位置分行和 DOM Range 实际 inline box 测量函数；保留硬换行与空行。
+  - `src/renderer/src/components/caption/ExactCaptionText.vue`：新增可复用精确文本组件；隐藏镜像与可见文本共享宽度和排版属性，使用 rAF 合并测量，并在容器尺寸及字体加载变化后重测；关闭换行时保留显示尾部的单行行为。
+  - `src/renderer/src/components/caption/CaptionViewport.vue`：新增公共字幕显示组件，统一原文/译文、显示条数、阴影、精确换行和窗口拖动区域。
+  - `src/renderer/src/components/CaptionStyle.vue`：样式预览改用 `CaptionViewport`，移除与字幕窗口重复的渲染分支；为本次触及的旧函数补齐返回类型并统一现有文件格式。
+  - `src/renderer/src/views/CaptionPage.vue`：字幕窗口改用同一 `CaptionViewport`，右侧工具栏改为绝对覆盖层；默认 900 ms 后隐藏，指针进入/移动或键盘聚焦时显示，离开后重新隐藏；保留关闭、打开控制窗口、鼠标穿透和拖动功能，并在卸载时清理计时器、ResizeObserver 与穿透状态。
+- 用户可见文本与 Lint 元数据：
+  - `src/renderer/src/i18n/lang/zh.ts`、`en.ts`、`ja.ts`：补齐工具栏三个操作和鼠标穿透开关状态的无障碍标题。
+  - `eslint-suppressions.json`：删除因本次重写及显式返回类型而失效的 `CaptionStyle.vue`、`CaptionPage.vue` 抑制项；没有清理其他历史抑制。
+- 测试：
+  - `tests/node/captionLog.test.mjs`：覆盖显式 partial/final、final 防回退、旧引擎隐式固化、翻译在后续 final 更新中保留，以及 Renderer 稳定 ID upsert。
+  - `tests/node/engineProtocol.test.mjs`：覆盖版本 1 生命周期接受、半套字段和未知版本拒绝。
+  - `tests/node/captionPresentation.test.mjs`：覆盖 Unicode 代理对/组合字符不拆分、按实测顶部坐标分行、硬换行与空行保留。
+- 文档：
+  - `docs/api-docs/caption-presentation.md`：新增公共增量模型、精确换行 API、组件复用方式、扩展准则与当前不含滚动动画的边界。
+  - `docs/api-docs/caption-engine.md`：记录版本 1 phase、final 防回退、旧引擎 unknown/隐式固化和拒绝规则。
+  - `docs/api-docs/electron-ipc.md`：补充 `CaptionItem.phase` 及模型语义，并更正 `caption.windowHeight.change` 为高度变化说明。
+  - `docs/engine-manual/zh.md`、`en.md`、`ja.md`：同步自定义引擎的版本化生命周期输出要求。
+  - `docs/user-manual/zh.md`、`en.md`、`ja.md`：同步增量更新、精确换行和自动隐藏工具栏的用户行为。
+  - `docs/CHANGELOG.md`：在未发布条目记录三项功能。
+  - `change.md`：追加本次授权、文件范围、协议兼容、验证、风险与回滚记录。
+
+### 修改前后行为
+
+- 修改前：同一句主要依靠稳定 `captionId` 原地替换，但进程协议没有 final 标记，显示链路无法可靠阻止延迟 partial 覆盖最终句；不同显示方式仍可能各自推断生命周期。
+- 修改后：内置引擎显式输出 version 1 partial/final，公共模型集中固化状态并禁止 `final -> partial`；旧自定义引擎继续工作，并在下一条新 ID 出现时隐式固化上一句。
+- 修改前：字幕窗口和样式预览各自依赖浏览器自然换行并复制模板，未来添加视觉行能力容易漂移，也无法取得可复用的实际分行结果。
+- 修改后：两处共同调用 `CaptionViewport`/`ExactCaptionText`；文本先按 Unicode grapheme 测量 Chromium 真实 inline box，再以显式视觉行呈现，宽度、字体或字体加载变化会触发重测。
+- 修改前：右侧固定 32 px 标题栏始终显示并从字幕可用宽度中扣除。
+- 修改后：40 px 工具栏绝对覆盖在右侧，不参与精确换行宽度；初始短暂显示后自动隐藏，指针或键盘交互会显示并暂停隐藏，离开后恢复；启用鼠标穿透时进入工具栏会临时恢复交互，离开后继续穿透。
+
+### 配置、IPC、协议、命令行与数据结构
+
+- 持久化配置 `schemaVersion`、字段、默认值、校验和迁移函数均无变化；没有配置迁移要求，也没有新增字幕样式选项。
+- Python stdout `caption` 消息新增可选且成对出现的 `event_version: 1`、`phase: 'partial' | 'final'`；内置引擎始终发送，新自定义引擎应发送，旧自定义引擎可以整组省略。
+- Electron 内部/Renderer IPC 的 `CaptionItem` 新增 `phase: 'partial' | 'final' | 'unknown'`。通道名称和方向不变；`both.captionLog.upsert` 仍是幂等稳定 ID upsert，但一次引擎事件可能顺序分发两次以完成旧句固化与新句插入。
+- TCP command、翻译消息、CLI 参数、Provider 配置、子进程启动方式和翻译仅在 final 触发一次的规则均无变化。
+- 字幕日志是当前运行内存数据，不是持久化配置；因此必需 `phase` 不需要配置迁移。导出的 JSON 会自然包含该字段，SRT 行为不变。
+- 没有新增、删除或升级依赖；实现只使用现有 Vue/Electron 和 Chromium 的 `Intl.Segmenter`、DOM Range、ResizeObserver、FontFaceSet API。
+
+### 兼容性、迁移与回滚
+
+- 旧自定义引擎：完整省略生命周期字段时继续通过协议校验并映射为 `unknown`；同 ID 仍原地更新，新 ID 会固化上一活跃句。只提供一个字段或未知版本会被明确拒绝，避免不可判定的半版本状态。
+- 内置 Provider：统一输出层增加元数据，不改变 Provider 生命周期、音频、时间戳、翻译或重试；final 后延迟 partial 被公共模型丢弃。
+- Windows、macOS、Linux：数据模型和换行函数为跨平台逻辑；DOM 测量运行在项目已有 Chromium Renderer。实际自动化和生产构建在当前 macOS arm64 开发环境完成，未对 Windows/Linux GUI 做实机验证。
+- 精确回滚：恢复本条列出的共享类型/模型、协议、输出层、主进程、Renderer、i18n、测试和文档文件，并恢复两项 ESLint 抑制记录；不需要配置回迁。回滚会恢复无 phase 协议、重复显示模板和常驻占宽工具栏。
+
+### 验证记录
+
+- 首次 `npm run verify`：类型检查通过，随后 ESLint 以退出码 2 停在本次重写造成的过期抑制项；没有把该次运行记为通过。删除仅对应 `CaptionStyle.vue`、`CaptionPage.vue` 的失效记录并补齐显式返回类型后重跑。
+- `npm run lint`：通过；确认剩余历史抑制项仍有效。
+- 最终 `npm run verify`：通过；Node/Web 类型检查、ESLint、Node 66/66 和 Python 66/66 全部成功。
+- `npm run build`：通过；包含完整类型检查，Electron main、preload、renderer 生产构建成功，分别转换 28、1、3268 个模块。
+- 浏览器视觉验证尝试：经项目已有浏览器测试能力尝试打开 `http://127.0.0.1:5173/#/caption` 与 `http://localhost:5173/#/caption`，均被内置浏览器的本地地址安全策略阻止；遵循安全策略未使用间接 URL、raw CDP 或其他浏览器面绕过。
+- 本地运行尝试：`npm run dev` 在沙箱内因 `listen EPERM ::1:5173` 失败；获准在沙箱外重跑后 Vite Renderer 启动，但 Electron 报 `Electron uninstall` 并退出。随后只读方式启动绑定 `127.0.0.1:5173` 的 Vite Renderer 服务成功，但仍无法越过内置浏览器策略，测试后已用 Ctrl-C 停止服务。
+- `git diff --check`：代码、测试和文档修改完成后通过；追加本记录后再次执行并在最终交付中如实报告。
+- 验证保留项目既有 npm mirror 配置弃用警告和 Node `MODULE_TYPELESS_PACKAGE_JSON` 性能警告；均未导致最终校验或构建失败，本批次未扩大范围修改包管理配置。
+
+### 未执行、风险与后续事项
+
+- 未完成真实 Electron 窗口的视觉截图、指针悬停、键盘 Tab、鼠标穿透和窗口拖动实机回归，原因是本地 Electron 二进制不可用且内置浏览器禁止访问本地地址；类型、状态转换、纯分行函数和生产编译已经覆盖，但 UI 最终手感仍建议在安装完整 Electron 后人工冒烟。
+- DOM Range 的真实 `getClientRects()` 结果只能在 Chromium 布局环境产生；Node 测试覆盖了 grapheme 和“位置到视觉行”的纯逻辑，不能替代不同字体 fallback、缩放比例和极窄窗口的实机排版测试。
+- 本次没有实现用户此前提到的逐行滚动；公共模型和 `CaptionViewport` 已留下稳定输入边界，后续可在独立变更中增加滚动呈现，而无需复制生命周期或换行规则。
+- 启用鼠标穿透后能否持续收到转发的 pointer move 依赖 Electron `setIgnoreMouseEvents(ignore, { forward: ignore })` 的平台行为；现有主进程已使用该参数，但 Windows/Linux 与 macOS 的实际工具栏唤醒仍需分别验证。
+- 未访问真实麦克风、系统音频、Gummy、Fun-ASR、GLM、翻译或热词 API，没有产生费用，也未验证真实服务端的乱序回调；离线测试构造了 final 后延迟 partial 场景。
+
+### 关键外部文档或技术决策来源
+
+- 用户提供的本地科大讯飞悬浮字幕保存页及资源：作为增量显示、精确分行与工具栏隐藏行为参考；项目实现使用自身 Vue/Electron 架构和公共 API，没有复制供应商脚本或资源。
+- 本地 `engine/core` 生命周期事件、`src/main/engine/captions/CaptionLog.ts` 和稳定 `captionId` 既有实现：决定在现有 partial/final 语义之上增加版本化外部标记，并把公共模型放到 `src/shared`。
+- Chromium DOM Range inline box、`Intl.Segmenter`、ResizeObserver 和 FontFaceSet：决定使用浏览器真实排版而不是固定字符数、平均字宽或 Provider 专属估算。
+- 根目录 `AGENTS.md`：决定保留旧自定义引擎、版本化协议、同步中英日文本、补充协议/扩展文档、执行类型/Lint/Node/Python/生产构建并追加本记录。
+
 ## 2026-08-15 - 补全配置拒绝诊断并修正 Token Usage 误脱敏
 
 ### 用户授权与变更目标

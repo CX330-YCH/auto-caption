@@ -54,6 +54,12 @@ export default {
     "system": "系统",
     "color": "颜色"
   },
+  captionToolbar: {
+    "close": "关闭字幕窗口",
+    "settings": "打开控制窗口",
+    "enableClickThrough": "开启鼠标穿透",
+    "disableClickThrough": "关闭鼠标穿透"
+  },
   engine: {
     "title": "字幕引擎设置",
     "applyChange": "应用更改",

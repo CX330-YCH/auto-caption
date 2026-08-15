@@ -73,6 +73,8 @@ JSON object + "\n" + JSON object + "\n" + ...
 ```js
 {
   command: "caption",
+  event_version: 1,
+  phase: "partial" | "final",
   index: number,
   time_s: string,
   time_t: string,
@@ -81,9 +83,11 @@ JSON object + "\n" + JSON object + "\n" + ...
 }
 ```
 
-字幕引擎产生的字幕数据。`index` 必须是有限数值，并且在一次引擎进程运行期间稳定标识同一句字幕；其余列出的字段必须是字符串。同一句的中间结果和最终结果必须复用 `index`，不同句不得复用。
+字幕引擎产生的字幕数据。`index` 必须是有限数值，并且在一次引擎进程运行期间稳定标识同一句字幕；其余内容字段必须是字符串。同一句的中间结果和最终结果必须复用 `index`，不同句不得复用。
 
-Python 内部已经区分 `CaptionPartial` 和 `CaptionFinal`，但为保持现有协议兼容，两者目前都映射为 `caption`。同一句的 partial/final 只保证复用 `index`；服务端可以校正 `time_s`/`time_t`，时间字段不得用作字幕身份。外部协议暂不提供 final 标记。Provider 自带的翻译（当前为 Gummy）会直接写入 `translation`；包括 Fun-ASR 在内的其他 Provider 只在 final 后通过独立 `translation` 消息补充一次翻译。
+`event_version: 1` 与 `phase` 是一组版本化的生命周期字段，必须同时出现：`partial` 表示同一句仍可继续更新，`final` 表示该句已经固化。内置引擎始终发送这两个字段。服务端可以校正 `time_s`/`time_t`，时间字段不得用作字幕身份；延迟到达的 `partial` 也不得把已经 `final` 的句子重新打开或覆盖。Provider 自带的翻译（当前为 Gummy）会直接写入 `translation`；包括 Fun-ASR 在内的其他 Provider 只在 final 后通过独立 `translation` 消息补充一次翻译。
+
+为兼容旧自定义引擎，`event_version` 和 `phase` 可以整组省略。Electron 会把这种事件标记为 `unknown`，仍按稳定 `index` 更新；当另一个新 `index` 首次出现时，上一条尚未固化的 `unknown` 字幕会被隐式转为 `final`。只提供其中一个字段、使用未知版本或未知 phase 的消息会被拒绝。兼容层的删除条件是公开协议未来发布带明确迁移期的新主版本。
 
 Electron 为每次引擎启动分配单调递增的运行 ID，并将 `运行 ID:index` 组合为应用内部 `captionId`。因此引擎重启后可以从原有 `index` 起点重新计数，而不会覆盖上一次运行保留的字幕。
 

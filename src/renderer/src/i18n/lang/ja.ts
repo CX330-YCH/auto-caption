@@ -54,6 +54,12 @@ export default {
     "system": "システム",
     "color": "カラー"
   },
+  captionToolbar: {
+    "close": "字幕ウィンドウを閉じる",
+    "settings": "コントロールウィンドウを開く",
+    "enableClickThrough": "マウス透過を有効にする",
+    "disableClickThrough": "マウス透過を無効にする"
+  },
   engine: {
     "title": "字幕エンジン設定",
     "applyChange": "変更を適用",

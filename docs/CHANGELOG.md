@@ -1,5 +1,13 @@
 ## 未发布
 
+## v2.12.0 - 2026-08-15
+
+- 将应用及中英日文档版本统一更新至 `2.12.0`。
+- 基于当前工作区生成并验证 macOS arm64 应用、ZIP、DMG 与 Python 引擎。
+
+- 字幕事件新增版本化 `partial`/`final` 生命周期，主进程和显示层共用增量字幕模型；旧自定义引擎继续兼容，延迟 partial 不再覆盖 final。
+- 字幕窗口与样式预览共用基于 Chromium 实际 inline box 的精确换行组件，支持 Unicode grapheme、硬换行、宽度及字体加载变化。
+- 字幕窗口工具栏改为不占排版宽度的自动隐藏覆盖层，鼠标和键盘聚焦时可重新显示。
 - 所有内置字幕引擎、SDK 回调、音频、翻译和热词 Worker 现在会把脱敏后的完整异常字段、traceback、cause/context 与 stderr 保存到本次 Debug JSONL；Gummy 不再丢弃服务端回调错误对象。
 - 修复流式字幕只停留在首个中间结果的问题：应用保留跨引擎运行唯一的 `captionId`，主进程和 Vue 均按稳定 ID 幂等更新；异步翻译优先按同一 ID 关联，并兼容旧自定义引擎的 `time_s` 格式。
 - 修复打包 Python 运行时未初始化系统 CA 的问题；所有 TLS 客户端在入口阶段统一使用 macOS Security、Windows CryptoAPI 或 Linux OpenSSL 系统信任，并新增 `truststore==0.10.4` 直接依赖和 PyInstaller 隐式导入。

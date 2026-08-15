@@ -54,6 +54,12 @@ export default {
     "system": "system",
     "color": "Color"
   },
+  captionToolbar: {
+    "close": "Close caption window",
+    "settings": "Open control window",
+    "enableClickThrough": "Enable click-through",
+    "disableClickThrough": "Disable click-through"
+  },
   engine: {
     "title": "Caption Engine Settings",
     "applyChange": "Apply Changes",

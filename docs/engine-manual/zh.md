@@ -1,6 +1,6 @@
 # 字幕引擎说明文档
 
-对应版本：v2.11.0
+对应版本：v2.12.0
 
 ![](../../assets/media/structure_zh.png)
 
@@ -162,6 +162,8 @@ ollama_translate("qwen3:0.6b", "en", text, "time_s")
 ```typescript
 export interface CaptionItem {
   command: "caption",
+  event_version: 1,    // 生命周期字段版本
+  phase: "partial" | "final",
   index: number,        // 字幕序号
   time_s: string,       // 当前字幕开始时间
   time_t: string,       // 当前字幕结束时间
@@ -169,6 +171,8 @@ export interface CaptionItem {
   translation: string   // 字幕翻译
 }
 ```
+
+同一句的中间结果和最终结果必须复用 `index`；`partial` 表示仍可更新，`final` 表示已经固化。新引擎应同时提供 `event_version: 1` 和 `phase`。为兼容旧自定义引擎，两者可以整组省略，但不能只提供其中一个；完整兼容规则见进程协议文档。
 
 **注意必须确保每输出一次字幕 JSON 数据就得刷新缓冲区，确保 electron 主进程每次接收到的字符串都可以被解释为 JSON 对象。** 建议使用项目已经实现的 `stdout_obj` 函数来发送。
 

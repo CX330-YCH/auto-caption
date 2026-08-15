@@ -1,205 +1,244 @@
 <template>
   <div
-    class="caption-page"
     ref="caption"
-    :style="{
-      backgroundColor: captionStyle.backgroundRGBA
-    }"
+    class="caption-page"
+    :style="{ backgroundColor: captionStyle.backgroundRGBA }"
+    @pointerenter="revealToolbar"
+    @pointermove="revealToolbar"
+    @pointerleave="scheduleToolbarHide"
   >
-    <div
-      class="caption-container"
-      :style="{
-        textShadow: captionStyle.textShadow ? `${captionStyle.offsetX}px ${captionStyle.offsetY}px ${captionStyle.blur}px ${captionStyle.textShadowColor}` : 'none'
-      }"
-    >
-      <template v-if="captionData.length">
-        <template
-          v-for="val in revArr[Math.min(captionStyle.lineNumber, captionData.length)]"
-          :key="captionData[captionData.length - val].captionId"
-        >
-          <p :class="[captionStyle.lineBreak?'':'left-ellipsis']" :style="{
-            fontFamily: captionStyle.fontFamily,
-            fontSize: captionStyle.fontSize + 'px',
-            color: captionStyle.fontColor,
-            fontWeight: captionStyle.fontWeight * 100
-          }">
-            <span>{{ captionData[captionData.length - val].text }}</span>
-          </p>
-          <p :class="[captionStyle.lineBreak?'':'left-ellipsis']"
-            v-if="captionStyle.transDisplay && captionData[captionData.length - val].translation"
-            :style="{
-            fontFamily: captionStyle.transFontFamily,
-            fontSize: captionStyle.transFontSize + 'px',
-            color: captionStyle.transFontColor,
-            fontWeight: captionStyle.transFontWeight * 100
-          }">
-            <span>{{ captionData[captionData.length - val].translation }}</span>
-          </p>
-        </template>
-      </template>
-      <template v-else>
-        <template v-for="val in captionStyle.lineNumber" :key="val">
-          <p :class="[captionStyle.lineBreak?'':'left-ellipsis']" :style="{
-            fontFamily: captionStyle.fontFamily,
-            fontSize: captionStyle.fontSize + 'px',
-            color: captionStyle.fontColor,
-            fontWeight: captionStyle.fontWeight * 100
-          }">
-            <span>{{ $t('example.original') }}</span>
-          </p>
-          <p :class="[captionStyle.lineBreak?'':'left-ellipsis']"
-            v-if="captionStyle.transDisplay"
-            :style="{
-            fontFamily: captionStyle.transFontFamily,
-            fontSize: captionStyle.transFontSize + 'px',
-            color: captionStyle.transFontColor,
-            fontWeight: captionStyle.transFontWeight * 100
-          }">
-            <span>{{ $t('example.translation') }}</span>
-          </p>
-        </template>
-      </template>
-    </div>
+    <CaptionViewport
+      :captions="captionData"
+      :fallback-captions="fallbackCaptions"
+      :styles="captionStyle.captionConfig.styles"
+      draggable
+    />
 
-    <div class="title-bar"
-      :style="{color: captionStyle.fontColor}"
-      @mouseenter="onTitleBarEnter()"
-      @mouseleave="onTitleBarLeave()"
+    <div
+      class="caption-toolbar"
+      :class="{ visible: toolbarVisible }"
+      @pointerenter="onToolbarEnter"
+      @pointerleave="onToolbarLeave"
+      @focusin="onToolbarEnter"
+      @focusout="onToolbarFocusOut"
     >
-      <div class="option-item" @click="closeCaptionWindow">
+      <button
+        type="button"
+        class="toolbar-button"
+        :title="$t('captionToolbar.close')"
+        :aria-label="$t('captionToolbar.close')"
+        @click="closeCaptionWindow"
+      >
         <CloseOutlined />
-      </div>
-      <div class="option-item" @click="openControlWindow">
+      </button>
+      <button
+        type="button"
+        class="toolbar-button"
+        :title="$t('captionToolbar.settings')"
+        :aria-label="$t('captionToolbar.settings')"
+        @click="openControlWindow"
+      >
         <SettingOutlined />
-      </div>
-      <div class="option-item" @click="pinCaptionWindow">
+      </button>
+      <button
+        type="button"
+        class="toolbar-button"
+        :title="pinned
+          ? $t('captionToolbar.disableClickThrough')
+          : $t('captionToolbar.enableClickThrough')"
+        :aria-label="pinned
+          ? $t('captionToolbar.disableClickThrough')
+          : $t('captionToolbar.enableClickThrough')"
+        @click="pinCaptionWindow"
+      >
         <PushpinFilled v-if="pinned" />
         <PushpinOutlined v-else />
-      </div>
+      </button>
       <div class="drag-area"></div>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { PushpinOutlined, PushpinFilled, CloseOutlined, SettingOutlined } from '@ant-design/icons-vue';
-import { ref, onMounted } from 'vue';
-import { useCaptionStyleStore } from '@renderer/stores/captionStyle';
-import { useCaptionLogStore } from '@renderer/stores/captionLog';
-import { storeToRefs } from 'pinia';
+import {
+  PushpinOutlined,
+  PushpinFilled,
+  CloseOutlined,
+  SettingOutlined
+} from '@ant-design/icons-vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { useI18n } from 'vue-i18n'
+import { storeToRefs } from 'pinia'
+import type { CaptionItem } from '../../../shared/types'
+import CaptionViewport from '@renderer/components/caption/CaptionViewport.vue'
+import { useCaptionStyleStore } from '@renderer/stores/captionStyle'
+import { useCaptionLogStore } from '@renderer/stores/captionLog'
 
-const revArr = {
-  1: [1],
-  2: [2, 1],
-  3: [3, 2, 1],
-  4: [4, 3, 2, 1],
-}
+const TOOLBAR_HIDE_DELAY_MS = 900
 
-const captionStyle = useCaptionStyleStore();
-const captionLog = useCaptionLogStore();
-const { captionData } = storeToRefs(captionLog);
-const caption = ref();
-const windowHeight = ref(100);
-const pinned = ref(false);
+const { t } = useI18n()
+const captionStyle = useCaptionStyleStore()
+const captionLog = useCaptionLogStore()
+const { captionData } = storeToRefs(captionLog)
+const caption = ref<HTMLElement>()
+const windowHeight = ref(100)
+const pinned = ref(false)
+const toolbarVisible = ref(true)
+const toolbarInteractive = ref(false)
+let toolbarHideTimer: ReturnType<typeof setTimeout> | undefined
+let resizeObserver: ResizeObserver | undefined
 
-onMounted(() => {
-  const resizeObserver = new ResizeObserver(entries => {
-    for (const entry of entries) {
-      if(windowHeight.value !== Math.floor(entry.contentRect.height) + 2) {
-        windowHeight.value = Math.floor(entry.contentRect.height) + 2;
-        window.electron.ipcRenderer.send('caption.windowHeight.change', windowHeight.value)
-      }
-    }
-  });
-  if (caption.value) {
-    resizeObserver.observe(caption.value);
+const fallbackCaptions = computed<CaptionItem[]>(() =>
+  Array.from({ length: 4 }, (_, index) => ({
+    captionId: `preview:${index}`,
+    index: index + 1,
+    time_s: '',
+    time_t: '',
+    text: t('example.original'),
+    translation: t('example.translation'),
+    phase: 'final'
+  }))
+)
+
+function clearToolbarHideTimer(): void {
+  if (toolbarHideTimer !== undefined) {
+    clearTimeout(toolbarHideTimer)
+    toolbarHideTimer = undefined
   }
-});
-
-function pinCaptionWindow() {
-  pinned.value = !pinned.value;
-  window.electron.ipcRenderer.send('caption.mouseEvents.ignore', pinned.value)
 }
 
-function openControlWindow() {
+function revealToolbar(): void {
+  toolbarVisible.value = true
+  clearToolbarHideTimer()
+  if (!toolbarInteractive.value) scheduleToolbarHide()
+}
+
+function scheduleToolbarHide(): void {
+  clearToolbarHideTimer()
+  if (toolbarInteractive.value) return
+  toolbarHideTimer = setTimeout(() => {
+    toolbarVisible.value = false
+    toolbarHideTimer = undefined
+  }, TOOLBAR_HIDE_DELAY_MS)
+}
+
+function setMouseEventsIgnored(ignore: boolean): void {
+  window.electron.ipcRenderer.send('caption.mouseEvents.ignore', ignore)
+}
+
+function onToolbarEnter(): void {
+  toolbarInteractive.value = true
+  toolbarVisible.value = true
+  clearToolbarHideTimer()
+  if (pinned.value) setMouseEventsIgnored(false)
+}
+
+function onToolbarLeave(): void {
+  toolbarInteractive.value = false
+  if (pinned.value) setMouseEventsIgnored(true)
+  scheduleToolbarHide()
+}
+
+function onToolbarFocusOut(event: FocusEvent): void {
+  const toolbar = event.currentTarget as HTMLElement
+  const nextTarget = event.relatedTarget
+  if (nextTarget instanceof Node && toolbar.contains(nextTarget)) return
+  onToolbarLeave()
+}
+
+function pinCaptionWindow(): void {
+  pinned.value = !pinned.value
+  setMouseEventsIgnored(pinned.value && !toolbarInteractive.value)
+}
+
+function openControlWindow(): void {
   window.electron.ipcRenderer.send('caption.controlWindow.activate')
 }
 
-function closeCaptionWindow() {
+function closeCaptionWindow(): void {
   window.electron.ipcRenderer.send('caption.window.close')
 }
 
-function onTitleBarEnter() {
-  if(pinned.value) {
-    window.electron.ipcRenderer.send('caption.mouseEvents.ignore', false)
-  }
-}
+onMounted(() => {
+  resizeObserver = new ResizeObserver(entries => {
+    for (const entry of entries) {
+      const nextHeight = Math.floor(entry.contentRect.height) + 2
+      if (windowHeight.value === nextHeight) continue
+      windowHeight.value = nextHeight
+      window.electron.ipcRenderer.send(
+        'caption.windowHeight.change',
+        windowHeight.value
+      )
+    }
+  })
+  if (caption.value) resizeObserver.observe(caption.value)
+  scheduleToolbarHide()
+})
 
-function onTitleBarLeave() {
-  if(pinned.value) {
-    window.electron.ipcRenderer.send('caption.mouseEvents.ignore', true)
-  }
-}
+onBeforeUnmount(() => {
+  resizeObserver?.disconnect()
+  clearToolbarHideTimer()
+  if (pinned.value) setMouseEventsIgnored(false)
+})
 </script>
 
 <style scoped>
 .caption-page {
-  width: 100%;
-  user-select: none;
-  border-radius: 8px;
+  position: relative;
   box-sizing: border-box;
-  border: 1px solid #3333;
   display: flex;
-}
-
-.caption-container {
-  display: inline-block;
-  width: calc(100% - 32px);
-  -webkit-app-region: drag;
-  padding-top: 10px;
-  padding-bottom: 10px;
-}
-
-.caption-container p {
-  text-align: center;
-  margin: 0;
-  line-height: 1.6em;
-}
-
-.left-ellipsis {
-  white-space: nowrap;
+  width: 100%;
   overflow: hidden;
-  direction: rtl;
-  text-align: left;
+  user-select: none;
+  border: 1px solid #3333;
+  border-radius: 8px;
 }
 
-.left-ellipsis > span {
-  direction: ltr;
-  display: inline-block;
-}
-
-.title-bar {
-  width: 32px;
+.caption-toolbar {
+  position: absolute;
+  z-index: 2;
+  top: 0;
+  right: 0;
+  bottom: 0;
   display: flex;
+  width: 40px;
   flex-direction: column;
-  vertical-align: top;
+  color: v-bind('captionStyle.fontColor');
+  opacity: 0;
+  pointer-events: none;
+  transform: translateX(6px);
+  background: linear-gradient(90deg, transparent, rgb(0 0 0 / 28%));
+  transition: opacity 180ms ease, transform 180ms ease;
+  -webkit-app-region: no-drag;
 }
 
-.option-item {
-  width: 32px;
-  height: 32px;
+.caption-toolbar.visible {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateX(0);
+}
+
+.toolbar-button {
   display: flex;
-  justify-content: center;
+  width: 40px;
+  height: 32px;
+  padding: 0;
   align-items: center;
+  justify-content: center;
+  border: 0;
+  color: inherit;
   cursor: pointer;
+  background: transparent;
+  -webkit-app-region: no-drag;
 }
 
-.option-item:hover {
-  background-color: #2221;
+.toolbar-button:hover,
+.toolbar-button:focus-visible {
+  outline: none;
+  background-color: rgb(34 34 34 / 18%);
 }
 
 .drag-area {
-  display: inline-flex;
   flex-grow: 1;
   -webkit-app-region: drag;
 }
