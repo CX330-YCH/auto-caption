@@ -4,9 +4,12 @@ export type UITheme = 'light' | 'dark' | 'system'
 
 export type CaptionDisplayMode = 'static' | 'rolling'
 
+export type CaptionBoundaryMode = 'sentence' | 'continuous'
+
 export interface Styles {
   [key: string]: unknown
   displayMode: CaptionDisplayMode
+  captionBoundaryMode: CaptionBoundaryMode
   lineNumber: number
   lineBreak: number
   fontFamily: string
@@ -49,7 +52,7 @@ export interface SoftwareLogItem {
 
 export interface FullConfig {
   platform: string
-  config: import('./config/schema').ConfigDocumentV4
+  config: import('./config/schema').ConfigDocumentV5
   engineEnabled: boolean
   captionLog: CaptionItem[]
   softwareLog: SoftwareLogItem[]

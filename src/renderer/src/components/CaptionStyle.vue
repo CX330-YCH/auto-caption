@@ -21,6 +21,21 @@
       </a-radio-group>
     </div>
 
+    <div v-if="currentDisplayMode === 'rolling'" class="input-item">
+      <span class="input-label">{{ $t('style.captionBoundaryMode') }}</span>
+      <a-radio-group
+        v-model:value="currentCaptionBoundaryMode"
+        class="responsive-radio-group"
+      >
+        <a-radio-button value="sentence">
+          {{ $t('style.captionBoundaryModes.sentence') }}
+        </a-radio-button>
+        <a-radio-button value="continuous">
+          {{ $t('style.captionBoundaryModes.continuous') }}
+        </a-radio-button>
+      </a-radio-group>
+    </div>
+
     <div class="input-item">
       <span class="input-label">{{ $t('style.lineNumber') }}</span>
       <a-radio-group v-model:value="currentLineNumber" class="responsive-radio-group">
@@ -225,6 +240,7 @@ import { useI18n } from 'vue-i18n'
 import { useCaptionLogStore } from '@renderer/stores/captionLog'
 import CaptionViewport from './caption/CaptionViewport.vue'
 import type {
+  CaptionBoundaryMode,
   CaptionDisplayMode,
   CaptionItem,
   Styles
@@ -239,6 +255,7 @@ const captionStyle = useCaptionStyleStore()
 const { changeSignal } = storeToRefs(captionStyle)
 
 const currentDisplayMode = ref<CaptionDisplayMode>('static')
+const currentCaptionBoundaryMode = ref<CaptionBoundaryMode>('sentence')
 const currentLineNumber = ref<number>(1)
 const currentLineBreak = ref<number>(0)
 const currentFontFamily = ref<string>('sans-serif')
@@ -261,6 +278,7 @@ const currentTextShadowColor = ref<string>('#ffffff')
 
 const previewStyles = computed<Styles>(() => ({
   displayMode: currentDisplayMode.value,
+  captionBoundaryMode: currentCaptionBoundaryMode.value,
   lineNumber: currentLineNumber.value,
   lineBreak: currentLineBreak.value,
   fontFamily: currentFontFamily.value,
@@ -309,6 +327,7 @@ function useSameStyle(): void {
 
 function applyStyle(): void {
   captionStyle.displayMode = currentDisplayMode.value
+  captionStyle.captionBoundaryMode = currentCaptionBoundaryMode.value
   captionStyle.lineNumber = currentLineNumber.value
   captionStyle.lineBreak = currentLineBreak.value
   captionStyle.fontFamily = currentFontFamily.value
@@ -340,6 +359,7 @@ function applyStyle(): void {
 
 function backStyle(): void {
   currentDisplayMode.value = captionStyle.displayMode
+  currentCaptionBoundaryMode.value = captionStyle.captionBoundaryMode
   currentLineNumber.value = captionStyle.lineNumber
   currentLineBreak.value = captionStyle.lineBreak
   currentFontFamily.value = captionStyle.fontFamily

@@ -35,11 +35,12 @@ interface CaptionItem {
 精确换行的纯函数位于 `src/renderer/src/captions/visualLines.ts`，可复用组件位于 `src/renderer/src/components/caption/`：
 
 - `segmentGraphemes`：按 Unicode grapheme cluster 分段，避免拆开代理对、组合附加符和 emoji 序列。
-- `measureVisualLines`：在隐藏镜像文本节点上使用 DOM `Range.getClientRects()` 读取 Chromium 实际生成的 inline box，并返回视觉行文本。
-- `buildVisualLines`：把测量位置转换为显式视觉行，同时保留输入中的硬换行和空行。
-- `ExactCaptionText`：同步字体、字号、字重和容器宽度，合并一帧内的重复测量；在宽度和字体加载变化后自动重测。
-- `rollingLines.ts`：把各字幕的实测行转换为具有稳定 key 的原文、译文两个独立轨道；每个轨道分别按配置截取最后 N 个视觉行。
-- `RollingCaptionViewport`：分别呈现原文和译文轨道；任一轨道新增视觉行时用 500 ms FLIP 过渡上移该轨道旧行，partial 在同一行内更新不会重复滚动，并遵循系统“减少动态效果”设置。
+- `measureVisualLineSlices`：在隐藏镜像文本节点上使用 DOM `Range.getClientRects()` 读取 Chromium 实际生成的 inline box，并返回每行文本及其 UTF-16 `start/end`；`measureVisualLines` 是只取文本的公共薄封装。
+- `buildVisualLineSlices`：把测量位置转换为显式视觉行范围，同时保留输入中的硬换行和空行。
+- `ExactCaptionText`：同步字体、字号、字重和容器宽度，合并一帧内的重复测量；区分内容更新和布局更新，并在宽度、字体加载变化后自动重测。
+- `captionTracks.ts`：从规范化 `CaptionItem[]` 构建原文/译文 segment，按句边界或连续策略组合逻辑文本，把视觉行范围映射为稳定的 `captionId + captionOffset` 锚点，并提供有界轨道窗口。
+- `RollingCaptionTrack`：单条轨道的唯一测量、最后 N 行和 500 ms FLIP 动画实现；宽度/字体/历史译文引起的重排不冒充新字幕滚动。
+- `RollingCaptionViewport`：只组合原文和译文两个 `RollingCaptionTrack`，两轨共享断句策略但独立测量、截取和滚动。
 - `CaptionViewport`：按 `styles.displayMode` 在原有整句显示和逐行滚动之间选择，统一原文/译文、行数、阴影和拖动区域；字幕窗口与样式预览共同使用。
 
 新增 Vue 字幕显示方式优先扩展 `CaptionViewport` 的呈现分派，并继续消费规范化的 `CaptionItem[]`。如果布局只需要单段文字，可单独使用 `ExactCaptionText`；如果需要非 Vue 渲染器，则复用 `measureVisualLines`，并保证测量镜像与最终文本拥有完全相同的可用宽度和排版属性。
@@ -50,6 +51,9 @@ interface CaptionItem {
 
 - `static`：保留原有按最近字幕条数显示的方式；`lineBreak` 关闭时保持单行并显示文本尾部。
 - `rolling`：始终使用精确换行并从左侧开始显示；原文和译文各自保留 `lineNumber` 个视觉行并独立滚动，异步译文不会占用原文行额度；同一 partial 行的文字修订只原地更新。
-- 切换方式属于持久化样式配置，V3→V4 迁移固定选择 `static`，不会在升级时自动改变行为。
+- `captionBoundaryMode: sentence`：每个规范化 `CaptionItem` 边界插入硬换行，保持原有逐句呈现。
+- `captionBoundaryMode: continuous`：字幕边界使用语言感知连接符而不是硬换行；下一条字幕利用上一行剩余宽度。原文和译文同时切换，但仍是两个独立轨道。
+- 轨道从最近 segment 开始测量，不足 `lineNumber + 2` 个安全视觉行时向前扩展；达到目标后以实测行首锚点裁剪。每轨最多测量 256 个 segment 和 16384 个 UTF-16 code unit，避免字幕记录增长导致隐藏 DOM 无界。
+- 显示与断句方式属于持久化样式配置；V3→V4 默认 `static`，V4→V5 默认 `sentence`，升级不会改变行为。
 - 工具栏采用绝对定位覆盖层，不参与字幕测量宽度；鼠标离开后自动隐藏，进入或键盘聚焦时显示。
 - 生命周期协议和旧引擎兼容规则以 [字幕引擎进程协议](./caption-engine.md) 为准；IPC 字段以 [Electron IPC API](./electron-ipc.md) 为准。

@@ -13,7 +13,7 @@ function valueAfter(args, flag) {
   return args[index + 1]
 }
 
-test('builds common and Provider-specific arguments from V4 config', () => {
+test('builds common and Provider-specific arguments from V5 config', () => {
   const engine = createDefaultConfig('/recordings').engine
   engine.common.audioSource = 1
   engine.common.recording.enabled = true

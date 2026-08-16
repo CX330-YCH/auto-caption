@@ -3696,3 +3696,159 @@
 - 本地 `package.json`、`package-lock.json`、`electron-builder.yml`、`engine/main.spec`：确定版本、arm64 目标和项目内虚拟环境构建方式。
 - Electron Builder 26 本地 blockmap API：确保更新元数据对应最终签名后文件。
 - 根目录 `AGENTS.md`：要求保护用户修改、同步三语、记录失败与沙箱外重跑、不改系统环境/依赖并限定验证平台。
+
+## 2026-08-16 - 逐行字幕新增可切换断句边界并抽取公共文本轨道
+
+### 用户授权与变更目标
+
+- 用户先要求技术分析，随后明确要求“实施计划”，授权新增“跟随断句换行 / 不跟随断句换行”设置；同一选择同时控制原文和翻译的换行逻辑，不跟随断句时下一条字幕从上一条结尾继续排版。
+- 目标：保留整句显示路径；在逐行滚动中提供两种边界语义；把增量字幕、精确换行、连续拼接、稳定行标识和有界测量窗口整理为可供以后字幕显示方式复用的公共方案；保持原文和译文独立滚动。
+- 非目标：不改变字幕识别/翻译业务、引擎协议、CLI、工具栏行为、版本号、依赖或既有 macOS 构建产物。
+- 修改前检查：完整阅读根目录 `AGENTS.md`，执行 `git status --short --branch`，阅读目标组件、共享类型、配置迁移、测试和文档，并检查同文件既有 diff。工作区已有逐行字幕、双轨修复和 `2.14.0` 构建等用户修改；本批次保留并在其上做可区分的增量实现。
+
+### 变更类型
+
+- 功能、重构、配置、测试、文档。
+
+### 修改文件与原因
+
+- `src/renderer/src/captions/captionTracks.ts`：新增公共、与 Vue 解耦的偏移感知字幕轨道模型，负责原文/译文分段、断句或连续拼接、稳定行 key、更新类型识别、视觉行映射、锚点恢复和有界测量窗口。
+- `src/renderer/src/captions/rollingLines.ts`：删除已被公共轨道模型取代的旧逐条字幕测量模型，避免两套滚动语义并存。
+- `src/renderer/src/captions/visualLines.ts`：在现有 Chromium 精确分行之上增加带 UTF-16 起止偏移的 `VisualLineSlice` 公共结果；旧字符串行 API 保留为兼容包装。
+- `src/renderer/src/components/caption/ExactCaptionText.vue`：输出带偏移的视觉行，并区分内容变化和布局变化的测量原因；仅观察宽度变化，供上层决定是否播放滚动动画。
+- `src/renderer/src/components/caption/RollingCaptionTrack.vue`：新增可复用单轨渲染组件；每条轨道独立测量、截取和动画，使用真实视觉行锚点渐进扩大测量窗口，历史译文、字体和窗口变化只重排不冒充新字幕滚动。
+- `src/renderer/src/components/caption/RollingCaptionViewport.vue`：改为组合两个 `RollingCaptionTrack`，让同一边界设置同时进入原文和译文，同时保留两个轨道各自的行额度、样式和滚动状态。
+- `src/renderer/src/components/CaptionStyle.vue`、`src/renderer/src/stores/captionStyle.ts`：在逐行模式设置与预览中接入 `captionBoundaryMode`，应用和撤销样式时完整同步该字段。
+- `src/renderer/src/i18n/lang/zh.ts`、`en.ts`、`ja.ts`：补齐设置标签、两个选项及逐行模式说明的中英日文本。
+- `src/shared/types.ts`：新增 `CaptionBoundaryMode`，并把该字段纳入共享 `Styles`；完整配置类型更新为 V5。
+- `src/shared/config/schema.ts`：配置 schema 升级到 V5，默认 `captionBoundaryMode: "sentence"`。
+- `src/shared/config/document.ts`：增加显式 V4→V5 迁移与枚举校验，维持 V2→V3→V4→V5 的顺序迁移链。
+- `src/main/utils/AllConfig.ts`：主进程改用 `ConfigDocumentV5` 读取、保存和报告默认配置。
+- `tests/node/captionPresentation.test.mjs`：覆盖 Unicode 精确分行偏移、双轨构建、断句/连续拼接、稳定 key、partial 尾部更新、历史回填、锚点延续、代理项安全裁剪和字符窗口恰好占满。
+- `tests/node/configDocument.test.mjs`：覆盖 V5 默认值、V2/V3/V4 迁移、合法/非法边界设置和未知扩展字段保留。
+- `tests/node/engineCatalog.test.mjs`、`tests/node/engineCommandBuilder.test.mjs`：同步共享配置版本断言与测试名称到 V5。
+- `docs/api-docs/config-v5.md`：新增 V5 配置、边界设置、迁移、校验、回滚和 IPC 兼容说明。
+- `docs/api-docs/config-v3.md`、`docs/api-docs/config-v4.md`：标记为历史格式并指向当前 V5 迁移链。
+- `docs/api-docs/caption-presentation.md`：记录公共视觉行切片、偏移感知轨道、单轨组件、两种边界语义、有界缓冲和动画判定。
+- `docs/api-docs/electron-ipc.md`：把完整配置类型与链接更新为 V5。
+- `docs/engine-manual/architecture.md`：更新配置版本，并说明 Renderer 公共文本轨道的职责边界和复用方式。
+- `docs/testing.md`：更新 V5 迁移和字幕轨道测试覆盖范围。
+- `docs/user-manual/zh.md`、`en.md`、`ja.md`：同步两种换行方式、原文/翻译共同切换但独立滚动、历史重排不播放新行动画及 V5 升级行为。
+- `README.md`、`README_en.md`、`README_ja.md`：在三语功能清单中补充滚动字幕的断句/连续排版选择。
+- `docs/CHANGELOG.md`：在未发布部分记录新设置、公共轨道重构和 V5 配置迁移。
+- `change.md`：追加本次授权、范围、技术行为、验证、兼容性和风险记录。
+
+### 修改前后行为
+
+- 修改前：逐行模式把每个 `CaptionItem` 作为独立测量单元，因此每条新字幕天然从新行开始；无法利用上一行剩余宽度。
+- 修改后：`sentence` 模式仍在每个字幕边界插入硬换行；`continuous` 模式把下一条字幕接入同一文本轨道，只在文本自身换行或 Chromium 实际宽度不足时换行。拉丁片段之间补必要空格，CJK 和闭合标点直接相接。
+- 同一个 `captionBoundaryMode` 同时应用于原文和译文，但两者分别构建轨道、分别保留 `lineNumber` 个视觉行、分别判断增量变化和播放滚动动画；异步译文不会顶掉原文。
+- partial 尾部文本沿稳定字幕 ID 和字符偏移原位增长；新尾部字幕才产生滚动。历史译文补写、模式切换、窗口缩放、字体加载或样式变化会重新精确测量，但关闭过渡，避免把重排伪装为新字幕。
+- 整句 `static` 显示组件和既有工具栏自动隐藏逻辑未修改。
+
+### 配置、IPC、协议、命令行、数据结构与依赖
+
+- 持久化配置由 V4 升级为 V5，`caption.styles.captionBoundaryMode` 为必需枚举字段，合法值为 `sentence`、`continuous`，默认 `sentence`。V4 迁移写入 `sentence`，不改变升级前显示；V2/V3 继续按顺序迁移。
+- 主进程、IPC 和 Renderer 共享完整 `ConfigDocumentV5`；沿用原有 application/engine/caption IPC 通道，没有新增 IPC 名称。主进程继续对 Renderer 提交的 caption 层做严格校验并保留未知扩展字段。
+- Renderer 新增公共 `VisualLineSlice`、`CaptionTrackSegment`、`ComposedCaptionTrack`、`CaptionTrackAnchor` 和 `RollingCaptionLine` 数据结构；旧 `buildVisualLines`/`measureVisualLines` 字符串 API 保留。
+- 测量窗口最多 256 个字幕片段、16,384 个 UTF-16 代码单元；裁剪不会从低代理项开始，也不会在字符上限恰好占满时留下空白片段。
+- Python stdout NDJSON、本地 TCP command、字幕 partial/final、翻译关联、引擎 Provider、CLI 参数和凭据处理均无变化。
+- 没有新增、删除或升级依赖，没有执行安装命令，也未访问外部 API。
+
+### 兼容性、迁移与回滚
+
+- 默认 `sentence` 保留旧配置和新安装的既有断句换行行为；连续排版仅在用户明确选择后启用。
+- V5 配置被旧版本视为未来版本；降级前应恢复升级前配置备份。回滚本批次需要恢复上述 Renderer/共享类型/主进程/测试/文档文件，并把配置 schema 恢复为 V4；不得回退任务开始前已有的逐行字幕、双轨修复、`2.14.0` 版本或构建修改。
+- 实现只依赖 Vue 与 Chromium 既有布局 API，未增加平台专属分支；自动化和浏览器冒烟在当前 macOS arm64 环境执行，未声明 Windows、Linux 或其他 macOS 架构已实机验证。
+- 超过有界窗口的极长历史不会被全部重复测量；组件从当前可见视觉行的字幕 ID/字符偏移锚点继续渲染，优先保证实时尾部的正确性和内存边界。
+
+### 验证记录
+
+- 浏览器临时组件页（本机 Vite + Chromium）：通过。`sentence` 的原文行分别为“第一句。”、“第二句继续显示。”，译文分别为 “First sentence.”、“Second sentence continues.”；`continuous` 分别合并为“第一句。第二句继续显示。”和 “First sentence. Second sentence continues.”；两条轨道计算样式均为 `text-align: left`，控制台 error/warn 为 0。临时页和两个本机服务在验证后已删除/停止。
+- `npm run lint`：通过，无 ESLint 错误。
+- `npm run verify`：最终通过；Node/Web TypeScript、ESLint、Node 73/73、Python 66/66 全部成功。
+- `npm run build`：最终通过；包含完整类型检查，Electron main、preload、renderer 分别转换 28、1、3275 个模块。
+- `rg -n 'rollingLines|CaptionLineMeasurement|buildRollingCaptionTracks|lines-change' src tests docs`：无残留旧模型或旧事件引用。
+- `git diff --check`：代码和文档完成后第一次审计通过；追加本记录后再次执行最终审计。
+- 校验仍打印项目已有 npm mirror 配置弃用警告和 Node `MODULE_TYPELESS_PACKAGE_JSON` 性能警告；没有测试、lint 或构建失败。
+
+### 未执行、风险与后续事项
+
+- 未执行真实麦克风/系统音频、云端识别/翻译、长时间字幕会话或付费 API 测试；本功能位于 Renderer 呈现和本地配置层，不需要外部调用。
+- 未实机验证 Windows、Linux、macOS x64/universal，也未重新生成安装包；生产构建成功不等同于这些平台的 GUI 回归。
+- 浏览器冒烟覆盖最终排版、双轨隔离和左对齐；没有以真实流式音频持续观察 500ms 动画节奏。公共纯函数测试已覆盖 partial、尾部追加和历史回填的动画分类。
+- 连续模式只能按收到的字幕文本和标点决定片段间空格；引擎若输出缺失或错误标点，呈现层不会自行做语言学断句修复。
+
+### 关键外部文档或技术决策来源
+
+- 用户明确的语义：一个设置同时切换原文和翻译；不跟随断句时下一条字幕紧接上一条末尾显示。
+- 用户提供截图：确认目标是字幕窗口的逐行呈现，不是字幕记录表或引擎断句协议。
+- 本地 Chromium 实际布局结果：继续作为精确换行的单一事实来源，公共层只附加字符偏移和字幕来源映射，不复制浏览器换行规则。
+- 根目录 `AGENTS.md`：决定使用显式 V5 迁移、保持双轨和现有协议、补齐中英日、建立有界公共抽象、执行全量测试/构建并保留用户既有修改。
+
+## 2026-08-16 - V2.15.0 macOS arm64 构建
+
+### 用户授权与变更目标
+
+- 用户明确要求编译 Mac 版本并更新小版本号；本批次将 `2.14.0` 升级为 `2.15.0`，使用项目内既有 `.venv` 编译 Python 引擎，并基于当前工作区生成 macOS arm64 应用、ZIP 和 DMG。
+- 非目标：不安装、删除或升级依赖，不修改系统 Python、Node、PATH 或其他系统环境，不发布 Release，不提交或推送 Git，不改动本批次之外的功能实现。
+- 修改前已执行 `git status --short --branch` 并阅读适用的根目录 `AGENTS.md`。工作区已有未提交的 V5 断句边界功能和相关文档/测试修改；本次完整保留，因此产物包含该功能。
+
+### 变更类型
+
+- 构建、配置、文档。
+
+### 修改文件与原因
+
+- `package.json`、`package-lock.json`：将应用版本及锁文件根包版本从 `2.14.0` 统一更新为 `2.15.0`；依赖项和依赖约束未变化。
+- `src/renderer/index.html`、`src/renderer/src/components/EngineStatus.vue`：同步窗口标题和关于信息中的可见版本号。
+- `README.md`、`README_en.md`、`README_ja.md`：同步中英日 README 的当前版本。
+- `docs/user-manual/zh.md`、`docs/user-manual/en.md`、`docs/user-manual/ja.md`：同步三语用户手册版本。
+- `docs/engine-manual/zh.md`、`docs/engine-manual/en.md`、`docs/engine-manual/ja.md`：同步三语引擎手册版本。
+- `docs/CHANGELOG.md`：新增 `v2.15.0` 条目，记录版本统一和 macOS arm64 构建；此前未发布的 V5 断句显示条目随本版本归档。
+- `change.md`：追加本次授权、版本、构建、验证、兼容性和风险记录。
+- `engine/dist/main`、`dist/mac-arm64/Auto Caption.app`、`dist/Auto Caption-2.15.0-arm64-mac.zip`、`dist/auto-caption-2.15.0.dmg` 及对应 blockmap/`latest-mac.yml`：由 PyInstaller、electron-builder、codesign、ditto 和 hdiutil 生成或刷新；均位于 Git 忽略的构建目录，不作为源文件提交。
+
+### 修改前后行为
+
+- 修改前：源码、应用界面和三语文档显示版本 `2.14.0`，没有本批次的 `2.15.0` macOS 产物。
+- 修改后：上述版本统一为 `2.15.0`；产物中的 `CFBundleShortVersionString` 和 `CFBundleVersion` 均为 `2.15.0`，Electron 主程序与内置 Python 引擎均为 arm64。
+- 本批次没有改变字幕、识别、翻译或配置运行逻辑；构建基于当前工作区，故包含此前未提交的 V5 断句边界功能。
+
+### 配置、IPC、协议、命令行、数据结构与依赖
+
+- 本批次自身未新增或修改配置字段、IPC、Python/Electron 进程协议、CLI 参数或业务数据结构；当前产物仍包含工作区既有的 V5 配置变更。
+- 没有执行 npm/pip 安装或升级命令；`package-lock.json` 仅更新根包版本。PyInstaller 使用 `engine/.venv`，临时配置写入 `/private/tmp/auto-caption-pyinstaller-config`，没有修改系统环境。
+- electron-builder 使用锁定的 Electron `43.4.0` 和项目现有依赖；仅在沙箱 DNS 限制后获准访问项目已配置的镜像下载 Electron 构建二进制。
+
+### 兼容性、迁移与回滚
+
+- 实际构建平台为 macOS arm64；未声明 macOS x64/universal、Windows 或 Linux 产物已验证。
+- 应用采用 ad-hoc 签名，未使用 Apple Developer ID，未公证；直接分发时仍可能触发 Gatekeeper。正式发布应使用 Developer ID 签名并完成 notarization。
+- 回滚版本批次时可恢复上述版本源文件和文档到 `2.14.0` 并删除忽略目录中的 `2.15.0` 产物；不得回退本任务开始前已有的 V5 功能修改。
+
+### 验证记录
+
+- `npm run verify`：通过；Node/Web TypeScript、ESLint、Node 73/73、Python 66/66 全部成功。
+- `npm run build`：通过；Electron main、preload、renderer 分别转换 28、1、3275 个模块。
+- `PYINSTALLER_CONFIG_DIR=/private/tmp/auto-caption-pyinstaller-config ./.venv/bin/pyinstaller --clean --noconfirm ./main.spec`：通过，生成 arm64 `engine/dist/main`。报告 `pycparser.lextab`/`yacctab` 隐式导入未找到以及 numba `@rpath/libomp.dylib` 未解析警告，未阻止构建。
+- `engine/dist/main --help`：沙箱内因 `semctl: Operation not permitted` 失败；获准在沙箱外重跑后退出码 0，并完整输出 CLI 帮助。
+- `npx electron-builder --mac`：沙箱内因 `npmmirror.com` DNS 受限失败；获准联网重跑后通过，生成 arm64 应用、ZIP 和 DMG。构建器报告重复依赖引用，并因没有 Developer ID 跳过发布签名。
+- `file` 与 `plutil`：通过；Electron 可执行文件和内置引擎均为 Mach-O arm64，Info.plist 两个版本字段均为 `2.15.0`。
+- `codesign --force --deep --sign -` 与 `codesign --verify --deep --strict --verbose=2`：通过；最终应用签名类型为 `adhoc`，`TeamIdentifier` 未设置。
+- `unzip -tq dist/Auto\ Caption-2.15.0-arm64-mac.zip`：通过，无压缩数据错误。
+- `hdiutil verify dist/auto-caption-2.15.0.dmg`：通过，磁盘映像校验有效。首次在沙箱内重建 DMG 因“设备未配置”失败，获准在沙箱外重跑后成功；同时出现 `hdiutil create` 旧语法弃用警告。
+- 最终 ZIP 大小 `224952345` 字节，SHA-256 `5b0468a36f1bb25cb5865e878bc4145454f44c27eccc9cfe468f28c978edbd42`；DMG 大小 `244918050` 字节，SHA-256 `02ec2de51be4f167eb2796b7376b9cdfc4d770d9becc9f75ea74bfd1f8c128ef`。已按最终签名产物重建 blockmap 并同步 `latest-mac.yml` 的 SHA-512、大小和日期。
+- npm 仍打印项目既有镜像配置弃用警告；不影响本次验证结果。
+
+### 未执行、风险与后续事项
+
+- 未执行 Apple notarization、Developer ID 发布签名、真实 GUI 启动巡检、麦克风/系统音频、云端识别/翻译、付费 API 或自动更新端到端测试。
+- 未验证其他 CPU 架构和操作系统；约 215 MiB ZIP 与 234 MiB DMG 均为本机 arm64 产物。
+- PyInstaller 的 `libomp` 警告可能影响实际走到 numba OpenMP 后端的运行路径；当前 CLI 启动自检通过，但正式发布前建议补做真实音频引擎回归。
+
+### 关键外部文档或技术决策来源
+
+- 用户明确授权：编译 Mac 版本并更新小版本号。
+- 根目录 `AGENTS.md`：要求保护已有修改、三语版本一致、使用项目环境、如实记录构建和失败、不修改系统环境或依赖，并限定实际验证平台。
+- 项目现有 `main.spec` 与 `electron-builder.yml`：作为 Python 引擎和 macOS arm64 打包配置的单一来源。

@@ -1,6 +1,8 @@
 # 配置文件 V4
 
-Auto Caption 的持久化配置位于 Electron `userData/config.json`。当前版本接受 `schemaVersion: 4`，磁盘、主进程、IPC 和渲染进程共享 `ConfigDocumentV4`。
+> 本文保留用于说明历史格式；当前格式为 [配置文件 V5](./config-v5.md)。应用会把完整 V4 显式迁移到 V5，并写入 `captionBoundaryMode: "sentence"` 以保持原行为。
+
+V4 曾用于在字幕样式中增加 `displayMode`。以下内容描述该历史格式。
 
 ## 文档结构
 

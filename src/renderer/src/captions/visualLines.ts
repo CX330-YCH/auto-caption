@@ -8,6 +8,12 @@ export interface PositionedGrapheme extends GraphemeSegment {
   lineTop?: number
 }
 
+export interface VisualLineSlice {
+  text: string
+  start: number
+  end: number
+}
+
 export function segmentGraphemes(text: string): GraphemeSegment[] {
   if (!text) return []
 
@@ -37,15 +43,22 @@ export function buildVisualLines(
   text: string,
   segments: PositionedGrapheme[]
 ): string[] {
+  return buildVisualLineSlices(text, segments).map(line => line.text)
+}
+
+export function buildVisualLineSlices(
+  text: string,
+  segments: PositionedGrapheme[]
+): VisualLineSlice[] {
   if (!text) return []
 
-  const lines: string[] = []
+  const lines: VisualLineSlice[] = []
   let lineStart = 0
   let currentTop: number | undefined
 
   for (const segment of segments) {
     if (segment.text === '\n') {
-      lines.push(text.slice(lineStart, segment.start))
+      lines.push(createVisualLineSlice(text, lineStart, segment.start))
       lineStart = segment.end
       currentTop = undefined
       continue
@@ -58,13 +71,25 @@ export function buildVisualLines(
     }
     if (Math.abs(segment.lineTop - currentTop) <= 0.5) continue
 
-    lines.push(text.slice(lineStart, segment.start))
+    lines.push(createVisualLineSlice(text, lineStart, segment.start))
     lineStart = segment.start
     currentTop = segment.lineTop
   }
 
-  lines.push(text.slice(lineStart))
+  lines.push(createVisualLineSlice(text, lineStart, text.length))
   return lines
+}
+
+function createVisualLineSlice(
+  text: string,
+  start: number,
+  end: number
+): VisualLineSlice {
+  return {
+    text: text.slice(start, end),
+    start,
+    end
+  }
 }
 
 /**
@@ -73,9 +98,18 @@ export function buildVisualLines(
  * caption presentation component using the same typography and width.
  */
 export function measureVisualLines(element: HTMLElement, text: string): string[] {
+  return measureVisualLineSlices(element, text).map(line => line.text)
+}
+
+export function measureVisualLineSlices(
+  element: HTMLElement,
+  text: string
+): VisualLineSlice[] {
   if (!text) return []
   const textNode = element.firstChild
-  if (!(textNode instanceof Text) || textNode.data !== text) return [text]
+  if (!(textNode instanceof Text) || textNode.data !== text) {
+    return [createVisualLineSlice(text, 0, text.length)]
+  }
 
   const range = document.createRange()
   const positioned = segmentGraphemes(text).map(segment => {
@@ -92,5 +126,5 @@ export function measureVisualLines(element: HTMLElement, text: string): string[]
     }
   })
   range.detach()
-  return buildVisualLines(text, positioned)
+  return buildVisualLineSlices(text, positioned)
 }

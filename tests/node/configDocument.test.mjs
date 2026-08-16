@@ -7,11 +7,11 @@ import {
 } from '../../src/shared/config/schema.ts'
 import {
   parseApplicationConfig,
-  parseConfigDocumentV4,
+  parseConfigDocumentV5,
   parseEngineConfig
 } from '../../src/shared/config/document.ts'
 
-test('creates a complete layered V4 document', () => {
+test('creates a complete layered V5 document', () => {
   const config = createDefaultConfig('/recordings')
 
   assert.equal(config.schemaVersion, CONFIG_SCHEMA_VERSION)
@@ -25,20 +25,21 @@ test('creates a complete layered V4 document', () => {
   assert.deepEqual(config.engine.providers.funAsr.hotwords.contextTerms, [])
   assert.equal(config.caption.styles.fontSize, 24)
   assert.equal(config.caption.styles.displayMode, 'static')
+  assert.equal(config.caption.styles.captionBoundaryMode, 'sentence')
   assert.equal('controls' in config, false)
   assert.equal('engineEnabled' in config.engine, false)
 })
 
-test('migrates schema V2/V3 and rejects unversioned or future documents', () => {
+test('migrates schema V2/V3/V4 and rejects unversioned or future documents', () => {
   const config = createDefaultConfig('/recordings')
 
   assert.throws(
-    () => parseConfigDocumentV4({ controls: {} }),
+    () => parseConfigDocumentV5({ controls: {} }),
     /schemaVersion/
   )
   assert.throws(
-    () => parseConfigDocumentV4({ ...config, schemaVersion: 5 }),
-    /Unsupported config schema version: 5/
+    () => parseConfigDocumentV5({ ...config, schemaVersion: 6 }),
+    /Unsupported config schema version: 6/
   )
 
   const v2 = {
@@ -57,7 +58,7 @@ test('migrates schema V2/V3 and rejects unversioned or future documents', () => 
   }
   delete v2.engine.activeEngineId
   delete v2.engine.customEngines
-  const migrated = parseConfigDocumentV4(v2)
+  const migrated = parseConfigDocumentV5(v2)
   assert.equal(migrated.schemaVersion, CONFIG_SCHEMA_VERSION)
   assert.equal(migrated.engine.activeEngineId, 'custom-migrated')
   assert.deepEqual(migrated.engine.customEngines, [{
@@ -67,9 +68,11 @@ test('migrates schema V2/V3 and rejects unversioned or future documents', () => 
     command: '--legacy',
     extensionCustom: 'preserved'
   }])
+  assert.equal(migrated.caption.styles.displayMode, 'static')
+  assert.equal(migrated.caption.styles.captionBoundaryMode, 'sentence')
 
   v2.engine.custom.enabled = false
-  const migratedInactive = parseConfigDocumentV4(v2)
+  const migratedInactive = parseConfigDocumentV5(v2)
   assert.equal(migratedInactive.engine.activeEngineId, 'vosk')
   assert.equal(migratedInactive.engine.customEngines[0].executable, '/engines/legacy')
 
@@ -82,39 +85,84 @@ test('migrates schema V2/V3 and rejects unversioned or future documents', () => 
     }
   }
   delete v3.caption.styles.displayMode
+  delete v3.caption.styles.captionBoundaryMode
   v3.caption.styles.extensionStyle = 'preserved'
-  const migratedV3 = parseConfigDocumentV4(v3)
+  const migratedV3 = parseConfigDocumentV5(v3)
   assert.equal(migratedV3.schemaVersion, CONFIG_SCHEMA_VERSION)
   assert.equal(migratedV3.caption.styles.displayMode, 'static')
+  assert.equal(migratedV3.caption.styles.captionBoundaryMode, 'sentence')
   assert.equal(migratedV3.caption.styles.extensionStyle, 'preserved')
+
+  const v4 = {
+    ...config,
+    schemaVersion: 4,
+    caption: {
+      ...config.caption,
+      styles: {
+        ...config.caption.styles,
+        displayMode: 'rolling',
+        extensionStyle: 'preserved-v4'
+      }
+    }
+  }
+  delete v4.caption.styles.captionBoundaryMode
+  const migratedV4 = parseConfigDocumentV5(v4)
+  assert.equal(migratedV4.caption.styles.displayMode, 'rolling')
+  assert.equal(migratedV4.caption.styles.captionBoundaryMode, 'sentence')
+  assert.equal(migratedV4.caption.styles.extensionStyle, 'preserved-v4')
 })
 
-test('validates nested values while preserving V4 extension fields', () => {
+test('validates nested values while preserving V5 extension fields', () => {
   const config = createDefaultConfig('/recordings')
   config.extensionRoot = { enabled: true }
   config.engine.extensionEngine = 'future-engine-setting'
   config.engine.providers.glm.extensionGlm = 7
 
-  const parsed = parseConfigDocumentV4(config)
+  const parsed = parseConfigDocumentV5(config)
 
   assert.deepEqual(parsed.extensionRoot, { enabled: true })
   assert.equal(parsed.engine.extensionEngine, 'future-engine-setting')
   assert.equal(parsed.engine.providers.glm.extensionGlm, 7)
-  const rolling = parseConfigDocumentV4({
+  const rolling = parseConfigDocumentV5({
     ...config,
     caption: {
       styles: { ...config.caption.styles, displayMode: 'rolling' }
     }
   })
   assert.equal(rolling.caption.styles.displayMode, 'rolling')
+  const continuous = parseConfigDocumentV5({
+    ...config,
+    caption: {
+      styles: {
+        ...config.caption.styles,
+        captionBoundaryMode: 'continuous'
+      }
+    }
+  })
+  assert.equal(
+    continuous.caption.styles.captionBoundaryMode,
+    'continuous'
+  )
   assert.throws(
-    () => parseConfigDocumentV4({
+    () => parseConfigDocumentV5({
       ...config,
       caption: {
         styles: { ...config.caption.styles, displayMode: 'unknown' }
       }
     }),
     /Invalid displayMode/
+  )
+  assert.throws(
+    () => parseConfigDocumentV5({
+      ...config,
+      caption: {
+        styles: {
+          ...config.caption.styles,
+          captionBoundaryMode: 'unknown'
+        }
+      }
+    }),
+    /Invalid captionBoundaryMode/
   )
 
   assert.throws(

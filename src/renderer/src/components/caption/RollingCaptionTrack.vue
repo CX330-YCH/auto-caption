@@ -1,0 +1,295 @@
+<template>
+  <div class="rolling-caption-track" :data-kind="kind">
+    <TransitionGroup
+      name="rolling-line"
+      tag="div"
+      class="rolling-line-list"
+      :css="animateRows"
+    >
+      <div
+        v-for="row in visibleRows"
+        :key="row.key"
+        class="rolling-line"
+        :data-phase="row.phase"
+        :data-kind="row.kind"
+        :style="lineStyle"
+      >{{ row.text || '\u00a0' }}</div>
+    </TransitionGroup>
+
+    <div class="rolling-track-measurement" aria-hidden="true">
+      <ExactCaptionText
+        :text="composedTrack.text"
+        wrap
+        :font-family="fontFamily"
+        :font-size="fontSize"
+        :font-color="fontColor"
+        :font-weight="fontWeight"
+        :phase="measurementPhase"
+        @before-measure="handleBeforeMeasure"
+        @line-slices-change="handleLineSlicesChange"
+      />
+    </div>
+  </div>
+</template>
+
+<script setup lang="ts">
+import { computed, ref, watch } from 'vue'
+import type {
+  CaptionBoundaryMode,
+  CaptionPhase
+} from '../../../../shared/types'
+import {
+  buildRollingCaptionLines,
+  captionTrackAnchorAtOffset,
+  classifyCaptionTrackMutation,
+  composeCaptionTrack,
+  selectCaptionTrackFromAnchor,
+  selectCaptionTrackWindow,
+  selectRollingCaptionLines,
+  type CaptionTrackKind,
+  type CaptionTrackAnchor,
+  type CaptionTrackSegment,
+  type RollingCaptionLine
+} from '../../captions/captionTracks'
+import type { VisualLineSlice } from '../../captions/visualLines'
+import ExactCaptionText from './ExactCaptionText.vue'
+
+const INITIAL_SEGMENT_WINDOW = 8
+const MAX_SEGMENT_WINDOW = 256
+
+const props = defineProps<{
+  kind: CaptionTrackKind
+  segments: CaptionTrackSegment[]
+  boundaryMode: CaptionBoundaryMode
+  lineNumber: number
+  fontFamily: string
+  fontSize: number
+  fontColor: string
+  fontWeight: number
+}>()
+
+const requestedSegments = ref(INITIAL_SEGMENT_WINDOW)
+const windowAnchor = ref<CaptionTrackAnchor>()
+const measuredRows = ref<RollingCaptionLine[]>([])
+const lastVisualLines = ref<VisualLineSlice[]>([])
+const animateRows = ref(false)
+let trackInitialized = false
+
+const selectedSegments = computed(() => {
+  if (windowAnchor.value) {
+    return selectCaptionTrackFromAnchor(
+      props.segments,
+      windowAnchor.value,
+      MAX_SEGMENT_WINDOW
+    )
+  }
+  return selectCaptionTrackWindow(
+    props.segments,
+    requestedSegments.value,
+    MAX_SEGMENT_WINDOW
+  )
+})
+
+const composedTrack = computed(() => composeCaptionTrack(
+  selectedSegments.value,
+  props.boundaryMode
+))
+
+const visibleRows = computed(() => selectRollingCaptionLines(
+  measuredRows.value,
+  props.lineNumber
+))
+
+const lineStyle = computed(() => ({
+  fontFamily: props.fontFamily,
+  fontSize: `${props.fontSize}px`,
+  color: props.fontColor,
+  fontWeight: props.fontWeight * 100
+}))
+
+const measurementPhase = computed<CaptionPhase>(() => {
+  if (selectedSegments.value.some(segment => segment.phase === 'partial')) {
+    return 'partial'
+  }
+  if (selectedSegments.value.some(segment => segment.phase === 'unknown')) {
+    return 'unknown'
+  }
+  return 'final'
+})
+
+watch(
+  () => props.segments.map(segment => ({ ...segment })),
+  (next, previous) => {
+    if (!trackInitialized || previous === undefined) {
+      trackInitialized = true
+      animateRows.value = false
+      return
+    }
+    const mutation = classifyCaptionTrackMutation(previous, next)
+    animateRows.value = mutation === 'tail-append' || mutation === 'tail-update'
+    if (mutation === 'tail-update' || mutation === 'historical-reflow') {
+      resetMeasurementAnchor()
+    }
+    if (next.length === 0) {
+      requestedSegments.value = INITIAL_SEGMENT_WINDOW
+      windowAnchor.value = undefined
+      measuredRows.value = []
+      lastVisualLines.value = []
+    }
+  },
+  { immediate: true }
+)
+
+watch(
+  () => props.boundaryMode,
+  () => {
+    animateRows.value = false
+    resetMeasurementAnchor()
+  }
+)
+
+watch(
+  () => props.lineNumber,
+  () => {
+    animateRows.value = false
+    adjustMeasurementWindow(lastVisualLines.value)
+  }
+)
+
+function handleBeforeMeasure(reason: 'content' | 'layout'): void {
+  if (reason !== 'layout') return
+  animateRows.value = false
+  resetMeasurementAnchor()
+}
+
+function handleLineSlicesChange(
+  measuredText: string,
+  lines: VisualLineSlice[]
+): void {
+  if (measuredText !== composedTrack.value.text) return
+  lastVisualLines.value = lines.map(line => ({ ...line }))
+  measuredRows.value = buildRollingCaptionLines(composedTrack.value, lines)
+  adjustMeasurementWindow(lines)
+}
+
+function adjustMeasurementWindow(lines: readonly VisualLineSlice[]): void {
+  const targetRows = Math.max(1, Math.floor(props.lineNumber)) + 2
+  if (lines.length >= targetRows) {
+    const firstRetainedLine = lines[lines.length - targetRows]
+    const anchor = captionTrackAnchorAtOffset(
+      composedTrack.value,
+      firstRetainedLine.start
+    )
+    if (!sameAnchor(windowAnchor.value, anchor)) {
+      animateRows.value = false
+      windowAnchor.value = anchor
+    }
+    return
+  }
+
+  const currentStartIndex = firstSelectedSegmentIndex()
+  if (currentStartIndex <= 0) return
+  if (requestedSegments.value >= MAX_SEGMENT_WINDOW) return
+
+  animateRows.value = false
+  windowAnchor.value = undefined
+  const currentWindowSize = props.segments.length - currentStartIndex
+  requestedSegments.value = Math.min(
+    MAX_SEGMENT_WINDOW,
+    Math.max(
+      currentWindowSize + 4,
+      currentWindowSize * 2
+    )
+  )
+}
+
+function resetMeasurementAnchor(): void {
+  if (!windowAnchor.value) return
+  const currentStartIndex = firstSelectedSegmentIndex()
+  const currentWindowSize = currentStartIndex < 0
+    ? INITIAL_SEGMENT_WINDOW
+    : props.segments.length - currentStartIndex
+  requestedSegments.value = Math.min(
+    MAX_SEGMENT_WINDOW,
+    Math.max(INITIAL_SEGMENT_WINDOW, currentWindowSize + 4)
+  )
+  windowAnchor.value = undefined
+}
+
+function firstSelectedSegmentIndex(): number {
+  const first = selectedSegments.value[0]
+  if (!first) return -1
+  return props.segments.findIndex(segment => {
+    return segment.captionId === first.captionId && segment.kind === first.kind
+  })
+}
+
+function sameAnchor(
+  left: CaptionTrackAnchor | undefined,
+  right: CaptionTrackAnchor | undefined
+): boolean {
+  return left?.captionId === right?.captionId &&
+    left?.kind === right?.kind &&
+    left?.captionOffset === right?.captionOffset
+}
+</script>
+
+<style scoped>
+.rolling-caption-track,
+.rolling-line-list {
+  position: relative;
+  width: 100%;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.rolling-line {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  line-height: 1.6em;
+  text-align: left;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: normal;
+  line-break: auto;
+}
+
+.rolling-line-move,
+.rolling-line-enter-active,
+.rolling-line-leave-active {
+  transition: transform 500ms ease, opacity 250ms ease;
+}
+
+.rolling-line-enter-from {
+  opacity: 0;
+  transform: translateY(100%);
+}
+
+.rolling-line-leave-active {
+  position: absolute;
+  left: 0;
+}
+
+.rolling-line-leave-to {
+  opacity: 0;
+  transform: translateY(-100%);
+}
+
+.rolling-track-measurement {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rolling-line-move,
+  .rolling-line-enter-active,
+  .rolling-line-leave-active {
+    transition: none;
+  }
+}
+</style>

@@ -228,7 +228,12 @@ export default {
       "static": "文単位表示",
       "rolling": "行単位スクロール"
     },
-    "rollingWrapHint": "行単位スクロールでは実際のウィンドウ幅で常に正確に折り返し、字幕行数は保持する表示行数になります。",
+    "captionBoundaryMode": "文境界での改行",
+    captionBoundaryModes: {
+      "sentence": "文ごとに改行",
+      "continuous": "連続レイアウト"
+    },
+    "rollingWrapHint": "行単位スクロールは実際のウィンドウ幅で正確に折り返します。原文と翻訳文には選択した文境界モードが同時に適用され、それぞれ指定した表示行数を保持します。",
     "lineNumber": "字幕行数",
     "longCaption": "長い字幕",
     "fontFamily": "フォント",

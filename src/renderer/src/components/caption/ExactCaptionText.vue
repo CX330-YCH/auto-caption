@@ -11,9 +11,9 @@
     <template v-else>
       <span
         v-for="(line, index) in lines"
-        :key="`${index}:${line}`"
+        :key="`${index}:${line.start}:${line.end}`"
         class="visual-line"
-      >{{ line || '\u00a0' }}</span>
+      >{{ line.text || '\u00a0' }}</span>
       <span
         ref="measurement"
         class="measurement"
@@ -26,7 +26,12 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import type { CaptionPhase } from '../../../../shared/types'
-import { measureVisualLines } from '../../captions/visualLines'
+import {
+  measureVisualLineSlices,
+  type VisualLineSlice
+} from '../../captions/visualLines'
+
+type MeasurementReason = 'content' | 'layout'
 
 const props = defineProps<{
   text: string
@@ -39,15 +44,20 @@ const props = defineProps<{
 }>()
 
 const emit = defineEmits<{
-  linesChange: [lines: string[]]
+  beforeMeasure: [reason: MeasurementReason]
+  lineSlicesChange: [text: string, lines: VisualLineSlice[]]
 }>()
 
 const container = ref<HTMLElement>()
 const measurement = ref<HTMLElement>()
-const lines = ref<string[]>(props.text ? [props.text] : [])
+const lines = ref<VisualLineSlice[]>(props.text
+  ? [{ text: props.text, start: 0, end: props.text.length }]
+  : [])
 let animationFrame: number | undefined
 let resizeObserver: ResizeObserver | undefined
 let hasReportedLines = false
+let pendingReason: MeasurementReason = 'layout'
+let measuredWidth: number | undefined
 
 const textStyle = computed(() => ({
   fontFamily: props.fontFamily,
@@ -56,9 +66,14 @@ const textStyle = computed(() => ({
   fontWeight: props.fontWeight * 100
 }))
 
-function scheduleMeasurement(): void {
+function scheduleMeasurement(reason: MeasurementReason): void {
+  if (reason === 'layout' || animationFrame === undefined) {
+    pendingReason = reason
+  }
   if (!props.wrap) {
-    updateLines(props.text ? [props.text] : [])
+    updateLines(props.text
+      ? [{ text: props.text, start: 0, end: props.text.length }]
+      : [])
     return
   }
   if (animationFrame !== undefined) cancelAnimationFrame(animationFrame)
@@ -66,44 +81,66 @@ function scheduleMeasurement(): void {
     animationFrame = undefined
     const mirror = measurement.value
     if (!mirror) return
-    updateLines(measureVisualLines(mirror, props.text))
+    emit('beforeMeasure', pendingReason)
+    updateLines(measureVisualLineSlices(mirror, props.text))
   })
 }
 
-function updateLines(nextLines: string[]): void {
+function updateLines(nextLines: VisualLineSlice[]): void {
   const unchanged =
     lines.value.length === nextLines.length &&
-    lines.value.every((line, index) => line === nextLines[index])
+    lines.value.every((line, index) => {
+      const next = nextLines[index]
+      return next !== undefined &&
+        line.text === next.text &&
+        line.start === next.start &&
+        line.end === next.end
+    })
   if (!unchanged) lines.value = nextLines
   if (unchanged && hasReportedLines) return
   hasReportedLines = true
-  emit('linesChange', [...nextLines])
+  emit('lineSlicesChange', props.text, nextLines.map(line => ({ ...line })))
 }
 
 function handleFontLoading(): void {
-  scheduleMeasurement()
+  scheduleMeasurement('layout')
 }
 
 watch(
+  () => props.text,
+  () => {
+    void nextTick(() => scheduleMeasurement('content'))
+  },
+  { flush: 'post' }
+)
+
+watch(
   () => [
-    props.text,
     props.wrap,
     props.fontFamily,
     props.fontSize,
     props.fontWeight
   ],
   () => {
-    void nextTick(scheduleMeasurement)
+    void nextTick(() => scheduleMeasurement('layout'))
   },
   { flush: 'post' }
 )
 
 onMounted(() => {
-  resizeObserver = new ResizeObserver(scheduleMeasurement)
+  resizeObserver = new ResizeObserver(entries => {
+    const width = entries[0]?.contentRect.width
+    if (width === undefined) return
+    if (measuredWidth !== undefined && Math.abs(width - measuredWidth) <= 0.5) {
+      return
+    }
+    measuredWidth = width
+    scheduleMeasurement('layout')
+  })
   if (container.value) resizeObserver.observe(container.value)
   document.fonts?.addEventListener('loadingdone', handleFontLoading)
-  void document.fonts?.ready.then(scheduleMeasurement)
-  scheduleMeasurement()
+  void document.fonts?.ready.then(() => scheduleMeasurement('layout'))
+  scheduleMeasurement('layout')
 })
 
 onBeforeUnmount(() => {

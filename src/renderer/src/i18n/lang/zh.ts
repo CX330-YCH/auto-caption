@@ -228,7 +228,12 @@ export default {
       "static": "整句显示",
       "rolling": "逐行滚动"
     },
-    "rollingWrapHint": "逐行滚动始终按窗口实际宽度精确换行；字幕行数表示保留的视觉行数。",
+    "captionBoundaryMode": "断句换行",
+    captionBoundaryModes: {
+      "sentence": "跟随断句换行",
+      "continuous": "不跟随断句换行"
+    },
+    "rollingWrapHint": "逐行滚动始终按窗口实际宽度精确换行；原文和翻译同时使用所选断句方式，并各自保留指定的视觉行数。",
     "lineNumber": "字幕行数",
     "longCaption": "长字幕",
     "fontFamily": "字体族",

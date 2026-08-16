@@ -229,7 +229,12 @@ export default {
       "static": "Sentence View",
       "rolling": "Line Rolling"
     },
-    "rollingWrapHint": "Line Rolling always wraps at the actual window width; Caption Lines is the number of visual rows retained.",
+    "captionBoundaryMode": "Sentence Boundaries",
+    captionBoundaryModes: {
+      "sentence": "Break at Sentences",
+      "continuous": "Continuous Layout"
+    },
+    "rollingWrapHint": "Line Rolling always wraps at the actual window width. Source and translation use the selected boundary mode together and retain their visual rows independently.",
     "longCaption": "LongCaption",
     "fontFamily": "Font Family",
     "fontColor": "Font Color",

@@ -2,13 +2,21 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 
 import {
+  buildVisualLineSlices,
   buildVisualLines,
   segmentGraphemes
 } from '../../src/renderer/src/captions/visualLines.ts'
 import {
-  buildRollingCaptionTracks,
+  buildCaptionTrackSegments,
+  buildRollingCaptionLines,
+  captionTrackAnchorAtOffset,
+  captionSegmentSeparator,
+  classifyCaptionTrackMutation,
+  composeCaptionTrack,
+  selectCaptionTrackWindow,
+  selectCaptionTrackFromAnchor,
   selectRollingCaptionLines
-} from '../../src/renderer/src/captions/rollingLines.ts'
+} from '../../src/renderer/src/captions/captionTracks.ts'
 
 test('segments Unicode text without splitting surrogate pairs or combining marks', () => {
   const segments = segmentGraphemes('A👩‍💻e\u0301中')
@@ -38,92 +46,210 @@ test('keeps explicit empty lines while grouping measured rows', () => {
   }))
 
   assert.deepEqual(buildVisualLines(text, segments), ['first', '', 'last'])
+  assert.deepEqual(buildVisualLineSlices(text, segments), [
+    { text: 'first', start: 0, end: 5 },
+    { text: '', start: 6, end: 6 },
+    { text: 'last', start: 7, end: 11 }
+  ])
 })
 
-test('builds independent source and translation tracks from measurements', () => {
-  const captions = [{
-    captionId: '1:8',
-    index: 1,
-    time_s: '',
-    time_t: '',
-    text: 'first second',
-    translation: '一 二',
-    phase: 'partial'
-  }]
-  const measurements = new Map([[
-    '1:8',
-    { source: ['first ', 'second'], translation: ['一 ', '二'] }
-  ]])
-
-  const tracks = buildRollingCaptionTracks(captions, measurements, true)
+test('builds ordered source and available translation segments', () => {
+  const captions = [
+    caption('1', '第一句。', ''),
+    caption('2', '第二句。', 'Second sentence.'),
+    caption('3', '第三句。', 'Third sentence.', 'partial')
+  ]
 
   assert.deepEqual(
-    tracks.source.map(({ key, text, kind }) => ({ key, text, kind })),
+    buildCaptionTrackSegments(captions, 'source').map(segment => ({
+      captionId: segment.captionId,
+      text: segment.text,
+      phase: segment.phase
+    })),
     [
-      { key: '1:8:source:0', text: 'first ', kind: 'source' },
-      { key: '1:8:source:1', text: 'second', kind: 'source' }
+      { captionId: '1', text: '第一句。', phase: 'final' },
+      { captionId: '2', text: '第二句。', phase: 'final' },
+      { captionId: '3', text: '第三句。', phase: 'partial' }
     ]
   )
   assert.deepEqual(
-    tracks.translation.map(({ key, text, kind }) => ({ key, text, kind })),
+    buildCaptionTrackSegments(captions, 'translation').map(segment => ({
+      captionId: segment.captionId,
+      text: segment.text
+    })),
     [
-      { key: '1:8:translation:0', text: '一 ', kind: 'translation' },
-      { key: '1:8:translation:1', text: '二', kind: 'translation' }
+      { captionId: '2', text: 'Second sentence.' },
+      { captionId: '3', text: 'Third sentence.' }
     ]
-  )
-  assert.deepEqual(
-    buildRollingCaptionTracks(captions, measurements, false)
-      .source.map(row => row.kind),
-    ['source', 'source']
-  )
-  assert.deepEqual(
-    buildRollingCaptionTracks(captions, measurements, false).translation,
-    []
   )
 })
 
-test('delayed translation cannot consume the source track row budget', () => {
-  const captions = [{
-    captionId: 'caption',
-    index: 1,
-    time_s: '',
-    time_t: '',
-    text: 'source',
-    translation: 'translation',
-    phase: 'final'
-  }]
-  const measurements = new Map([[
-    'caption',
+test('composes sentence boundaries or continuous text through one track model', () => {
+  const source = buildCaptionTrackSegments([
+    caption('1', '第一句。', ''),
+    caption('2', '第二句。', '')
+  ], 'source')
+  const translation = buildCaptionTrackSegments([
+    caption('1', '', 'First sentence.'),
+    caption('2', '', 'Second sentence.')
+  ], 'translation')
+
+  assert.equal(composeCaptionTrack(source, 'sentence').text, '第一句。\n第二句。')
+  assert.equal(composeCaptionTrack(source, 'continuous').text, '第一句。第二句。')
+  assert.equal(
+    composeCaptionTrack(translation, 'continuous').text,
+    'First sentence. Second sentence.'
+  )
+  assert.equal(captionSegmentSeparator('hello', 'world'), ' ')
+  assert.equal(captionSegmentSeparator('你好。', '世界'), '')
+  assert.equal(captionSegmentSeparator('hello ', 'world'), '')
+  assert.equal(captionSegmentSeparator('value', ','), '')
+})
+
+test('maps measured rows to stable caption offsets and line phases', () => {
+  const segments = buildCaptionTrackSegments([
+    caption('1', 'first ', '', 'final'),
+    caption('2', 'second partial', '', 'partial')
+  ], 'source')
+  const track = composeCaptionTrack(segments, 'continuous')
+  const rows = buildRollingCaptionLines(track, [
+    { text: 'first second ', start: 0, end: 13 },
+    { text: 'partial', start: 13, end: 20 }
+  ])
+
+  assert.deepEqual(rows.map(row => ({
+    key: row.key,
+    captionId: row.captionId,
+    text: row.text,
+    phase: row.phase
+  })), [
     {
-      source: ['source 1', 'source 2', 'source 3'],
-      translation: ['translation 1', 'translation 2', 'translation 3']
+      key: 'source:1:0',
+      captionId: '1',
+      text: 'first second ',
+      phase: 'partial'
+    },
+    {
+      key: 'source:2:7',
+      captionId: '2',
+      text: 'partial',
+      phase: 'partial'
     }
-  ]])
-
-  const tracks = buildRollingCaptionTracks(captions, measurements, true)
-
-  assert.deepEqual(
-    selectRollingCaptionLines(tracks.source, 2).map(row => row.text),
-    ['source 2', 'source 3']
-  )
-  assert.deepEqual(
-    selectRollingCaptionLines(tracks.translation, 2).map(row => row.text),
-    ['translation 2', 'translation 3']
-  )
-})
-
-test('keeps only the configured visual rows for rolling display', () => {
-  const rows = Array.from({ length: 5 }, (_, lineIndex) => ({
-    key: `caption:source:${lineIndex}`,
-    captionId: 'caption',
-    kind: 'source',
-    lineIndex,
-    text: `line ${lineIndex}`,
-    phase: 'final'
-  }))
+  ])
 
   assert.deepEqual(
     selectRollingCaptionLines(rows, 2).map(row => row.text),
-    ['line 3', 'line 4']
+    ['first second ', 'partial']
   )
 })
+
+test('classifies tail changes separately from historical translation backfill', () => {
+  const first = buildCaptionTrackSegments([
+    caption('1', 'one', ''),
+    caption('2', 'two', '', 'partial')
+  ], 'source')
+  const partial = buildCaptionTrackSegments([
+    caption('1', 'one', ''),
+    caption('2', 'two updated', '', 'partial')
+  ], 'source')
+  const appended = buildCaptionTrackSegments([
+    caption('1', 'one', ''),
+    caption('2', 'two updated', ''),
+    caption('3', 'three', '', 'partial')
+  ], 'source')
+  const backfilled = buildCaptionTrackSegments([
+    caption('0', 'zero', ''),
+    caption('1', 'one', ''),
+    caption('2', 'two updated', ''),
+    caption('3', 'three', '', 'partial')
+  ], 'source')
+
+  assert.equal(classifyCaptionTrackMutation(first, partial), 'tail-update')
+  assert.equal(classifyCaptionTrackMutation(partial, appended), 'tail-append')
+  assert.equal(
+    classifyCaptionTrackMutation(appended, backfilled),
+    'historical-reflow'
+  )
+})
+
+test('bounds the measured track window and preserves cropped caption offsets', () => {
+  const segments = buildCaptionTrackSegments([
+    caption('1', 'old', ''),
+    caption('2', 'A👩‍💻BCDE', '')
+  ], 'source')
+  const selected = selectCaptionTrackWindow(segments, 10, 10, 5)
+
+  assert.equal(selected.length, 1)
+  assert.equal(selected[0].text, 'BCDE')
+  assert.equal(selected[0].textOffset, 6)
+  const track = composeCaptionTrack(selected, 'continuous')
+  const [line] = buildRollingCaptionLines(track, [
+    { text: 'BCDE', start: 0, end: 4 }
+  ])
+  assert.equal(line.key, 'source:2:6')
+})
+
+test('does not retain an empty segment when the character window is exactly full', () => {
+  const segments = buildCaptionTrackSegments([
+    caption('1', 'old', ''),
+    caption('2', '12345', '')
+  ], 'source')
+
+  const selected = selectCaptionTrackWindow(segments, 10, 10, 5)
+
+  assert.deepEqual(selected.map(segment => ({
+    captionId: segment.captionId,
+    text: segment.text,
+    textOffset: segment.textOffset
+  })), [
+    { captionId: '2', text: '12345', textOffset: 0 }
+  ])
+  assert.equal(composeCaptionTrack(selected, 'sentence').text, '12345')
+})
+
+test('retains a measured visual-line anchor while the track tail grows', () => {
+  const initial = buildCaptionTrackSegments([
+    caption('1', 'first sentence', ''),
+    caption('2', 'second sentence', '')
+  ], 'source')
+  const track = composeCaptionTrack(initial, 'continuous')
+  const anchor = captionTrackAnchorAtOffset(track, 9)
+
+  assert.deepEqual(anchor, {
+    captionId: '1',
+    kind: 'source',
+    captionOffset: 9
+  })
+
+  const appended = buildCaptionTrackSegments([
+    caption('1', 'first sentence', ''),
+    caption('2', 'second sentence', ''),
+    caption('3', 'third sentence', '')
+  ], 'source')
+  const selected = selectCaptionTrackFromAnchor(appended, anchor)
+
+  assert.equal(selected[0].captionId, '1')
+  assert.equal(selected[0].text, 'tence')
+  assert.equal(selected[0].textOffset, 9)
+  assert.equal(
+    composeCaptionTrack(selected, 'continuous').text,
+    'tence second sentence third sentence'
+  )
+})
+
+function caption(
+  captionId,
+  text,
+  translation,
+  phase = 'final'
+) {
+  return {
+    captionId,
+    index: Number(captionId) || 1,
+    time_s: '',
+    time_t: '',
+    text,
+    translation,
+    phase
+  }
+}

@@ -1,6 +1,6 @@
 import type { Styles, UILanguage, UITheme } from '../types'
 
-export const CONFIG_SCHEMA_VERSION = 4 as const
+export const CONFIG_SCHEMA_VERSION = 5 as const
 
 export type KnownProviderName = 'gummy' | 'vosk' | 'sosv' | 'glm' | 'fun_asr'
 export type AudioSourceType = 0 | 1
@@ -128,7 +128,7 @@ export interface CaptionConfig {
   styles: Styles
 }
 
-export interface ConfigDocumentV4 {
+export interface ConfigDocumentV5 {
   [key: string]: unknown
   schemaVersion: typeof CONFIG_SCHEMA_VERSION
   application: ApplicationConfig
@@ -153,6 +153,7 @@ export class InvalidConfigError extends Error {
 export function createDefaultStyles(): Styles {
   return {
     displayMode: 'static',
+    captionBoundaryMode: 'sentence',
     lineNumber: 1,
     lineBreak: 1,
     fontFamily: 'sans-serif',
@@ -175,7 +176,7 @@ export function createDefaultStyles(): Styles {
   }
 }
 
-export function createDefaultConfig(recordingPath: string): ConfigDocumentV4 {
+export function createDefaultConfig(recordingPath: string): ConfigDocumentV5 {
   return {
     schemaVersion: CONFIG_SCHEMA_VERSION,
     application: {
