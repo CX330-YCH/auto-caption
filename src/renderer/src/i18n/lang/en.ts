@@ -224,6 +224,12 @@ export default {
     "cancelChange": "Cancel",
     "lineNumber": "CaptionLines",
     "resetStyle": "Reset",
+    "displayMode": "Display Mode",
+    displayModes: {
+      "static": "Sentence View",
+      "rolling": "Line Rolling"
+    },
+    "rollingWrapHint": "Line Rolling always wraps at the actual window width; Caption Lines is the number of visual rows retained.",
     "longCaption": "LongCaption",
     "fontFamily": "Font Family",
     "fontColor": "Font Color",

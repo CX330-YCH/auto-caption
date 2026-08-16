@@ -2,8 +2,11 @@ export type UILanguage = 'zh' | 'en' | 'ja'
 
 export type UITheme = 'light' | 'dark' | 'system'
 
+export type CaptionDisplayMode = 'static' | 'rolling'
+
 export interface Styles {
   [key: string]: unknown
+  displayMode: CaptionDisplayMode
   lineNumber: number
   lineBreak: number
   fontFamily: string
@@ -46,7 +49,7 @@ export interface SoftwareLogItem {
 
 export interface FullConfig {
   platform: string
-  config: import('./config/schema').ConfigDocumentV3
+  config: import('./config/schema').ConfigDocumentV4
   engineEnabled: boolean
   captionLog: CaptionItem[]
   softwareLog: SoftwareLogItem[]

@@ -38,15 +38,18 @@ interface CaptionItem {
 - `measureVisualLines`：在隐藏镜像文本节点上使用 DOM `Range.getClientRects()` 读取 Chromium 实际生成的 inline box，并返回视觉行文本。
 - `buildVisualLines`：把测量位置转换为显式视觉行，同时保留输入中的硬换行和空行。
 - `ExactCaptionText`：同步字体、字号、字重和容器宽度，合并一帧内的重复测量；在宽度和字体加载变化后自动重测。
-- `CaptionViewport`：统一原文/译文、行数、阴影和拖动区域；当前字幕窗口与样式预览共同使用。
+- `rollingLines.ts`：把各字幕的实测行转换为具有稳定 key 的原文、译文两个独立轨道；每个轨道分别按配置截取最后 N 个视觉行。
+- `RollingCaptionViewport`：分别呈现原文和译文轨道；任一轨道新增视觉行时用 500 ms FLIP 过渡上移该轨道旧行，partial 在同一行内更新不会重复滚动，并遵循系统“减少动态效果”设置。
+- `CaptionViewport`：按 `styles.displayMode` 在原有整句显示和逐行滚动之间选择，统一原文/译文、行数、阴影和拖动区域；字幕窗口与样式预览共同使用。
 
-新增 Vue 字幕显示方式优先直接组合 `CaptionViewport`。如果布局只需要单段文字，可单独使用 `ExactCaptionText`；如果需要非 Vue 渲染器，则复用 `measureVisualLines`，并保证测量镜像与最终文本拥有完全相同的可用宽度和排版属性。
+新增 Vue 字幕显示方式优先扩展 `CaptionViewport` 的呈现分派，并继续消费规范化的 `CaptionItem[]`。如果布局只需要单段文字，可单独使用 `ExactCaptionText`；如果需要非 Vue 渲染器，则复用 `measureVisualLines`，并保证测量镜像与最终文本拥有完全相同的可用宽度和排版属性。
 
 不要用固定字符数、canvas 平均字宽或字符串长度预测换行。中文、拉丁文、emoji、组合字符、不同字体 fallback 和 Chromium 的断行规则都会使这些估算与实际显示漂移。
 
-## 当前边界
+## 两种内置方式
 
-- 精确换行只负责得到稳定视觉行；本次没有实现逐行滚动动画。
-- `lineBreak` 关闭时保留单行、显示文本尾部的既有行为。
+- `static`：保留原有按最近字幕条数显示的方式；`lineBreak` 关闭时保持单行并显示文本尾部。
+- `rolling`：始终使用精确换行并从左侧开始显示；原文和译文各自保留 `lineNumber` 个视觉行并独立滚动，异步译文不会占用原文行额度；同一 partial 行的文字修订只原地更新。
+- 切换方式属于持久化样式配置，V3→V4 迁移固定选择 `static`，不会在升级时自动改变行为。
 - 工具栏采用绝对定位覆盖层，不参与字幕测量宽度；鼠标离开后自动隐藏，进入或键盘聚焦时显示。
 - 生命周期协议和旧引擎兼容规则以 [字幕引擎进程协议](./caption-engine.md) 为准；IPC 字段以 [Electron IPC API](./electron-ipc.md) 为准。

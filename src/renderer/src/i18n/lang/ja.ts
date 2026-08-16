@@ -223,6 +223,12 @@ export default {
     "applyStyle": "適用",
     "cancelChange": "キャンセル",
     "resetStyle": "リセット",
+    "displayMode": "表示方式",
+    displayModes: {
+      "static": "文単位表示",
+      "rolling": "行単位スクロール"
+    },
+    "rollingWrapHint": "行単位スクロールでは実際のウィンドウ幅で常に正確に折り返し、字幕行数は保持する表示行数になります。",
     "lineNumber": "字幕行数",
     "longCaption": "長い字幕",
     "fontFamily": "フォント",

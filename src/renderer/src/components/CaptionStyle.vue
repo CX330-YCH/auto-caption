@@ -7,6 +7,21 @@
     </template>
 
     <div class="input-item">
+      <span class="input-label">{{ $t('style.displayMode') }}</span>
+      <a-radio-group
+        v-model:value="currentDisplayMode"
+        class="responsive-radio-group"
+      >
+        <a-radio-button value="static">
+          {{ $t('style.displayModes.static') }}
+        </a-radio-button>
+        <a-radio-button value="rolling">
+          {{ $t('style.displayModes.rolling') }}
+        </a-radio-button>
+      </a-radio-group>
+    </div>
+
+    <div class="input-item">
       <span class="input-label">{{ $t('style.lineNumber') }}</span>
       <a-radio-group v-model:value="currentLineNumber" class="responsive-radio-group">
         <a-radio-button :value="1">1</a-radio-button>
@@ -21,8 +36,12 @@
       <a-select
         class="input-area"
         v-model:value="currentLineBreak"
+        :disabled="currentDisplayMode === 'rolling'"
         :options="captionStyle.iBreakOptions"
       ></a-select>
+    </div>
+    <div v-if="currentDisplayMode === 'rolling'" class="mode-note">
+      {{ $t('style.rollingWrapHint') }}
     </div>
 
     <div class="input-item">
@@ -205,7 +224,11 @@ import { notification } from 'ant-design-vue'
 import { useI18n } from 'vue-i18n'
 import { useCaptionLogStore } from '@renderer/stores/captionLog'
 import CaptionViewport from './caption/CaptionViewport.vue'
-import type { CaptionItem, Styles } from '../../../shared/types'
+import type {
+  CaptionDisplayMode,
+  CaptionItem,
+  Styles
+} from '../../../shared/types'
 
 const captionLog = useCaptionLogStore()
 const { captionData } = storeToRefs(captionLog)
@@ -215,6 +238,7 @@ const { t } = useI18n()
 const captionStyle = useCaptionStyleStore()
 const { changeSignal } = storeToRefs(captionStyle)
 
+const currentDisplayMode = ref<CaptionDisplayMode>('static')
 const currentLineNumber = ref<number>(1)
 const currentLineBreak = ref<number>(0)
 const currentFontFamily = ref<string>('sans-serif')
@@ -236,6 +260,7 @@ const currentBlur = ref<number>(0)
 const currentTextShadowColor = ref<string>('#ffffff')
 
 const previewStyles = computed<Styles>(() => ({
+  displayMode: currentDisplayMode.value,
   lineNumber: currentLineNumber.value,
   lineBreak: currentLineBreak.value,
   fontFamily: currentFontFamily.value,
@@ -283,6 +308,7 @@ function useSameStyle(): void {
 }
 
 function applyStyle(): void {
+  captionStyle.displayMode = currentDisplayMode.value
   captionStyle.lineNumber = currentLineNumber.value
   captionStyle.lineBreak = currentLineBreak.value
   captionStyle.fontFamily = currentFontFamily.value
@@ -313,6 +339,7 @@ function applyStyle(): void {
 }
 
 function backStyle(): void {
+  currentDisplayMode.value = captionStyle.displayMode
   currentLineNumber.value = captionStyle.lineNumber
   currentLineBreak.value = captionStyle.lineBreak
   currentFontFamily.value = captionStyle.fontFamily
@@ -357,6 +384,12 @@ watch(changeSignal, (val): void => {
   color: #1668dc;
   cursor: pointer;
   font-weight: bold;
+}
+
+.mode-note {
+  margin: -4px 0 12px;
+  color: #888;
+  font-size: 12px;
 }
 
 .switch-option {

@@ -38,11 +38,16 @@ const props = defineProps<{
   phase: CaptionPhase
 }>()
 
+const emit = defineEmits<{
+  linesChange: [lines: string[]]
+}>()
+
 const container = ref<HTMLElement>()
 const measurement = ref<HTMLElement>()
 const lines = ref<string[]>(props.text ? [props.text] : [])
 let animationFrame: number | undefined
 let resizeObserver: ResizeObserver | undefined
+let hasReportedLines = false
 
 const textStyle = computed(() => ({
   fontFamily: props.fontFamily,
@@ -53,7 +58,7 @@ const textStyle = computed(() => ({
 
 function scheduleMeasurement(): void {
   if (!props.wrap) {
-    lines.value = props.text ? [props.text] : []
+    updateLines(props.text ? [props.text] : [])
     return
   }
   if (animationFrame !== undefined) cancelAnimationFrame(animationFrame)
@@ -61,8 +66,18 @@ function scheduleMeasurement(): void {
     animationFrame = undefined
     const mirror = measurement.value
     if (!mirror) return
-    lines.value = measureVisualLines(mirror, props.text)
+    updateLines(measureVisualLines(mirror, props.text))
   })
+}
+
+function updateLines(nextLines: string[]): void {
+  const unchanged =
+    lines.value.length === nextLines.length &&
+    lines.value.every((line, index) => line === nextLines[index])
+  if (!unchanged) lines.value = nextLines
+  if (unchanged && hasReportedLines) return
+  hasReportedLines = true
+  emit('linesChange', [...nextLines])
 }
 
 function handleFontLoading(): void {

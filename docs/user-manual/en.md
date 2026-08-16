@@ -1,6 +1,6 @@
 # Auto Caption User Manual
 
-Corresponding Version: v2.12.0
+Corresponding Version: v2.14.0
 
 **Note: Due to limited personal resources, the English and Japanese documentation files for this project (except for the README document) will no longer be maintained. The content of this document may not be consistent with the latest version of the project. If you are willing to help with translation, please submit relevant Pull Requests.**
 
@@ -122,7 +122,7 @@ Caption settings can be divided into three categories: general settings, caption
 
 The minimum caption control window size is 900×600. When its content area is narrower than 1200px, the settings panel collapses into a Settings rail on the left. Hover over or focus the rail with the keyboard to open it temporarily, or click it to keep it open. Click it again, click outside the settings area, or press Esc to close it. Unapplied caption engine and caption style drafts remain intact while the panel opens, closes, or crosses the responsive breakpoint. At panel widths up to 480px, form labels and controls use a consistent stacked layout; language, theme, color, caption-line, and switch controls remain complete units instead of breaking into orphaned rows. The caption style preview is docked at the bottom of the right pane and uses at most 35% of the content height; excess preview content scrolls inside that area instead of covering caption records.
 
-The current version uses a layered configuration file with `schemaVersion: 3`. Complete V2 configuration is migrated automatically, including conversion of the old custom engine into a named entry. Unversioned configuration still falls back to defaults.
+The current version uses a layered configuration file with `schemaVersion: 4`. A complete V2 configuration first migrates its named custom engine, then both V2 and V3 upgrade to V4. The new display mode defaults to Sentence View, so upgrading preserves the existing caption behavior. Unversioned configuration still falls back to defaults.
 
 Caption engine settings show the languages and provider fields for the selected engine. Disabling translation hides and omits translation-service parameters; after enabling it, "Configure Translation Engine" expands the provider, model, Base URL, and API key fields. "More Settings" shows the selected engine's credentials or local model path plus shared settings. Switching engines preserves saved settings, and changes are saved only after clicking "Apply Changes."
 
@@ -132,7 +132,7 @@ After completing all configurations, click the "Start Caption Engine" button on 
 
 ### Adjusting the Caption Display Window
 
-The following image shows the caption display window, which displays the latest captions in real time. Streaming updates for one sentence replace it in place, and a final sentence cannot be overwritten by a delayed partial result. When wrapping is enabled, visual lines follow the actual current window width, font, and font size. The toolbar on the right hides automatically and reappears when the pointer enters the window or toolbar, or when it receives keyboard focus. Its three buttons close the caption window, open the control window, and enable mouse pass-through. Adjust the window width by dragging its left or right edge.
+The following image shows the caption display window, which displays the latest captions in real time. Streaming updates for one sentence replace it in place, and a final sentence cannot be overwritten by a delayed partial result. Caption Style offers Sentence View and Line Rolling. Sentence View preserves the existing most-recent-caption behavior. Line Rolling always wraps using the actual window width, font, and size and starts text at the left edge. Source and translated text each retain the configured number of visual rows and scroll independently, so a delayed translation cannot displace source rows. A new row moves older rows in the same track upward with an approximately 500 ms animation. The animation is disabled when the operating system requests reduced motion. The toolbar on the right hides automatically and reappears when the pointer enters the window or toolbar, or when it receives keyboard focus. Its three buttons close the caption window, open the control window, and enable mouse pass-through. Adjust the window width by dragging its left or right edge.
 
 ![](../img/01.png)
 

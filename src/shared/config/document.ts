@@ -1,11 +1,11 @@
-import type { Styles } from '../types'
+import type { CaptionDisplayMode, Styles } from '../types'
 import {
   CONFIG_SCHEMA_VERSION,
   InvalidConfigError,
   UnsupportedConfigVersionError,
   isKnownProviderName,
   type ApplicationConfig,
-  type ConfigDocumentV3,
+  type ConfigDocumentV4,
   type EngineConfig,
   type ProviderConfigs
 } from './schema.ts'
@@ -27,12 +27,15 @@ import {
   validateFunAsrEndpoint
 } from './validation.ts'
 
-export function parseConfigDocumentV3(value: unknown): ConfigDocumentV3 {
+export function parseConfigDocumentV4(value: unknown): ConfigDocumentV4 {
   if (!isRecord(value)) {
     throw new InvalidConfigError('Config root must be an object')
   }
   if (value.schemaVersion === 2) {
-    return parseConfigDocumentV3(migrateConfigDocumentV2ToV3(value))
+    return parseConfigDocumentV4(migrateConfigDocumentV2ToV3(value))
+  }
+  if (value.schemaVersion === 3) {
+    return parseConfigDocumentV4(migrateConfigDocumentV3ToV4(value))
   }
   if (value.schemaVersion !== CONFIG_SCHEMA_VERSION) {
     if (
@@ -242,8 +245,26 @@ function migrateConfigDocumentV2ToV3(value: Record<string, unknown>): Record<str
   delete migratedEngine.custom
   return {
     ...value,
-    schemaVersion: CONFIG_SCHEMA_VERSION,
+    schemaVersion: 3,
     engine: migratedEngine
+  }
+}
+
+function migrateConfigDocumentV3ToV4(
+  value: Record<string, unknown>
+): Record<string, unknown> {
+  const caption = requireRecord(value.caption, 'caption')
+  const styles = requireRecord(caption.styles, 'caption.styles')
+  return {
+    ...value,
+    schemaVersion: CONFIG_SCHEMA_VERSION,
+    caption: {
+      ...caption,
+      styles: {
+        ...styles,
+        displayMode: 'static'
+      }
+    }
   }
 }
 
@@ -253,6 +274,7 @@ export function parseStyles(value: unknown): Styles {
   }
   return {
     ...value,
+    displayMode: requireCaptionDisplayMode(value.displayMode),
     lineNumber: requireNumber(value.lineNumber, 'lineNumber', 1, 4),
     lineBreak: requireNumber(value.lineBreak, 'lineBreak', 0, 10),
     fontFamily: requireString(value.fontFamily, 'fontFamily', 256, false),
@@ -362,7 +384,7 @@ function parseProviderConfigs(value: Record<string, unknown>): ProviderConfigs {
 
 export function parseCaptionConfig(
   value: unknown
-): ConfigDocumentV3['caption'] {
+): ConfigDocumentV4['caption'] {
   if (!isRecord(value)) {
     throw new InvalidConfigError('Caption config must be an object')
   }
@@ -370,6 +392,13 @@ export function parseCaptionConfig(
     ...value,
     styles: parseStyles(value.styles)
   }
+}
+
+function requireCaptionDisplayMode(value: unknown): CaptionDisplayMode {
+  if (value !== 'static' && value !== 'rolling') {
+    throw new InvalidConfigError('Invalid displayMode')
+  }
+  return value
 }
 
 function requireRecord(

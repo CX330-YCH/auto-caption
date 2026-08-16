@@ -4,7 +4,14 @@
     :class="{ draggable }"
     :style="viewportStyle"
   >
-    <template v-for="caption in visibleCaptions" :key="caption.captionId">
+    <RollingCaptionViewport
+      v-if="styles.displayMode === 'rolling'"
+      :captions="captions"
+      :fallback-captions="fallbackCaptions"
+      :styles="styles"
+      :draggable="draggable"
+    />
+    <template v-else v-for="caption in visibleCaptions" :key="caption.captionId">
       <ExactCaptionText
         :text="caption.text"
         :wrap="Boolean(styles.lineBreak)"
@@ -32,6 +39,7 @@
 import { computed } from 'vue'
 import type { CaptionItem, Styles } from '../../../../shared/types'
 import ExactCaptionText from './ExactCaptionText.vue'
+import RollingCaptionViewport from './RollingCaptionViewport.vue'
 
 const props = withDefaults(defineProps<{
   captions: CaptionItem[]

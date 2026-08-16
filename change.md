@@ -3057,6 +3057,99 @@
 - Electron Builder 26 本地 `app-builder-lib` blockmap API：用于重新生成签名后 zip/DMG 的 blockmap，避免自动更新元数据指向签名前哈希。
 - 根目录 `AGENTS.md`：决定版本构建必须同步中英日文档、记录 `change.md`、避免系统环境修改、如实记录沙箱外打包步骤与未验证平台。
 
+## 2026-08-16 - 新增逐行滚动字幕显示方式
+
+### 用户授权与变更目标
+
+- 用户明确要求“新增字幕显示样式：逐行滚动”，同时保留当前字幕显示方法，并在设置中添加两种方式的切换选项。
+- 目标：保留现有整句显示为默认模式；新增基于公共精确换行结果的逐行滚动模式；在字幕样式设置和预览中支持切换并持久化；对旧配置提供显式迁移。
+- 非目标：不修改字幕引擎 partial/final 协议、识别 Provider、翻译服务、音频、热词、工具栏行为或窗口 IPC；不增加依赖，不安装 Electron，不打包发布，不提交、推送或创建 PR。
+- 修改前检查：完整阅读根目录 `AGENTS.md`；确认没有子目录补充规则；`git status --short --branch` 显示 `main...origin/main` 且工作区干净；随后阅读 V3 配置类型/迁移/校验、Pinia 字幕样式、设置表单、公共精确换行组件、字幕窗口/预览共用组件、测试和中英日文档。
+
+### 变更类型
+
+- 功能、配置、重构、测试、文档。
+
+### 修改文件与原因
+
+- 配置与主进程：
+  - `src/shared/types.ts`：新增 `CaptionDisplayMode = 'static' | 'rolling'`，在公共 `Styles` 中增加必需 `displayMode`，并把 `FullConfig` 指向 V4 类型。
+  - `src/shared/config/schema.ts`：配置版本升级到 4；新增 `ConfigDocumentV4`；默认样式使用 `displayMode: 'static'`，确保新安装保留原显示方式。
+  - `src/shared/config/document.ts`：入口改为 `parseConfigDocumentV4`；保留 V2→V3 迁移并新增 V3→V4 显式迁移；迁移保留同层未知字段并强制旧配置使用 `static`；主进程校验只接受 `static`/`rolling`。
+  - `src/main/utils/AllConfig.ts`：使用 V4 类型和解析器，配置拒绝日志同步说明使用 V4 默认值。
+- 公共呈现与逐行滚动：
+  - `src/renderer/src/captions/rollingLines.ts`：新增无 Vue 依赖的视觉行模型，将各字幕实测原文/译文转换为稳定行 key，并按最大视觉行数截取末尾窗口。
+  - `src/renderer/src/components/caption/ExactCaptionText.vue`：在现有精确换行测量完成后发出 `linesChange`，相同行内容不重复通知；一行文本也会在首次测量后报告。
+  - `src/renderer/src/components/caption/RollingCaptionViewport.vue`：新增逐行呈现组件；隐藏测量层复用 `ExactCaptionText`，可见层用稳定 key 的 `TransitionGroup` 在新行进入时以 500 ms 向上滚动；启用 `prefers-reduced-motion` 时取消动画；测量 Map 只保留当前最多 `lineNumber + 2`（且至少 4）条字幕，避免随会话无界增长。
+  - `src/renderer/src/components/caption/CaptionViewport.vue`：作为公共分派入口，`static` 继续执行原有模板，`rolling` 调用新组件；字幕窗口和样式预览无需各自增加判断。
+- 设置与三语界面：
+  - `src/renderer/src/stores/captionStyle.ts`：公开响应式 `displayMode`，沿用完整 caption 层 IPC 保存和恢复。
+  - `src/renderer/src/components/CaptionStyle.vue`：增加“整句显示 / 逐行滚动”单选；预览实时切换；应用、取消、恢复默认均包含显示方式；逐行模式禁用长字幕开关并说明始终精确换行、行数表示视觉行数。
+  - `src/renderer/src/i18n/lang/zh.ts`、`en.ts`、`ja.ts`：补齐显示方式名称、两个选项和滚动换行说明。
+- 测试：
+  - `tests/node/configDocument.test.mjs`：更新到 V4；覆盖默认静态模式、V2→V3→V4、V3→V4、扩展字段保留、合法 rolling 和非法模式拒绝。
+  - `tests/node/captionPresentation.test.mjs`：覆盖实测原文/译文到稳定行的转换、关闭翻译、按视觉行数截取。
+  - `tests/node/engineCatalog.test.mjs`、`tests/node/engineCommandBuilder.test.mjs`：测试标题同步当前 V4 配置名称，测试行为不变。
+- 文档：
+  - `docs/api-docs/config-v4.md`：新增 V4 结构、显示方式语义、校验、V2/V3 迁移、默认值和回滚限制。
+  - `docs/api-docs/config-v3.md`：标记为历史格式并链接当前 V4。
+  - `docs/api-docs/electron-ipc.md`：`FullConfig` 类型和配置链接更新到 V4；IPC 通道本身不变。
+  - `docs/api-docs/caption-presentation.md`：补充滚动行公共模型、组件分派、500 ms 行动画、静态/滚动边界和配置迁移语义。
+  - `docs/engine-manual/architecture.md`、`docs/testing.md`：架构、测试范围和迁移链更新到 V4。
+  - `docs/user-manual/zh.md`、`en.md`、`ja.md`：说明两种方式、行数语义、精确换行、动画和 V4 迁移。
+  - `README.md`、`README_en.md`、`README_ja.md`：在三语特性列表加入两种显示方式。
+  - `docs/CHANGELOG.md`：未发布部分记录逐行滚动与 V4 配置。
+  - `change.md`：追加本次授权、范围、兼容、验证、风险和回滚记录。
+
+### 修改前后行为
+
+- 修改前：`CaptionViewport` 只按最近 N 条字幕整句显示；即使公共精确换行能够得到视觉行，也没有逐行窗口或动画。
+- 修改后：默认仍为 `static`，完全沿用原显示路径；选择 `rolling` 后，原文和已启用译文先按实际宽度精确分行，界面只保留最后 N 个视觉行，新增行使用稳定 key 触发行级上移动画；同一 partial 未形成新视觉行时只更新文本，不重复滚动。
+- 修改前：“长字幕”和“字幕行数”只服务整句视图。
+- 修改后：整句视图语义不变；逐行视图始终精确换行，因此禁用“长字幕”选择，“字幕行数”改为可见视觉行数，并在设置中明确提示。
+- 修改前：V3 配置没有显示方式。
+- 修改后：V4 必需 `displayMode`；新配置和 V2/V3 迁移均设为 `static`，升级不会主动改变用户现有字幕显示。
+
+### 配置、IPC、协议、命令行与数据结构
+
+- 持久化 `schemaVersion` 从 3 升级到 4；`caption.styles.displayMode` 是新增必需字段，合法值仅为 `static` 或 `rolling`，默认 `static`。
+- V3→V4 迁移只在保留字段的基础上写入 `displayMode: static`；V2 先走既有命名自定义引擎迁移到 V3，再继续迁移到 V4。无版本、V1、结构不完整和未来版本仍被拒绝。
+- Electron IPC 通道、方向和 envelope 不变；`control.captionConfig.change`、`both.captionConfig.set` 传递的完整 caption 层自然包含新样式字段，主进程继续重新校验。
+- Python stdout NDJSON、TCP command、字幕 `event_version/phase`、翻译消息、Provider 生命周期和命令行参数均无变化。
+- 没有新增、删除或升级依赖；仅使用现有 Vue `TransitionGroup`、CSS transition 和公共 DOM Range 精确换行能力。
+
+### 兼容性、迁移与回滚
+
+- 默认/迁移兼容：新安装、V2 和 V3 配置均选择 `static`，现有字幕窗口和预览行为保持不变；用户必须在字幕样式中明确选择并应用 `rolling`。
+- 扩展字段兼容：V3→V4 保留根、application、engine、caption 和 styles 的未知字段；V4 解析继续保留未知扩展字段。
+- 平台兼容：行模型为纯 TypeScript，动画为 Chromium/Vue 标准能力；`prefers-reduced-motion` 提供无动画降级。实际自动化与构建只在当前 macOS arm64 环境执行，未声称 Windows/Linux GUI 已实机验证。
+- 向旧版本回滚：一旦应用写出 V4，旧 V3 程序会把它视为未来版本并回退默认配置。若必须回滚，应先备份配置，再把 `schemaVersion` 改回 3 并删除 `caption.styles.displayMode`，或恢复升级前的 V3 配置备份。
+- 代码精确回滚：恢复本条列出的配置、主进程、Renderer、测试和文档文件，删除三个新增文件；同时按上一条将本地用户配置从 V4 转回 V3。
+
+### 验证记录
+
+- `node --experimental-strip-types --test tests/node/configDocument.test.mjs tests/node/captionPresentation.test.mjs tests/node/i18nParity.test.mjs`：通过，9/9；覆盖 V2/V3→V4、默认/非法模式、视觉行转换/截取和三语键一致性。
+- `npm run lint`：通过。
+- `npm run verify`：通过；Node/Web 类型检查、ESLint、Node 68/68 和 Python 66/66 全部成功。
+- `npm run build`：通过；包含完整类型检查，Electron main、preload、renderer 生产构建成功，分别转换 28、1、3272 个模块。
+- `git diff --check`：代码、测试和文档完成后通过；追加本记录后再次执行并在交付中报告。
+- Electron 可用性只读检查：本地 `node_modules/electron` 缺少可执行文件；读取模块时其安装器尝试下载二进制，但受限网络下 `fetch failed`，未安装依赖、未修改锁文件。因此未启动真实字幕窗口。
+- 验证保留既有 npm mirror 配置弃用警告和 Node `MODULE_TYPELESS_PACKAGE_JSON` 性能警告；均未导致校验或构建失败，本批次未扩大范围修复。
+
+### 未执行、风险与后续事项
+
+- 未执行真实 Electron 窗口的动画、窗口缩放、双语异步翻译插入和样式预览视觉冒烟；原因是当前 Electron 二进制缺失且用户未授权安装依赖。生产编译和纯行模型已验证，但跨平台视觉手感仍需安装完整运行时后检查。
+- 一次 ASR 更新若跨越多个视觉行，多个新行会在同一 500 ms 过渡中进入，而不是排队逐个播放；常规流式 partial 通常逐步增长。若后续要求严格逐行队列，可在不修改公共字幕/换行模型的情况下增加有界动画队列。
+- 异步翻译到达会按字幕顺序插入对应译文视觉行并可能触发滚动，这是与整句模式一致的原文/译文顺序；翻译关闭时不生成译文行。
+- 未访问麦克风、系统音频、Gummy、Fun-ASR、GLM、翻译或热词 API，没有产生费用，也未改变凭据处理。
+
+### 关键外部文档或技术决策来源
+
+- 用户提供的本地科大讯飞悬浮字幕保存页及资源：确认其固定可视高度、按实际行高计算溢出、约 500 ms 上移一行的行为；本项目没有复制供应商代码，而是用既有 Vue/精确换行架构实现等价语义。
+- 本地 `src/renderer/src/captions/visualLines.ts`、`ExactCaptionText.vue` 和 `CaptionViewport.vue`：决定复用已验证的 Chromium 实际换行结果，并让公共 `CaptionViewport` 作为显示方式唯一分派入口。
+- 本地 V3 配置 schema、parser 和 V2 迁移测试：决定升级到 V4 并显式串联 V2→V3→V4，避免通过缺字段默认值形成隐式长期迁移。
+- 根目录 `AGENTS.md`：决定配置变化必须版本化迁移、主进程校验、补齐中英日、同步 README/API/架构/用户文档、执行全量校验和构建并追加本记录。
+
 ## 2026-08-16 - V2.12.0 小版本与 macOS arm64 构建
 
 ### 用户授权与变更目标
@@ -3394,3 +3487,212 @@
 - 本地 `package.json` 与 `electron-builder.yml`：确认 macOS 产物版本来自 npm 包版本，DMG artifact 使用 `${name}-${version}.${ext}`。
 - Electron Builder 26 本地 `app-builder-lib` blockmap API：用于重新生成签名后 zip/DMG 的 blockmap，避免自动更新元数据指向签名前哈希。
 - 根目录 `AGENTS.md`：决定版本构建必须同步中英日文档、记录 `change.md`、避免系统环境修改、如实记录沙箱外打包步骤与未验证平台。
+
+## 2026-08-16 - V2.13.0 小版本与 macOS arm64 构建
+
+### 用户授权与变更目标
+
+- 用户明确要求“编译一下Mac版本 并更新小版本号”。
+- 目标：不修改系统环境，将版本从 `2.12.0` 提升到 `2.13.0`，并基于当前工作区生成 macOS arm64 应用与 Python 引擎。
+- 非目标：不安装或升级依赖，不提交、推送、创建 PR/Release，不执行 Windows、Linux、macOS x64 或 universal 打包，不调用真实音频或付费服务。
+- 修改前检查：完整阅读根目录 `AGENTS.md`，确认没有子目录规则；`git status --short --branch` 显示 `main...origin/main`，且已有 V4 配置、逐行滚动字幕、测试和文档等用户未提交修改。修改前阅读目标文件 diff，本批次保留全部既有内容，只更新可区分的版本字段并追加记录。
+
+### 变更类型
+
+- 构建、配置、文档。
+
+### 修改文件与原因
+
+- `package.json`、`package-lock.json`：根应用版本和 lock 根包版本更新为 `2.13.0`；依赖声明和解析版本不变。
+- `README.md`、`README_en.md`、`README_ja.md`：同步三语版本徽章、发布提示和平台说明，同时保留已有逐行滚动功能说明。
+- `docs/user-manual/zh.md`、`en.md`、`ja.md`：对应版本更新为 `v2.13.0`，保留已有 V4/滚动字幕内容。
+- `docs/engine-manual/zh.md`、`en.md`、`ja.md`：对应版本更新为 `v2.13.0`。
+- `src/renderer/index.html`、`src/renderer/src/components/EngineStatus.vue`：同步标题和关于界面的可见版本。
+- `docs/CHANGELOG.md`：新增 `v2.13.0` 发布条目；当前未发布的 V4 配置与逐行滚动说明归入该版本。
+- `change.md`：追加本次授权、文件范围、构建、验证、风险和回滚记录。
+- Git 忽略的生成产物：`engine/dist/main`、`dist/mac-arm64/Auto Caption.app`、`dist/Auto Caption-2.13.0-arm64-mac.zip`、`dist/auto-caption-2.13.0.dmg`、对应 `.blockmap` 与 `dist/latest-mac.yml`；签名后重新封装 ZIP/DMG 并重建更新元数据。
+
+### 修改前后行为
+
+- 修改前：应用版本、可见文本和上一批构建为 `2.12.0`。
+- 修改后：版本源、三语文档、可见文本、Info.plist、ZIP/DMG 和更新元数据统一为 `2.13.0`；本次产物包含构建前已有的 V4 配置与逐行滚动字幕修改。
+- 本批次本身不改变 Provider、字幕/翻译/热词协议、IPC、CLI 或数据结构；相关 V4 行为来自用户已有修改，未被覆盖。
+
+### 配置、IPC、协议、命令行、数据结构与依赖
+
+- 仅 npm 根包版本变化；没有新增、删除或升级依赖，也没有执行安装命令。
+- 本批次不修改持久化配置 schema、迁移、IPC 通道、Python stdout/TCP 协议、CLI 参数或共享数据结构。
+- `dist/latest-mac.yml` 仅同步最终签名后产物的文件名、大小、SHA-512 和时间戳。
+
+### 兼容性、迁移与回滚
+
+- 版本号更新无需额外配置迁移；当前工作区自身包含的 V3→V4 迁移随产物一同打包。
+- 仅实测 macOS arm64；未声明 Windows、Linux、macOS x64 或 universal 已验证。
+- 应用为本地 ad-hoc 签名，没有 Developer ID 签名和 notarization，外部分发首次打开可能收到 Gatekeeper 提示。
+- 回滚本批次可将上述版本文件恢复为 `2.12.0`，移除本条版本记录，并忽略/移除 `2.13.0` 生成产物；用户在任务开始前的未提交修改不属于回滚范围。
+
+### 验证记录
+
+- 版本一致性检查：`package.json`、`package-lock.json` 和 lock 根包均为 `2.13.0`；非历史版本入口没有旧 `v2.12.0` 残留。
+- `npm run verify`：通过；Node/Web TypeScript、ESLint、Node 68/68、Python 66/66 全部成功。
+- `npm run build`：通过；main、preload、renderer 分别转换 28、1、3272 个模块。
+- `PYINSTALLER_CONFIG_DIR=/private/tmp/auto-caption-pyinstaller-config ./.venv/bin/pyinstaller --clean --noconfirm ./main.spec`：通过，使用项目内 `.venv` 生成 arm64 引擎；保留 `pycparser.lextab/yacctab` hidden import 和 `@rpath/libomp.dylib` warning。
+- `./dist/main --help`：沙箱内因 semaphore 权限失败；沙箱外重跑退出码 0，输出完整帮助，冒烟通过。
+- `npx electron-builder --mac`：沙箱内因 `npmmirror.com` DNS 受限失败；沙箱外重跑通过。保留重复依赖引用以及无 Developer ID、跳过正式 Apple 签名 warning。
+- `file`：应用主程序和包内 Python 引擎均为 Mach-O 64-bit arm64；`plutil`：两个 Info.plist 版本字段均为 `2.13.0`。
+- `codesign --force --deep --sign -` 与 `codesign --verify --deep --strict --verbose=2`：通过，ad-hoc 签名有效。
+- `ditto`：通过，重新封装签名后 ZIP。`hdiutil create` 沙箱内以“设备未配置”失败，沙箱外重跑通过；保留 create 用法弃用提示。
+- Electron Builder 26 本地 `buildBlockMap`：通过，为最终 ZIP/DMG 重建 `.blockmap` 并同步 `latest-mac.yml`。
+- `hdiutil verify dist/auto-caption-2.13.0.dmg`：通过，checksum VALID；`unzip -tq 'dist/Auto Caption-2.13.0-arm64-mac.zip'`：通过，无压缩错误。
+- 最终 SHA-256：DMG `c86bb6aaa5da3553b774c38b48da77e1d57345050119da48d73ad97d87d5d54c`；ZIP `3ae21cec13cc2b806a0d7b5fcab57e57d7a8dad624988f2f4c44757b2f527abd`。
+- 最终大小：DMG 约 234 MB、ZIP 约 215 MB、Python 引擎约 83 MB；最终 `git diff --check` 与工作区审计在交付前执行。
+
+### 未执行、风险与后续事项
+
+- 未执行 Developer ID 签名、公证、远端发布、真实安装/GUI 动画、麦克风/系统音频或真实 Provider 测试；这些超出本次本地编译范围。
+- 未实机验证 Windows、Linux、macOS x64/universal；自动化和当前 macOS arm64 构建不能替代相应平台测试。
+- npm mirror 配置弃用、Node `MODULE_TYPELESS_PACKAGE_JSON`、PyInstaller hidden import/libomp、Electron Builder 重复依赖和 hdiutil 弃用提示仍存在，但未导致最终构建失败。
+- 当前产物有意包含工作区原有未提交 V4/滚动字幕修改；正式发布前仍需审阅整份 diff。
+
+### 关键外部文档或技术决策来源
+
+- 本地 `package.json`、`package-lock.json`、`electron-builder.yml` 与 `engine/main.spec`：确定版本来源、arm64 打包、资源路径和项目内虚拟环境构建方式。
+- Electron Builder 26 本地 blockmap API：用于让更新元数据对应签名后最终文件。
+- 根目录 `AGENTS.md`：决定保护用户修改、同步三语版本、记录失败与沙箱外重跑、不改系统环境/依赖并限定实际验证平台。
+
+## 2026-08-16 - 修复逐行滚动原文被译文顶掉及新行居中
+
+### 用户授权与变更目标
+
+- 用户在只读原因定位后明确要求修复两个逐行滚动问题：异步翻译到达后顶掉原文，以及新字幕行从中间开始显示。
+- 目标：原文和译文各自维护可见行额度并独立滚动；逐行模式的新行从左侧开始显示。
+- 非目标：不改变整句显示方式、精确换行算法、配置结构、字幕引擎、翻译服务、IPC、进程协议、版本号、依赖或现有 macOS 构建产物。
+- 修改前检查：复核根目录 `AGENTS.md`、`git status --short --branch`、逐行行模型/组件/测试/文档和目标文件既有 diff。工作区已有 V4 字幕方式及后续 `2.13.0` 构建变更，本批次保留这些用户修改，只修改可独立区分的滚动呈现文件并追加文档记录。
+
+### 变更类型
+
+- 修复、重构、测试、文档。
+
+### 修改文件与原因
+
+- `src/renderer/src/captions/rollingLines.ts`：把单一混合行数组改为 `RollingCaptionTracks`，分别返回 `source` 和 `translation` 行；稳定 key、精确测量输入和公共末尾 N 行选择函数保持不变。
+- `src/renderer/src/components/caption/RollingCaptionViewport.vue`：使用两个独立 `TransitionGroup`，分别计算原文和译文的最后 `lineNumber` 个视觉行；翻译轨道只在启用翻译时呈现；可见行由居中改为左对齐。
+- `tests/node/captionPresentation.test.mjs`：更新公共行模型测试；新增延迟翻译场景，验证原文和译文各自保留最后两行且互不占用额度；继续覆盖关闭翻译和通用行截取。
+- `docs/api-docs/caption-presentation.md`：说明公共滚动模型的双轨结构、独立行额度、独立动画和左侧起点。
+- `docs/user-manual/zh.md`、`en.md`、`ja.md`：同步说明逐行模式原文/译文独立滚动、异步译文不会顶掉原文及新行左对齐。
+- `docs/CHANGELOG.md`：在未发布部分记录两个显示修复。
+- `change.md`：追加本次授权、范围、行为、验证、兼容性和风险记录。
+
+### 修改前后行为
+
+- 修改前：行模型按每条字幕依次把原文和译文追加到同一个数组，组件再对整个数组执行一次 `slice(-lineNumber)`；异步译文位于数组尾部，因此会占用并顶掉原文的可见行。
+- 修改后：行模型返回原文、译文两个轨道，组件对每个轨道独立截取最后 `lineNumber` 行并在独立容器中执行动画；译文到达只改变译文轨道，不影响原文轨道的选中结果和 DOM 列表。
+- 修改前：滚动行占满宽度并使用 `text-align: center`，同一 partial 增长时以中心为锚点重新排版。
+- 修改后：滚动行使用 `text-align: left`，文本从左侧开始增长；未强制覆盖 Unicode 双向文本方向，字符内部仍交给浏览器 BiDi 规则处理。
+- 整句 `static` 路径未修改，仍保留原有居中显示行为。
+
+### 配置、IPC、协议、命令行、数据结构与依赖
+
+- 持久化配置 schema、默认值和 V2→V3→V4 迁移均无变化；`lineNumber` 在逐行模式下现在分别应用于原文和译文轨道。
+- Electron IPC、Python stdout NDJSON、本地 TCP command、字幕 partial/final 生命周期、翻译关联和 CLI 参数均无变化。
+- Renderer 内部公共行模型从单一 `RollingCaptionLine[]` 调整为 `RollingCaptionTracks`；该模块没有对外进程协议或第三方 API 使用者。
+- 没有新增、删除或升级依赖，没有执行安装命令。
+
+### 兼容性、迁移与回滚
+
+- 原文与译文字体、字号、颜色、字重、精确换行、稳定 key、500 ms 动画及减少动态效果支持保持不变。
+- 启用翻译时最多可同时显示 `lineNumber` 行原文和 `lineNumber` 行译文，总高度可能高于旧混合队列；这是按用户要求让两部分各自滚动的预期变化，字幕窗口现有高度观察器会继续同步内容高度。
+- Windows、macOS 和 Linux 均使用现有 Vue/Chromium 标准布局能力；本批次自动化只在当前 macOS arm64 开发环境执行，未声明其他平台 GUI 已实机验证。
+- 回滚本批次可恢复上述行模型、滚动组件、测试和文档文件中本条对应修改；无需迁移或回退用户配置。不得回退同一工作区已有的 V4、版本号或构建变更。
+
+### 验证记录
+
+- `npm run typecheck && node --experimental-strip-types --test tests/node/captionPresentation.test.mjs`：通过；Web/Node 类型检查通过，呈现模型测试 6/6，通过独立轨道、延迟翻译、翻译关闭和末尾行选择场景。
+- `npm run verify`：通过；Node/Web TypeScript、ESLint、Node 69/69、Python 66/66 全部成功。
+- `npm run build`：通过；包含完整类型检查，Electron main、preload、renderer 生产构建成功，分别转换 28、1、3272 个模块。
+- `git diff --check`：在代码和文档完成后于最终工作区审计执行，结果在交付中如实报告。
+- 校验保留既有 npm mirror 配置弃用警告和 Node `MODULE_TYPELESS_PACKAGE_JSON` 性能警告；没有测试或构建失败。
+
+### 未执行、风险与后续事项
+
+- 未执行真实字幕窗口、异步云端翻译、窗口缩放或样式预览的 GUI 冒烟；自动化已验证纯行模型隔离，CSS 左对齐和两个 `TransitionGroup` 的最终视觉效果仍需实际窗口确认。
+- 一次更新产生多条新视觉行时，同一轨道中的这些行仍会同时进入 500 ms 过渡；本次只修复两轨隔离和起点对齐，没有扩大为严格逐行动画队列。
+- 未访问麦克风、系统音频、识别/翻译/热词 API，没有产生费用、修改凭据或重新打包现有 `2.13.0` 产物。
+
+### 关键技术决策来源
+
+- 用户确认的预期语义：翻译和原文分为两部分，各自处理滚动；新行文字从左侧开始显示。
+- 本地 `RollingCaptionViewport.vue` 与 `rollingLines.ts` 原实现：确认问题来自混合数组共用一次尾部截取和可见行明确居中，而非字幕数据被删除或字符书写方向错误。
+- 根目录 `AGENTS.md`：决定保护已有未提交变更、同步中英日用户文档、补充回归测试、执行全量校验和构建并追加本记录。
+
+## 2026-08-16 - V2.14.0 小版本与 macOS arm64 构建
+
+### 用户授权与变更目标
+
+- 用户明确要求“编译一下Mac版本 并更新小版本号”。
+- 目标：在不修改系统环境的前提下，把版本从 `2.13.0` 提升到 `2.14.0`，并基于当前工作区生成 macOS arm64 应用和 Python 引擎。
+- 非目标：不安装/升级依赖，不提交、推送、创建 PR/Release，不执行 Windows、Linux、macOS x64/universal 构建，不调用真实音频或付费服务。
+- 修改前检查：完整阅读根目录 `AGENTS.md`，确认无子目录规则；`git status --short --branch` 显示已有 V4 配置、逐行滚动及原文/译文独立滚动修复等未提交修改。修改前阅读目标文件 diff，本批次保留所有既有修改，仅同步版本与构建记录。
+
+### 变更类型
+
+- 构建、配置、文档。
+
+### 修改文件与原因
+
+- `package.json`、`package-lock.json`：根应用和 lock 根包版本更新到 `2.14.0`；依赖声明与解析版本不变。
+- `README.md`、`README_en.md`、`README_ja.md`：同步三语版本徽章、发布提示和平台说明。
+- `docs/user-manual/zh.md`、`en.md`、`ja.md`：同步对应版本，同时保留 V4、滚动字幕和双轨修复说明。
+- `docs/engine-manual/zh.md`、`en.md`、`ja.md`：同步对应版本。
+- `src/renderer/index.html`、`src/renderer/src/components/EngineStatus.vue`：同步窗口标题和关于界面版本。
+- `docs/CHANGELOG.md`：新增 `v2.14.0` 条目，将当前未发布的双轨滚动修复纳入该版本。
+- `change.md`：追加本次完整构建记录。
+- Git 忽略产物：`engine/dist/main`、`dist/mac-arm64/Auto Caption.app`、`dist/Auto Caption-2.14.0-arm64-mac.zip`、`dist/auto-caption-2.14.0.dmg`、对应 `.blockmap` 与 `dist/latest-mac.yml`；签名后重封装并重建更新元数据。
+
+### 修改前后行为
+
+- 修改前：应用版本和上一批构建为 `2.13.0`。
+- 修改后：版本源、三语文档、可见版本、Info.plist、ZIP/DMG 和更新元数据统一为 `2.14.0`；产物包含任务开始前已有的 V4、逐行滚动和原文/译文独立滚动修复。
+- 本批次自身不改变配置、IPC、进程协议、CLI、Provider 或数据结构行为。
+
+### 配置、IPC、协议、命令行、数据结构与依赖
+
+- 仅 npm 根包版本变化；未新增、删除或升级依赖，未执行安装命令。
+- 本批次不修改持久化配置 schema/迁移、IPC、Python stdout/TCP 协议、CLI 参数或共享数据结构。
+- `dist/latest-mac.yml` 只同步最终签名后产物的路径、大小、SHA-512 和时间戳。
+
+### 兼容性、迁移与回滚
+
+- 版本更新无需新增配置迁移；工作区已有 V3→V4 迁移随应用打包。
+- 仅验证 macOS arm64；不声明其他平台或架构已验证。
+- 应用采用本地 ad-hoc 签名，无 Developer ID 和 notarization，外部分发可能触发 Gatekeeper。
+- 回滚本批次可把上述版本字段恢复为 `2.13.0`、移除本条发布/构建记录并忽略 `2.14.0` 产物；不得回退任务前已有用户修改。
+
+### 验证记录
+
+- 版本一致性：`package.json`、`package-lock.json` 与 lock 根包均为 `2.14.0`；非历史入口无旧 `v2.13.0`。
+- `npm run verify`：通过；Node/Web TypeScript、ESLint、Node 69/69、Python 66/66。
+- `npm run build`：通过；main、preload、renderer 分别转换 28、1、3272 个模块。
+- `PYINSTALLER_CONFIG_DIR=/private/tmp/auto-caption-pyinstaller-config ./.venv/bin/pyinstaller --clean --noconfirm ./main.spec`：通过，项目内 `.venv` 生成 arm64 引擎；保留 `pycparser.lextab/yacctab` hidden import 和 `@rpath/libomp.dylib` warning。
+- `./dist/main --help`：沙箱内因 semaphore 权限失败；沙箱外重跑退出码 0，CLI 冒烟通过。
+- `npx electron-builder --mac`：沙箱内因 `npmmirror.com` DNS 受限失败；沙箱外重跑通过；保留重复依赖引用以及缺少 Developer ID warning。
+- `file`：应用和包内引擎均为 Mach-O arm64；`plutil`：两个版本字段均为 `2.14.0`。
+- `codesign --force --deep --sign -` 及严格验证：通过，ad-hoc 签名有效。
+- `ditto` 重封装 ZIP：通过。`hdiutil create` 沙箱内“设备未配置”，沙箱外重跑通过；保留 create 弃用提示。
+- Electron Builder 本地 `buildBlockMap`：通过，最终 ZIP/DMG blockmap 与 `latest-mac.yml` 已同步。
+- `hdiutil verify`：DMG checksum VALID；`unzip -tq`：ZIP 无压缩错误。
+- SHA-256：DMG `d7a58cdcd27c0dc2a75cd528dad288392f01d75444b51614ca79a0f310a53065`；ZIP `e39f032babb4ec343c473ad43716b820032d28c321de5987ccf9ca5a021853cc`。
+- 大小：DMG 约 234 MB、ZIP 约 215 MB、引擎约 83 MB；最终 `git diff --check` 和状态审计在交付前执行。
+
+### 未执行、风险与后续事项
+
+- 未执行 Developer ID 签名、公证、发布、真实安装/GUI、音频或 Provider 冒烟；不在本次本地编译授权内。
+- 未验证 Windows、Linux、macOS x64/universal。
+- npm mirror 配置弃用、Node `MODULE_TYPELESS_PACKAGE_JSON`、PyInstaller hidden import/libomp、Electron Builder 重复依赖和 hdiutil 弃用提示仍存在，但未导致构建失败。
+- 产物有意包含工作区原有未提交功能和修复；正式发布前应审阅完整 diff。
+
+### 关键外部文档或技术决策来源
+
+- 本地 `package.json`、`package-lock.json`、`electron-builder.yml`、`engine/main.spec`：确定版本、arm64 目标和项目内虚拟环境构建方式。
+- Electron Builder 26 本地 blockmap API：确保更新元数据对应最终签名后文件。
+- 根目录 `AGENTS.md`：要求保护用户修改、同步三语、记录失败与沙箱外重跑、不改系统环境/依赖并限定验证平台。

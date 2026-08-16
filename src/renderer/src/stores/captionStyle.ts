@@ -9,6 +9,7 @@ export const useCaptionStyleStore = defineStore('captionStyle', () => {
     createDefaultConfig('').caption
   )
   const {
+    displayMode,
     lineNumber,
     lineBreak,
     fontFamily,
@@ -68,6 +69,7 @@ export const useCaptionStyleStore = defineStore('captionStyle', () => {
 
   return {
     captionConfig,
+    displayMode,
     lineNumber,
     lineBreak,
     fontFamily,

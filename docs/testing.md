@@ -60,8 +60,8 @@ npm run build
 Node.js 测试覆盖：
 
 - 中英日界面文案的递归键结构一致性，防止新增用户可见文本时遗漏任一语言。
-- V3 分层配置默认值、V2 显式迁移、严格版本拒绝、命名自定义引擎校验、Fun-ASR 热词约束和未知扩展字段保留。
-- 从 V3 `EngineConfig` 为 Gummy、Vosk、SOSV、GLM、Fun-ASR 及自定义引擎生成启动参数，并验证关闭翻译后不传翻译服务参数。
+- V4 分层配置默认值、V2/V3 显式迁移、显示方式校验、严格版本拒绝、命名自定义引擎校验、Fun-ASR 热词约束和未知扩展字段保留。
+- 从 V4 `EngineConfig` 为 Gummy、Vosk、SOSV、GLM、Fun-ASR 及自定义引擎生成启动参数，并验证关闭翻译后不传翻译服务参数。
 - Renderer 引擎目录的 Provider 唯一注册、能力驱动字段组合、嵌套草稿路径读写、条件可见性、Provider 启动要求、默认值归一化和语言默认值。
 - 字幕时间字符串解析、毫秒换算和当前跨日行为。
 - 命令行与配置对象中的 API Key 日志脱敏。
@@ -106,7 +106,7 @@ Python 测试覆盖：
 - 真实音频设备和平台驱动。
 - Electron 窗口、热词管理 IPC/子进程超时和浏览器交互集成。
 - Ant Design Vue 通用引擎字段控件的浏览器交互、视觉布局和键盘可访问性。
-- Electron `userData/config.json` 的真实磁盘读写、V2→V3 迁移和无版本配置回退的桌面端流程。
+- Electron `userData/config.json` 的真实磁盘读写、V2→V3→V4/V3→V4 迁移和无版本配置回退的桌面端流程。
 - 真实 Python/PyInstaller 子进程启动、超时和正常停止；POSIX 进程组强杀已用临时 Node 父子进程集成验证，但尚未使用 PyInstaller 包和 Windows/Linux 实机验证。
 - Electron 与真实 Python 子进程之间的端到端 Socket/stdio 集成。
 - 真实 Vosk/SOSV 模型文件以及实际 Gummy、GLM、Fun-ASR 或其他在线 Provider；阿里云远端热词表的 list/create/update/delete 也未执行。

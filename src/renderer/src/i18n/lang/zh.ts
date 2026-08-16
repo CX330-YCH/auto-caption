@@ -223,6 +223,12 @@ export default {
     "applyStyle": "应用样式",
     "cancelChange": "取消更改",
     "resetStyle": "恢复默认",
+    "displayMode": "显示方式",
+    displayModes: {
+      "static": "整句显示",
+      "rolling": "逐行滚动"
+    },
+    "rollingWrapHint": "逐行滚动始终按窗口实际宽度精确换行；字幕行数表示保留的视觉行数。",
     "lineNumber": "字幕行数",
     "longCaption": "长字幕",
     "fontFamily": "字体族",
