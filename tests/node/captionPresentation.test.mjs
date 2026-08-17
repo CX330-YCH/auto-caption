@@ -15,7 +15,8 @@ import {
   composeCaptionTrack,
   selectCaptionTrackWindow,
   selectCaptionTrackFromAnchor,
-  selectRollingCaptionLines
+  selectRollingCaptionLines,
+  shouldJustifyRollingLine
 } from '../../src/renderer/src/captions/captionTracks.ts'
 
 test('segments Unicode text without splitting surrogate pairs or combining marks', () => {
@@ -121,19 +122,22 @@ test('maps measured rows to stable caption offsets and line phases', () => {
     key: row.key,
     captionId: row.captionId,
     text: row.text,
-    phase: row.phase
+    phase: row.phase,
+    breakKind: row.breakKind
   })), [
     {
       key: 'source:1:0',
       captionId: '1',
       text: 'first second ',
-      phase: 'partial'
+      phase: 'partial',
+      breakKind: 'soft'
     },
     {
       key: 'source:2:7',
       captionId: '2',
       text: 'partial',
-      phase: 'partial'
+      phase: 'partial',
+      breakKind: 'end'
     }
   ])
 
@@ -141,6 +145,64 @@ test('maps measured rows to stable caption offsets and line phases', () => {
     selectRollingCaptionLines(rows, 2).map(row => row.text),
     ['first second ', 'partial']
   )
+})
+
+test('distinguishes soft wrapping, explicit line breaks, and the track end', () => {
+  const track = composeCaptionTrack(buildCaptionTrackSegments([
+    caption('1', '第一行自动折行后继续。', ''),
+    caption('2', '第二句。', '')
+  ], 'source'), 'sentence')
+
+  const rows = buildRollingCaptionLines(track, [
+    { text: '第一行自动折行', start: 0, end: 7 },
+    { text: '后继续。', start: 7, end: 11 },
+    { text: '第二句。', start: 12, end: 16 }
+  ])
+
+  assert.deepEqual(
+    rows.map(row => ({ text: row.text, breakKind: row.breakKind })),
+    [
+      { text: '第一行自动折行', breakKind: 'soft' },
+      { text: '后继续。', breakKind: 'hard' },
+      { text: '第二句。', breakKind: 'end' }
+    ]
+  )
+})
+
+test('keeps explicit empty lines out of soft-wrap justification', () => {
+  const track = composeCaptionTrack(buildCaptionTrackSegments([
+    caption('1', 'first\n\nlast', '')
+  ], 'source'), 'continuous')
+
+  const rows = buildRollingCaptionLines(track, [
+    { text: 'first', start: 0, end: 5 },
+    { text: '', start: 6, end: 6 },
+    { text: 'last', start: 7, end: 11 }
+  ])
+
+  assert.deepEqual(
+    rows.map(row => row.breakKind),
+    ['hard', 'hard', 'end']
+  )
+})
+
+test('justifies only complete soft-wrapped rows with multiple graphemes', () => {
+  assert.equal(shouldJustifyRollingLine({
+    text: '完整行',
+    breakKind: 'soft'
+  }), true)
+  assert.equal(shouldJustifyRollingLine({
+    text: '👩‍💻',
+    breakKind: 'soft'
+  }), false)
+  assert.equal(shouldJustifyRollingLine({
+    text: '短句',
+    breakKind: 'hard'
+  }), false)
+  assert.equal(shouldJustifyRollingLine({
+    text: 'current partial row',
+    breakKind: 'end'
+  }), false)
 })
 
 test('classifies tail changes separately from historical translation backfill', () => {

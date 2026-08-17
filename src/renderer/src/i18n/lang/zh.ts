@@ -233,7 +233,7 @@ export default {
       "sentence": "跟随断句换行",
       "continuous": "不跟随断句换行"
     },
-    "rollingWrapHint": "逐行滚动始终按窗口实际宽度精确换行；原文和翻译同时使用所选断句方式，并各自保留指定的视觉行数。",
+    "rollingWrapHint": "逐行滚动在对称安全边距内精确换行；自动折出的完整行两端对齐，断句行和末行保持左对齐。原文和翻译各自保留指定的视觉行数。",
     "lineNumber": "字幕行数",
     "longCaption": "长字幕",
     "fontFamily": "字体族",

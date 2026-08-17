@@ -70,7 +70,7 @@ const viewportStyle = computed(() => ({
   box-sizing: border-box;
   width: 100%;
   min-width: 0;
-  padding: 10px 0;
+  padding: 10px;
 }
 
 .caption-viewport.draggable {

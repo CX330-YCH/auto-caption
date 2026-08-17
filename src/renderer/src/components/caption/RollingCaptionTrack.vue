@@ -10,8 +10,10 @@
         v-for="row in visibleRows"
         :key="row.key"
         class="rolling-line"
+        :class="{ justified: shouldJustifyRollingLine(row) }"
         :data-phase="row.phase"
         :data-kind="row.kind"
+        :data-break-kind="row.breakKind"
         :style="lineStyle"
       >{{ row.text || '\u00a0' }}</div>
     </TransitionGroup>
@@ -46,6 +48,7 @@ import {
   selectCaptionTrackFromAnchor,
   selectCaptionTrackWindow,
   selectRollingCaptionLines,
+  shouldJustifyRollingLine,
   type CaptionTrackKind,
   type CaptionTrackAnchor,
   type CaptionTrackSegment,
@@ -253,6 +256,11 @@ function sameAnchor(
   overflow-wrap: anywhere;
   word-break: normal;
   line-break: auto;
+}
+
+.rolling-line.justified {
+  text-align: justify;
+  text-align-last: justify;
 }
 
 .rolling-line-move,

@@ -50,10 +50,12 @@ interface CaptionItem {
 ## 两种内置方式
 
 - `static`：保留原有按最近字幕条数显示的方式；`lineBreak` 关闭时保持单行并显示文本尾部。
-- `rolling`：始终使用精确换行并从左侧开始显示；原文和译文各自保留 `lineNumber` 个视觉行并独立滚动，异步译文不会占用原文行额度；同一 partial 行的文字修订只原地更新。
+- `rolling`：始终使用精确换行；自动折出的完整行两端对齐，显式断句行和轨道末行保持左对齐；原文和译文各自保留 `lineNumber` 个视觉行并独立滚动，异步译文不会占用原文行额度；同一 partial 行的文字修订只原地更新。
+- 公共 `CaptionViewport` 在四边提供 `10px` 安全边距。滚动轨道的隐藏测量镜像与显示行共享扣除边距后的内容宽度，字幕窗口和样式预览不会因边距产生不同换行。
+- `RollingCaptionLine.breakKind` 区分 `soft`（相邻视觉行偏移连续）、`hard`（中间消耗显式换行符）和 `end`（轨道末行）。只有包含多个 Unicode grapheme 的 `soft` 行应用 `text-align-last: justify`，避免把单字符行、短句、空行和实时增长的末行强行拉伸。
 - `captionBoundaryMode: sentence`：每个规范化 `CaptionItem` 边界插入硬换行，保持原有逐句呈现。
 - `captionBoundaryMode: continuous`：字幕边界使用语言感知连接符而不是硬换行；下一条字幕利用上一行剩余宽度。原文和译文同时切换，但仍是两个独立轨道。
 - 轨道从最近 segment 开始测量，不足 `lineNumber + 2` 个安全视觉行时向前扩展；达到目标后以实测行首锚点裁剪。每轨最多测量 256 个 segment 和 16384 个 UTF-16 code unit，避免字幕记录增长导致隐藏 DOM 无界。
 - 显示与断句方式属于持久化样式配置；V3→V4 默认 `static`，V4→V5 默认 `sentence`，升级不会改变行为。
-- 工具栏采用绝对定位覆盖层，不参与字幕测量宽度；鼠标离开后自动隐藏，进入或键盘聚焦时显示。
+- 工具栏采用绝对定位覆盖层，不参与字幕测量宽度或对称安全边距；鼠标离开后自动隐藏，进入或键盘聚焦时显示。
 - 生命周期协议和旧引擎兼容规则以 [字幕引擎进程协议](./caption-engine.md) 为准；IPC 字段以 [Electron IPC API](./electron-ipc.md) 为准。

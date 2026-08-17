@@ -3,7 +3,7 @@ import type {
   CaptionItem,
   CaptionPhase
 } from '../../../shared/types'
-import type { VisualLineSlice } from './visualLines'
+import { segmentGraphemes, type VisualLineSlice } from './visualLines.ts'
 
 export type CaptionTrackKind = 'source' | 'translation'
 
@@ -44,7 +44,10 @@ export interface RollingCaptionLine {
   end: number
   text: string
   phase: CaptionPhase
+  breakKind: RollingLineBreakKind
 }
+
+export type RollingLineBreakKind = 'soft' | 'hard' | 'end'
 
 export type CaptionTrackMutation =
   | 'unchanged'
@@ -199,9 +202,10 @@ export function buildRollingCaptionLines(
   track: ComposedCaptionTrack,
   visualLines: readonly VisualLineSlice[]
 ): RollingCaptionLine[] {
-  return visualLines.map(line => {
+  return visualLines.map((line, index) => {
     const anchor = findLineAnchor(track.spans, line.start)
     const phase = resolveLinePhase(track.spans, line.start, line.end)
+    const nextLine = visualLines[index + 1]
     const captionOffset = anchor === undefined
       ? line.start
       : anchor.captionOffset + Math.max(0, line.start - anchor.start)
@@ -214,9 +218,21 @@ export function buildRollingCaptionLines(
       start: line.start,
       end: line.end,
       text: line.text,
-      phase
+      phase,
+      breakKind: nextLine === undefined
+        ? 'end'
+        : nextLine.start === line.end
+          ? 'soft'
+          : 'hard'
     }
   })
+}
+
+export function shouldJustifyRollingLine(
+  line: Pick<RollingCaptionLine, 'text' | 'breakKind'>
+): boolean {
+  return line.breakKind === 'soft' &&
+    segmentGraphemes(line.text.trim()).length > 1
 }
 
 export function captionTrackAnchorAtOffset(

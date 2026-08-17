@@ -3,7 +3,7 @@
     <h1 align="center">auto-caption</h1>
     <p>Auto Caption はクロスプラットフォームのリアルタイム字幕表示ソフトウェアです。</p>
     <p>
-      <a href="https://github.com/HiMeditator/auto-caption/releases"><img src="https://img.shields.io/badge/release-2.15.0-blue"></a>
+      <a href="https://github.com/HiMeditator/auto-caption/releases"><img src="https://img.shields.io/badge/release-2.16.0-blue"></a>
       <a href="https://github.com/HiMeditator/auto-caption/issues"><img src="https://img.shields.io/github/issues/HiMeditator/auto-caption?color=orange"></a>
       <img src="https://img.shields.io/github/languages/top/HiMeditator/auto-caption?color=royalblue">
       <img src="https://img.shields.io/github/repo-size/HiMeditator/auto-caption?color=green">
@@ -14,7 +14,7 @@
         | <a href="./README_en.md">English</a>
         | <b>日本語</b> |
     </p>
-    <p><i>v2.15.0 がリリースされました。macOS arm64 ビルドを含みます...</i></p>
+    <p><i>v2.16.0 がリリースされました。macOS arm64 ビルドを含みます...</i></p>
 </div>
 
 ![](./assets/media/main_ja.png)
@@ -45,7 +45,7 @@ https://github.com/user-attachments/assets/9c188d78-9520-4397-bacf-4c8fdcc54874
 - ローカルのOllamaモデル、クラウド上のOpenAI互換モデル、またはクラウド上のGoogle翻訳APIを呼び出して翻訳を行うことをサポートしています
 - クロスプラットフォーム（Windows、macOS、Linux）、多言語インターフェース（中国語、英語、日本語）対応
 - 豊富な字幕スタイル設定（フォント、フォントサイズ、フォント太さ、フォント色、背景色など）
-- 従来の文単位表示を保持するか、文境界または連続レイアウトを選べる正確な行単位スクロール字幕へ切り替え可能
+- 従来の文単位表示を保持するか、左右対称の安全余白、完成した自動折り返し行だけの両端揃え、文境界または連続レイアウトを備えた正確な行単位スクロール字幕へ切り替え可能
 - 柔軟な字幕エンジン選択（阿里云Gummyクラウドモデル、GLM-ASRクラウドモデル、ローカルVoskモデル、ローカルSOSVモデル、または独自にモデルを開発可能）
 - 多言語認識と翻訳（下記「⚙️ 字幕エンジン説明」参照）
 - 字幕記録表示とエクスポート（`.srt` および `.json` 形式のエクスポートに対応）
@@ -53,7 +53,7 @@ https://github.com/user-attachments/assets/9c188d78-9520-4397-bacf-4c8fdcc54874
 
 ## 📖 基本使い方
 
-> ⚠️ 注意：現在の v2.15.0 は Windows と macOS arm64 ビルドを提供しています。Linux はソースまたは既存のビルド手順での検証が必要です。
+> ⚠️ 注意：現在の v2.16.0 は Windows と macOS arm64 ビルドを提供しています。Linux はソースまたは既存のビルド手順での検証が必要です。
 
 このソフトウェアは Windows、macOS、Linux プラットフォームに対応しています。テスト済みのプラットフォーム情報は以下の通りです：
 

@@ -234,7 +234,7 @@ export default {
       "sentence": "Break at Sentences",
       "continuous": "Continuous Layout"
     },
-    "rollingWrapHint": "Line Rolling always wraps at the actual window width. Source and translation use the selected boundary mode together and retain their visual rows independently.",
+    "rollingWrapHint": "Line Rolling wraps exactly within symmetric safe margins. Complete soft-wrapped rows are justified; sentence breaks and final rows stay left-aligned. Source and translation retain their visual rows independently.",
     "longCaption": "LongCaption",
     "fontFamily": "Font Family",
     "fontColor": "Font Color",

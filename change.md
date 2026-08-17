@@ -3852,3 +3852,148 @@
 - 用户明确授权：编译 Mac 版本并更新小版本号。
 - 根目录 `AGENTS.md`：要求保护已有修改、三语版本一致、使用项目环境、如实记录构建和失败、不修改系统环境或依赖，并限定实际验证平台。
 - 项目现有 `main.spec` 与 `electron-builder.yml`：作为 Python 引擎和 macOS arm64 打包配置的单一来源。
+
+## 2026-08-16 - 字幕增加对称安全边距和选择性两端对齐
+
+### 用户授权与变更目标
+
+- 用户先要求针对截图中的字幕左右视觉距离进行技术分析，随后要求生成“对称安全边距 + 仅自动折行的完整行两端对齐”完整计划，并最终明确授权“实施设计”。
+- 目标：字幕公共视口四边保留 `10px` 安全边距；逐行滚动只对 Chromium 因宽度不足自动折出的完整行进行两端对齐，显式断句行、轨道末行、空行和单 grapheme 行不强制拉伸；原文、译文、字幕窗口和样式预览共用相同行为。
+- 非目标：不新增用户配置开关，不调整右侧覆盖式工具栏宽度，不修改静态模式的居中语义，不改识别、翻译、IPC、进程协议或 Python 引擎，不安装/升级依赖，不打包发布，不提交或推送 Git。
+- 修改前完整阅读根目录 `AGENTS.md`，确认目标目录没有更具体规则；`git status --short --branch` 为 `main...origin/main`，工作区干净，目标文件没有用户未提交差异。
+
+### 变更类型
+
+- 功能、测试、文档。
+
+### 修改文件与原因
+
+- `src/renderer/src/components/caption/CaptionViewport.vue`：把仅上下 `10px` 的内边距改为四边 `10px`，让静态/滚动、字幕窗口/设置预览共享对称内容边界。
+- `src/renderer/src/captions/captionTracks.ts`：为 `RollingCaptionLine` 增加 Renderer 内部 `breakKind: soft | hard | end`；通过相邻视觉行的 UTF-16 偏移连续性区分自动折行、显式换行和轨道末行；增加基于 Unicode grapheme 数量的选择性对齐判断。
+- `src/renderer/src/components/caption/RollingCaptionTrack.vue`：把换行类型输出为 DOM data 属性，只给包含多个 grapheme 的 `soft` 行应用 `text-align: justify` 与 `text-align-last: justify`，其余行沿用左对齐。
+- `tests/node/captionPresentation.test.mjs`：覆盖软折行、显式换行、轨道末行、连续空行、partial 行阶段、单个 emoji grapheme 和选择性对齐判断。
+- `src/renderer/src/i18n/lang/zh.ts`、`en.ts`、`ja.ts`：同步更新滚动模式提示，说明安全边距、选择性两端对齐及末行左对齐。
+- `README.md`、`README_en.md`、`README_ja.md`：在三语功能清单中同步新的滚动字幕呈现语义。
+- `docs/user-manual/zh.md`、`en.md`、`ja.md`：同步三语用户行为、工具栏覆盖层限制及两种断句模式下的对齐规则。
+- `docs/api-docs/caption-presentation.md`：记录公共安全边距、`breakKind` 判定、grapheme 限制和隐藏测量镜像的宽度契约。
+- `docs/CHANGELOG.md`：在未发布部分记录本次字幕呈现行为变化。
+- `change.md`：追加本次授权、范围、文件、行为、验证、失败尝试、兼容性、限制和回滚记录。
+
+### 修改前后行为
+
+- 修改前：公共字幕视口只有上下 `10px`，左右为 `0`；滚动行统一左对齐，自动换行不足一个字符或单词的剩余宽度全部留在右侧。
+- 修改后：公共字幕视口四边均为 `10px`；隐藏测量镜像和最终显示行都在扣除相同安全边距后的内容宽度中排版。自动折出的完整行用浏览器原生两端对齐分配剩余宽度，显式断句行和当前轨道末行继续左对齐。
+- 自动折行只依据现有 Chromium `Range.getClientRects()` 测量结果及相邻行偏移，不引入固定字符数、平均字宽或重复换行算法。一个 emoji ZWJ 序列等单个 grapheme 不会被错误视为多个字符并强制对齐。
+- 原文和译文继续作为独立轨道测量、截取和滚动；partial 尾行继续原位更新，只有它形成后续视觉行后，已完成的上一软折行才进入两端对齐。
+- 静态模式仍使用既有居中/单行尾部行为，只增加对称安全边距。右侧 `40px` 工具栏仍为绝对定位覆盖层，不预留永久排版宽度。
+
+### 配置、IPC、协议、命令行、数据结构与依赖
+
+- 持久化配置仍为 V5，没有新增字段、默认值、校验或迁移；旧配置可直接沿用。
+- IPC 名称和数据、Python stdout NDJSON、本地 TCP command、自定义引擎协议、字幕 partial/final、翻译关联、CLI 参数和凭据处理均无变化。
+- `RollingCaptionLine.breakKind` 和选择性对齐函数仅属于 Renderer 内部显示数据结构，不跨 IPC 或持久化边界。
+- 没有新增、删除或升级 npm/pip 依赖，没有修改锁文件，没有访问外部 API。
+
+### 兼容性、迁移与回滚
+
+- 实现使用项目既有 Chromium CSS、Unicode `Intl.Segmenter` fallback 路径和 Vue 组件，不增加平台专属分支；源码和生产构建在当前 macOS arm64 环境验证，未声明 Windows、Linux 或其他 macOS 架构已完成 GUI 实机验证。
+- 左右边距使每行可用宽度比修改前减少 `20px`，处于临界宽度的字幕可能提前折行；这是提供对称安全边距的预期行为。
+- 浏览器两端对齐作用于字符排版盒，字体自身左右侧承仍可能产生少量黑色笔画视觉差异；最大文字阴影也可能超过 `10px` 安全区。工具栏显示时仍可能覆盖其下文字，这两项均未扩展为动态边距或工具栏重构。
+- 回滚时恢复上述 Renderer、测试、三语说明和文档文件并删除本条记录即可；没有配置降级或远端资源回滚，且不得回退任务开始前的 V5、双轨滚动或其他历史修改。
+
+### 验证记录
+
+- 首次 `npm run test:node`（加入软/硬/末行分类后）：通过，Node `75/75`。
+- `npm run typecheck`：通过，Node 与 Web TypeScript 均无错误。
+- `npm run lint`：通过，无 ESLint 错误。
+- 首次 `npm run verify`（加入单 grapheme 保护前）：通过；Node `75/75`、Python `66/66`，类型检查和 lint 成功。
+- `npm run build`（加入单 grapheme 保护前）：通过；Electron main、preload、renderer 分别转换 28、1、3275 个模块，构建 CSS 包含 `.rolling-line.justified` 的 `text-align-last: justify` 和 `.caption-viewport` 的 `padding: 10px`。
+- 加入单 grapheme 保护后首次 `npm run test:node && npm run typecheck:web`：失败；运行时从 `captionTracks.ts` 导入 `visualLines` 缺少 `.ts` 扩展，Node ESM 报 `ERR_MODULE_NOT_FOUND`，因此后续 Web 类型检查未执行。修正为显式 `./visualLines.ts` 后重跑通过，Node `76/76`，Web 类型检查成功。
+- Renderer-only 开发服务器首次在沙箱内因 `listen EPERM ::1:5173` 失败；获准在沙箱外重跑后服务启动，但项目本地 Electron 运行二进制不可用并报 `Electron uninstall`，进程退出。
+- 尝试使用受控本地浏览器加载不传输数据的内嵌 Chromium 排版测试页时，被浏览器 URL 安全策略拒绝；遵循工具约束，没有改用其他浏览器、CDP 或绕过策略。
+- 最终 `npm run verify`：通过；Node/Web TypeScript、ESLint、Node `76/76`、Python `66/66` 全部成功。
+- 最终 `npm run build`：通过；Electron main、preload、renderer 分别转换 28、1、3275 个模块，生成的 Renderer CSS 保留选择性两端对齐和四边 `10px` 安全边距。
+- 最终 `git diff --check`：通过；变更范围审计只包含本批次 16 个 Renderer、测试和文档记录文件，未包含 `out/`、`dist/`、密钥、锁文件或无关格式化；`git status --short --branch` 显示分支 `main...origin/main` 及上述预期修改。
+- 验证过程持续出现项目既有 npm mirror 配置弃用警告及 Node `MODULE_TYPELESS_PACKAGE_JSON` 性能警告；没有修改无关 npm 配置。
+
+### 未执行、风险与后续事项
+
+- 未完成真实 Electron GUI、Windows/Linux/macOS 字幕窗口视觉截图回归；原因是本地 Electron 运行二进制不可用且受控浏览器禁止内嵌测试 URL。生产 CSS、纯函数分类、类型、lint、全量单元测试和构建可验证代码契约，但正式发布前仍建议在 Windows 主发布平台用中文、英文、混合语言、1–4 行、两种断句模式和窗口缩放做一次人工视觉确认。
+- 未运行真实麦克风/系统音频、云端识别/翻译或付费 API；此次变更只涉及 Renderer 排版，不需要这些外部调用。
+- 未执行 PyInstaller 或 electron-builder 安装包构建；普通生产构建足以覆盖本次源码编译，平台打包不在用户授权范围内。
+- 英文两端对齐主要扩展词间空格，中文主要使用字符间机会；很少的可分配间隙可能产生明显间距，但末行、硬换行和单 grapheme 已明确排除。
+
+### 关键外部文档或技术决策来源
+
+- 用户提供的字幕窗口截图和后续澄清：目标是第一行首尾字形相对边框的视觉距离，不是后续短行的普通右侧余量。
+- 用户批准的完整设计：对称安全边距 + 仅自动折行的完整行两端对齐；固定应用于滚动模式，不新增配置开关。
+- CSS 排版决策：每个视觉行是独立 `<div>`，因此选择性行同时使用 `text-align: justify` 和 `text-align-last: justify`；显式换行和轨道末行不加该 class。
+- 项目既有 `visualLines.ts`/`captionTracks.ts`：继续以 Chromium 实测视觉行和 UTF-16 偏移为单一换行事实来源。
+- 根目录 `AGENTS.md`：要求三语一致、保持跨平台兼容、完整记录失败和未执行验证、不扩大配置/协议/依赖范围，并在同一批次追加 `change.md`。
+
+## 2026-08-16 - V2.16.0 macOS arm64 构建
+
+### 用户授权与变更目标
+
+- 用户明确要求编译 Mac 版本并更新小版本号；本批次将 `2.15.0` 更新为 `2.16.0`，使用项目内既有 `.venv` 编译 Python 引擎，并基于当前工作区生成 macOS arm64 应用、ZIP 和 DMG。
+- 非目标：不安装、删除或升级依赖，不修改系统 Python、Node、PATH 或其他系统环境，不发布 Release，不提交或推送 Git，不修改本批次之外的功能。
+- 修改前完整阅读根目录 `AGENTS.md`、确认无子目录规则，执行 `git status --short --branch` 并阅读版本目标文件现有 diff。工作区已有未提交的字幕四边安全边距和选择性两端对齐功能；本次完整保留，因此最终产物包含该功能。
+
+### 变更类型
+
+- 构建、配置、文档。
+
+### 修改文件与原因
+
+- `package.json`、`package-lock.json`：将应用和锁文件根包版本从 `2.15.0` 更新为 `2.16.0`；依赖及其约束未变化。
+- `src/renderer/index.html`、`src/renderer/src/components/EngineStatus.vue`：同步窗口标题和关于页可见版本。
+- `README.md`、`README_en.md`、`README_ja.md`：在保留既有字幕功能说明修改的基础上，同步中英日 README 版本和发布提示。
+- `docs/user-manual/zh.md`、`docs/user-manual/en.md`、`docs/user-manual/ja.md`：在保留既有安全边距说明修改的基础上，同步三语用户手册版本。
+- `docs/engine-manual/zh.md`、`docs/engine-manual/en.md`、`docs/engine-manual/ja.md`：同步三语引擎手册版本。
+- `docs/CHANGELOG.md`：新增 `v2.16.0` 条目，将当前未发布的字幕安全边距/选择性两端对齐功能归入该版本，并记录版本同步和 macOS 构建。
+- `change.md`：追加本批次授权、范围、构建、验证、兼容性和风险记录。
+- `engine/dist/main`、`dist/mac-arm64/Auto Caption.app`、`dist/Auto Caption-2.16.0-arm64-mac.zip`、`dist/auto-caption-2.16.0.dmg` 及对应 blockmap/`latest-mac.yml`：由既有 PyInstaller/electron-builder 配置和系统打包工具生成或刷新，位于 Git 忽略的构建目录，不作为源文件提交。
+
+### 修改前后行为
+
+- 修改前：源码、应用界面和三语文档显示 `2.15.0`，没有本批次的 `2.16.0` macOS 产物。
+- 修改后：版本统一为 `2.16.0`；产物的 `CFBundleShortVersionString` 和 `CFBundleVersion` 均为 `2.16.0`，Electron 主程序和内置 Python 引擎均为 arm64。
+- 本批次没有改变业务运行逻辑；应用基于当前工作区构建，因此包含此前未提交的字幕四边 `10px` 安全边距和选择性两端对齐功能。
+
+### 配置、IPC、协议、命令行、数据结构与依赖
+
+- 本批次没有新增或修改配置字段、迁移、IPC、Python/Electron 进程协议、CLI 参数或业务数据结构。
+- 未执行 npm/pip 安装或升级命令；`package-lock.json` 仅修改根包版本。PyInstaller 使用 `engine/.venv`，临时配置目录为 `/private/tmp/auto-caption-pyinstaller-config`，没有修改系统环境。
+- electron-builder 使用项目锁定的 Electron `43.4.0` 和现有依赖，仅在沙箱 DNS 限制后按授权访问项目配置的下载镜像。
+
+### 兼容性、迁移与回滚
+
+- 实际构建及验证平台仅为 macOS arm64；未声明 macOS x64/universal、Windows 或 Linux 产物已验证。
+- 应用使用 ad-hoc 签名，没有 Apple Developer ID 和 TeamIdentifier，未执行 notarization；正式公开分发仍应使用 Developer ID 签名并完成 Apple 公证。
+- 回滚本批次可恢复上述版本源文件和文档到 `2.15.0`，并移除忽略目录中的 `2.16.0` 构建产物；不得回退本任务开始前已有的字幕呈现修改。
+
+### 验证记录
+
+- `npm run verify`：通过；Node/Web TypeScript、ESLint、Node `76/76`、Python `66/66` 全部成功。
+- `npm run build`：通过；Electron main、preload、renderer 分别转换 28、1、3275 个模块。
+- `PYINSTALLER_CONFIG_DIR=/private/tmp/auto-caption-pyinstaller-config ./.venv/bin/pyinstaller --clean --noconfirm ./main.spec`：通过，生成 arm64 `engine/dist/main`；报告 `pycparser.lextab`/`yacctab` 隐式导入缺失和 numba `@rpath/libomp.dylib` 未解析警告，但未阻止构建。
+- `engine/dist/main --help`：沙箱内因 `semctl: Operation not permitted` 失败；按授权在沙箱外重跑后退出码 0，并输出完整 CLI 帮助。
+- `npx electron-builder --mac`：沙箱内因 `npmmirror.com` DNS 受限失败；按授权联网重跑后成功。构建器报告重复依赖引用，并因没有 Developer ID 跳过发布签名。
+- `file` 和 `plutil`：通过；主程序和内置引擎均为 Mach-O arm64，Info.plist 两个版本字段均为 `2.16.0`。
+- `codesign --force --deep --sign -` 与 `codesign --verify --deep --strict --verbose=2`：通过；最终应用为 ad-hoc 签名，TeamIdentifier 未设置。
+- `unzip -tq dist/Auto\ Caption-2.16.0-arm64-mac.zip`：通过，无压缩数据错误。
+- `hdiutil verify dist/auto-caption-2.16.0.dmg`：通过，磁盘映像校验有效。沙箱内重建首次因“设备未配置”失败，按授权在沙箱外重跑成功；工具同时报告旧 `hdiutil create` 语法弃用警告。
+- ZIP 大小 `224959119` 字节，SHA-256 `9ae1261f4a42cb781799752803ee2c98d0f26c74d6552f506a0a89bb3d7a6765`；DMG 大小 `244926455` 字节，SHA-256 `1f3d5e963e12adf4abf5d9fd9096f3d47e3938894a443b623da909c03ce3376d`。已按最终签名产物重建 blockmap，并同步 `latest-mac.yml` 的 SHA-512、大小和日期。
+- npm 持续打印项目既有镜像配置弃用警告和 Node `MODULE_TYPELESS_PACKAGE_JSON` 性能警告；不影响测试或构建结果。
+
+### 未执行、风险与后续事项
+
+- 未执行 Developer ID 发布签名、Apple notarization、真实 Electron GUI/音频设备、云端识别翻译、付费 API 或自动更新端到端测试。
+- 未验证其他 CPU 架构和操作系统；ZIP 约 215 MiB，DMG 约 234 MiB，均为本机 arm64 产物。
+- PyInstaller 的 `libomp` 警告可能影响实际使用 numba OpenMP 后端的路径；CLI 启动自检已通过，但正式发布前建议进行真实音频引擎和字幕窗口人工回归。
+
+### 关键外部文档或技术决策来源
+
+- 用户明确授权：编译 Mac 版本并更新小版本号。
+- 根目录 `AGENTS.md`：要求保留用户修改、三语同步、使用项目环境、如实记录失败、不改系统环境或依赖，并明确实际验证平台。
+- 项目现有 `main.spec` 与 `electron-builder.yml`：作为 Python 引擎和 macOS arm64 打包配置来源。
