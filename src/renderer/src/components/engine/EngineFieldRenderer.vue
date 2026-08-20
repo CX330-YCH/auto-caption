@@ -1,25 +1,29 @@
 <template>
-  <div class="input-item">
-    <a-popover v-if="field.helpKey" placement="right">
-      <template #content>
-        <p class="label-hover-info">{{ $t(field.helpKey) }}</p>
-        <p v-if="field.helpLink">
-          <a :href="field.helpLink" target="_blank">
-            {{ field.helpLinkLabelKey ? $t(field.helpLinkLabelKey) : field.helpLink }}
-          </a>
-        </p>
-      </template>
-      <span class="input-label info-label" :style="{ color: accentColor }">
-        {{ $t(field.labelKey) }}
-      </span>
-    </a-popover>
-    <span v-else class="input-label">{{ $t(field.labelKey) }}</span>
+  <SettingsField
+    :label="$t(field.labelKey)"
+    :kind="field.control === 'switch' ? 'switch' : 'standard'"
+    :control-layout="field.control === 'switch' ? 'intrinsic' : 'fill'"
+    :align="field.control === 'directory' ? 'start' : 'center'"
+  >
+    <template #label>
+      <a-popover v-if="field.helpKey" placement="right">
+        <template #content>
+          <p class="label-hover-info">{{ $t(field.helpKey) }}</p>
+          <p v-if="field.helpLink">
+            <a :href="field.helpLink" target="_blank">
+              {{ field.helpLinkLabelKey ? $t(field.helpLinkLabelKey) : field.helpLink }}
+            </a>
+          </p>
+        </template>
+        <span class="info-label" :style="{ color: accentColor }">
+          {{ $t(field.labelKey) }}
+        </span>
+      </a-popover>
+      <span v-else>{{ $t(field.labelKey) }}</span>
+    </template>
 
     <div v-if="field.control === 'directory'" class="input-with-addon">
-      <span
-        class="input-folder"
-        :style="{ color: accentColor }"
-        @click="$emit('browse')"
+      <span class="input-folder" :style="{ color: accentColor }" @click="$emit('browse')"
         ><FolderOpenOutlined
       /></span>
       <a-input
@@ -32,7 +36,6 @@
 
     <a-select
       v-if="field.control === 'select'"
-      class="input-area"
       :value="modelValue"
       :disabled="field.disabled"
       :options="localizedOptions"
@@ -40,14 +43,12 @@
     />
     <a-input
       v-else-if="field.control === 'text'"
-      class="input-area"
       :value="modelValue"
       :placeholder="field.placeholder"
       @update:value="$emit('update:modelValue', $event)"
     />
     <a-input
       v-else-if="field.control === 'password'"
-      class="input-area"
       type="password"
       :value="modelValue"
       :placeholder="field.placeholder"
@@ -55,7 +56,6 @@
     />
     <a-input-number
       v-else-if="field.control === 'number'"
-      class="input-area"
       :value="modelValue"
       :min="field.min"
       :max="field.max"
@@ -68,7 +68,7 @@
       :checked="modelValue"
       @update:checked="$emit('update:modelValue', $event)"
     />
-  </div>
+  </SettingsField>
 </template>
 
 <script setup lang="ts">
@@ -76,6 +76,7 @@ import { computed } from 'vue'
 import { FolderOpenOutlined } from '@ant-design/icons-vue'
 import { useI18n } from 'vue-i18n'
 import type { EngineFieldDescriptor } from '@renderer/engines/types.ts'
+import SettingsField from '@renderer/components/settings/SettingsField.vue'
 
 const props = defineProps<{
   field: EngineFieldDescriptor
@@ -99,8 +100,6 @@ const localizedOptions = computed(
 </script>
 
 <style scoped>
-@import url(../../assets/input.css);
-
 .label-hover-info {
   margin-top: 10px;
   max-width: min(36vw, 380px);
@@ -130,16 +129,10 @@ const localizedOptions = computed(
 }
 
 .input-with-addon {
-  grid-column: 2;
+  width: 100%;
   min-width: 0;
   display: flex;
   align-items: center;
   gap: 8px;
-}
-
-@container (max-width: 480px) {
-  .input-with-addon {
-    grid-column: 1;
-  }
 }
 </style>

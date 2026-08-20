@@ -1,44 +1,36 @@
 <template>
   <a-card size="small" :title="$t('engine.hotwords.levelOneTitle')">
     <p class="hotword-note">{{ $t('engine.hotwords.levelOneNote') }}</p>
-    <div class="input-item">
-      <span class="hotword-label">{{ $t('engine.hotwords.vocabularyId') }}</span>
-      <a-input
-        class="hotword-input"
-        :value="modelValue.vocabularyId"
-        :placeholder="$t('engine.hotwords.vocabularyIdPlaceholder')"
-        @update:value="updateVocabularyId"
-      />
-    </div>
-    <div class="input-item">
-      <span class="hotword-label">{{ $t('engine.hotwords.targetModel') }}</span>
-      <a-select
-        class="hotword-input"
-        :value="modelValue.targetModel"
-        :options="modelOptions"
-        @update:value="updateTargetModel"
-      />
-    </div>
-    <div class="input-item context-row">
-      <span class="hotword-label">{{ $t('engine.hotwords.contextTerms') }}</span>
-      <a-textarea
-        class="hotword-input"
-        :value="contextText"
-        :maxlength="400"
-        :rows="4"
-        :placeholder="$t('engine.hotwords.contextTermsPlaceholder')"
-        show-count
-        @update:value="updateContextTerms"
-      />
-    </div>
+    <SettingsForm>
+      <SettingsField :label="$t('engine.hotwords.vocabularyId')">
+        <a-input
+          :value="modelValue.vocabularyId"
+          :placeholder="$t('engine.hotwords.vocabularyIdPlaceholder')"
+          @update:value="updateVocabularyId"
+        />
+      </SettingsField>
+      <SettingsField :label="$t('engine.hotwords.targetModel')">
+        <a-select
+          :value="modelValue.targetModel"
+          :options="modelOptions"
+          @update:value="updateTargetModel"
+        />
+      </SettingsField>
+      <SettingsField :label="$t('engine.hotwords.contextTerms')" align="start">
+        <a-textarea
+          :value="contextText"
+          :maxlength="400"
+          :rows="4"
+          :placeholder="$t('engine.hotwords.contextTermsPlaceholder')"
+          show-count
+          @update:value="updateContextTerms"
+        />
+      </SettingsField>
+    </SettingsForm>
     <p class="hotword-note">{{ $t('engine.hotwords.contextTermsNote') }}</p>
   </a-card>
 
-  <a-card
-    size="small"
-    :title="$t('engine.hotwords.levelTwoTitle')"
-    class="remote-card"
-  >
+  <a-card size="small" :title="$t('engine.hotwords.levelTwoTitle')" class="remote-card">
     <p class="hotword-note">{{ $t('engine.hotwords.remoteImmediateNote') }}</p>
     <a-descriptions size="small" bordered :column="1">
       <a-descriptions-item :label="$t('engine.hotwords.account')">
@@ -58,6 +50,7 @@
     <a-space class="manager-toolbar" wrap>
       <a-input
         v-model:value="listPrefix"
+        data-settings-layout-exempt="manager-toolbar"
         :placeholder="$t('engine.hotwords.prefixFilter')"
         :maxlength="10"
       />
@@ -116,14 +109,17 @@
 
   <a-modal
     v-model:open="editorOpen"
-    :title="editorMode === 'create' ? $t('engine.hotwords.createTitle') : $t('engine.hotwords.editTitle')"
+    :title="
+      editorMode === 'create' ? $t('engine.hotwords.createTitle') : $t('engine.hotwords.editTitle')
+    "
     :confirm-loading="loading"
     @ok="submitEditor"
   >
-    <div v-if="editorMode === 'create'" class="input-item">
-      <span class="editor-label">{{ $t('engine.hotwords.prefix') }}</span>
-      <a-input v-model:value="editorPrefix" :maxlength="10" />
-    </div>
+    <SettingsForm v-if="editorMode === 'create'">
+      <SettingsField :label="$t('engine.hotwords.prefix')">
+        <a-input v-model:value="editorPrefix" :maxlength="10" />
+      </SettingsField>
+    </SettingsForm>
     <p v-else>{{ editorVocabularyId }}</p>
     <p class="hotword-note">{{ $t('engine.hotwords.entryFormat') }}</p>
     <a-textarea
@@ -146,6 +142,8 @@ import type {
   HotwordSummary
 } from '../../../../shared/hotwords.ts'
 import { parseHotwordEntriesText } from '../../../../shared/hotwords.ts'
+import SettingsField from '@renderer/components/settings/SettingsField.vue'
+import SettingsForm from '@renderer/components/settings/SettingsForm.vue'
 
 const props = defineProps<{
   modelValue: FunAsrHotwordConfig
@@ -178,9 +176,9 @@ const modelOptions = computed(() => [
   }
 ])
 const contextText = computed(() => props.modelValue.contextTerms.join('\n'))
-const managementReady = computed(() => Boolean(
-  props.appliedWorkspaceId && props.appliedWebsocketUrl
-))
+const managementReady = computed(() =>
+  Boolean(props.appliedWorkspaceId && props.appliedWebsocketUrl)
+)
 const isSingapore = computed(() => props.appliedWebsocketUrl.includes('ap-southeast-1'))
 const regionLabel = computed(() => {
   if (props.appliedWebsocketUrl.includes('cn-beijing')) {
@@ -203,17 +201,24 @@ function updateTargetModel(value: string): void {
 }
 
 function updateContextTerms(value: string): void {
-  const terms = [...new Set(value.split(/\r?\n/).map((term) => term.trim()).filter(Boolean))]
+  const terms = [
+    ...new Set(
+      value
+        .split(/\r?\n/)
+        .map((term) => term.trim())
+        .filter(Boolean)
+    )
+  ]
   updateLocal({ contextTerms: terms })
 }
 
 async function execute(request: HotwordRequest): Promise<unknown | null> {
   loading.value = true
   try {
-    const response = await window.electron.ipcRenderer.invoke(
+    const response = (await window.electron.ipcRenderer.invoke(
       'control.hotwords.execute',
       request
-    ) as HotwordResponse
+    )) as HotwordResponse
     if (!response.ok) {
       notification.error({
         message: t('engine.hotwords.operationFailed'),
@@ -222,8 +227,7 @@ async function execute(request: HotwordRequest): Promise<unknown | null> {
       return null
     }
     return response.data
-  }
-  finally {
+  } finally {
     loading.value = false
   }
 }
@@ -260,7 +264,7 @@ function openCreate(): void {
 
 async function queryResource(item: HotwordSummary): Promise<HotwordResource | null> {
   const data = await execute({ action: 'query', vocabularyId: item.vocabularyId })
-  return data && typeof data === 'object' ? data as HotwordResource : null
+  return data && typeof data === 'object' ? (data as HotwordResource) : null
 }
 
 async function selectResource(item: HotwordSummary): Promise<void> {
@@ -295,13 +299,14 @@ async function openEdit(item: HotwordSummary): Promise<void> {
 async function submitEditor(): Promise<void> {
   try {
     const vocabulary = parseHotwordEntriesText(editorEntries.value)
-    const request: HotwordRequest = editorMode.value === 'create'
-      ? { action: 'create', prefix: editorPrefix.value, vocabulary }
-      : {
-          action: 'update',
-          vocabularyId: editorVocabularyId.value,
-          vocabulary
-        }
+    const request: HotwordRequest =
+      editorMode.value === 'create'
+        ? { action: 'create', prefix: editorPrefix.value, vocabulary }
+        : {
+            action: 'update',
+            vocabularyId: editorVocabularyId.value,
+            vocabulary
+          }
     const data = await execute(request)
     if (!data) return
     if (editorMode.value === 'create') {
@@ -314,8 +319,7 @@ async function submitEditor(): Promise<void> {
     editorOpen.value = false
     notification.success({ message: t('engine.hotwords.operationSucceeded') })
     await refresh()
-  }
-  catch {
+  } catch {
     notification.error({
       message: t('engine.hotwords.invalidEntries'),
       description: t('engine.hotwords.invalidEntriesNote')
@@ -365,15 +369,6 @@ function showModelMismatch(): void {
 </script>
 
 <style scoped>
-.input-item {
-  display: grid;
-  grid-template-columns: minmax(90px, 110px) minmax(0, 1fr);
-  align-items: center;
-  column-gap: 12px;
-  row-gap: 6px;
-  margin: 12px 0;
-}
-
 .remote-card {
   margin-top: 10px;
 }
@@ -381,24 +376,6 @@ function showModelMismatch(): void {
 .hotword-note {
   color: #666;
   margin: 8px 0;
-}
-
-.hotword-label,
-.editor-label {
-  grid-column: 1;
-  min-width: 0;
-  text-align: right;
-  overflow-wrap: anywhere;
-}
-
-.hotword-input {
-  grid-column: 2;
-  width: 100%;
-  min-width: 0;
-}
-
-.context-row {
-  align-items: flex-start;
 }
 
 .manager-toolbar,
@@ -419,23 +396,5 @@ function showModelMismatch(): void {
 
 .danger-action {
   color: #ff4d4f;
-}
-
-@container (max-width: 480px) {
-  .input-item {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .hotword-label,
-  .editor-label,
-  .hotword-input,
-  .input-item > :deep(.ant-input) {
-    grid-column: 1;
-  }
-
-  .hotword-label,
-  .editor-label {
-    text-align: left;
-  }
 }
 </style>

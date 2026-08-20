@@ -3998,6 +3998,145 @@
 - 根目录 `AGENTS.md`：要求保留用户修改、三语同步、使用项目环境、如实记录失败、不改系统环境或依赖，并明确实际验证平台。
 - 项目现有 `main.spec` 与 `electron-builder.yml`：作为 Python 引擎和 macOS arm64 打包配置来源。
 
+## 2026-08-20 - V2.18.0 macOS arm64 构建
+
+### 用户授权与变更目标
+
+- 用户明确要求编译 Mac 版本并更新小版本号；本批次将 `2.17.0` 更新为 `2.18.0`，使用项目内既有 `.venv` 编译 Python 引擎，并基于当前工作区生成 macOS arm64 应用、ZIP 和 DMG。
+- 非目标：不安装、删除或升级依赖，不修改系统 Python、Node、PATH 或其他系统环境，不发布 Release，不提交或推送 Git，不修改本批次之外的功能。
+- 修改前完整阅读根目录 `AGENTS.md`，确认没有子目录规则，执行 `git status --short --branch` 并阅读版本目标文件现有 diff。工作区已有未提交的设置表单共享布局与宽栏限宽修复；本次完整保留，因此最终产物包含该功能。
+
+### 变更类型
+
+- 构建、配置、文档。
+
+### 修改文件与原因
+
+- `package.json`、`package-lock.json`：将应用和锁文件根包版本从 `2.17.0` 更新为 `2.18.0`；依赖及依赖约束未变化。
+- `src/renderer/index.html`、`src/renderer/src/components/EngineStatus.vue`：同步窗口标题和关于页可见版本。
+- `README.md`、`README_en.md`、`README_ja.md`：同步中英日 README 版本和发布提示。
+- `docs/user-manual/zh.md`、`docs/user-manual/en.md`、`docs/user-manual/ja.md`：在保留既有设置布局说明修改的基础上，同步三语用户手册版本。
+- `docs/engine-manual/zh.md`、`docs/engine-manual/en.md`、`docs/engine-manual/ja.md`：同步三语引擎手册版本。
+- `docs/CHANGELOG.md`：新增 `v2.18.0` 条目，记录当前设置表单共享布局与限宽修复、版本同步和 macOS 构建。
+- `change.md`：追加本批次授权、范围、构建、验证、兼容性和风险记录。
+- `engine/dist/main`、`dist/mac-arm64/Auto Caption.app`、`dist/Auto Caption-2.18.0-arm64-mac.zip`、`dist/auto-caption-2.18.0.dmg` 及对应 blockmap/`latest-mac.yml`：由既有 PyInstaller/electron-builder 配置和系统打包工具生成或刷新，位于 Git 忽略目录，不作为源文件提交。
+
+### 修改前后行为
+
+- 修改前：源码、界面和三语文档显示 `2.17.0`，没有本批次的 `2.18.0` macOS 产物。
+- 修改后：版本统一为 `2.18.0`；产物的 `CFBundleShortVersionString` 和 `CFBundleVersion` 均为 `2.18.0`，Electron 主程序和内置 Python 引擎均为 arm64。
+- 本批次没有改变业务运行逻辑；应用基于当前工作区构建，因此包含此前未提交的共享设置表单、640px 限宽、480px 堆叠和开关对齐修复。
+
+### 配置、IPC、协议、命令行、数据结构与依赖
+
+- 本批次没有新增或修改配置字段、迁移、IPC、Python/Electron 进程协议、CLI 参数或业务数据结构。
+- 未执行 npm/pip 安装或升级命令；`package-lock.json` 仅修改根包版本。PyInstaller 使用 `engine/.venv`，临时配置目录为 `/private/tmp/auto-caption-pyinstaller-config`，没有修改系统环境。
+- electron-builder 使用项目锁定的 Electron `43.4.0` 和现有依赖，仅在沙箱 DNS 限制后按授权访问项目配置的下载镜像。
+
+### 兼容性、迁移与回滚
+
+- 实际构建及验证平台仅为 macOS arm64；未声明 macOS x64/universal、Windows 或 Linux 产物已验证。
+- 应用使用 ad-hoc 签名，没有 Apple Developer ID 和 TeamIdentifier，未执行 notarization；正式公开分发仍应使用 Developer ID 签名并完成 Apple 公证。
+- 回滚本批次可恢复上述版本源文件和文档到 `2.17.0`，并移除忽略目录中的 `2.18.0` 构建产物；不得回退本任务开始前已有的设置布局修改。
+
+### 验证记录
+
+- `npm run verify`：通过；Node/Web TypeScript、ESLint、Node `88/88`、Python `66/66` 全部成功。
+- `npm run build`：通过；Electron main、preload、renderer 分别转换 28、1、3285 个模块。
+- `PYINSTALLER_CONFIG_DIR=/private/tmp/auto-caption-pyinstaller-config ./.venv/bin/pyinstaller --clean --noconfirm ./main.spec`：通过，生成 arm64 `engine/dist/main`；报告 `pycparser.lextab`/`yacctab` 隐式导入缺失和 numba `@rpath/libomp.dylib` 未解析警告，但未阻止构建。
+- `engine/dist/main --help`：沙箱内因 `semctl: Operation not permitted` 失败；按授权在沙箱外重跑后退出码 0，并输出 CLI 帮助。
+- `npx electron-builder --mac`：沙箱内因 `npmmirror.com` DNS 受限失败；按授权联网重跑后成功。构建器报告重复依赖引用，并因没有 Developer ID 跳过发布签名。
+- `file` 和 `plutil`：通过；主程序和内置引擎均为 Mach-O arm64，Info.plist 两个版本字段均为 `2.18.0`。
+- `codesign --force --deep --sign -` 与 `codesign --verify --deep --strict --verbose=2`：通过；最终应用为 ad-hoc 签名，TeamIdentifier 未设置。
+- `unzip -tq dist/Auto\ Caption-2.18.0-arm64-mac.zip`：通过，无压缩数据错误。
+- `hdiutil verify dist/auto-caption-2.18.0.dmg`：通过，磁盘映像校验有效。沙箱内重建首次因“设备未配置”失败，按授权在沙箱外重跑成功；工具同时报告旧 `hdiutil create` 语法弃用警告。
+- ZIP 大小 `224974658` 字节，SHA-256 `de894714bdf827d1333fadee6454832d10ef1a424d9cb651997499078ce50969`；DMG 大小 `244931328` 字节，SHA-256 `da2a52fcb165094e95da6be6103f2186739d905bc9334645bf60023952019a07`。已按最终签名产物重建 blockmap，并同步 `latest-mac.yml` 的 SHA-512、大小和日期。
+- npm 持续打印项目既有镜像配置弃用警告和 Node `MODULE_TYPELESS_PACKAGE_JSON` 性能警告；不影响测试或构建结果。
+
+### 未执行、风险与后续事项
+
+- 未执行 Developer ID 发布签名、Apple notarization、真实 Electron GUI/音频设备、云端识别翻译、付费 API 或自动更新端到端测试。
+- 未验证其他 CPU 架构和操作系统；ZIP 约 215 MiB，DMG 约 234 MiB，均为本机 arm64 产物。
+- PyInstaller 的 `libomp` 警告可能影响实际使用 numba OpenMP 后端的路径；CLI 启动自检已通过，但正式发布前建议进行真实音频引擎和设置窗口人工回归。
+
+### 关键外部文档或技术决策来源
+
+- 用户明确授权：编译 Mac 版本并更新小版本号。
+- 根目录 `AGENTS.md`：要求保留用户修改、三语同步、使用项目环境、如实记录失败、不改系统环境或依赖，并明确实际验证平台。
+- 项目现有 `main.spec` 与 `electron-builder.yml`：作为 Python 引擎和 macOS arm64 打包配置来源。
+
+## 2026-08-20 - 设置表单共享布局与宽栏控件限宽修复
+
+### 用户授权与变更目标
+
+- 用户先要求只做技术分析，随后要求生成避免补丁堆叠的完整修复方案，并最终明确要求实施计划；本批次据此获准修改仓库。
+- 变更类型：修复、重构、测试、文档。
+- 目标：修复部分开关标签左边缘不一致，以及左侧设置区域扩大时单选按钮、输入框、下拉框和滑块被无限拉长的问题；同时建立共享表单边界和自动化约束，使后续新增设置控件默认继承同一布局。
+- 明确非目标：不修改配置字段、默认值、迁移、Pinia 状态语义、Provider 能力、IPC、Python CLI、子进程协议、识别/翻译/热词业务、依赖或版本号，不构建安装包或发布产物。
+- 修改前完整阅读根目录 `AGENTS.md`，确认无子目录规则，执行 `git status --short --branch`；工作区为 `main...origin/main` 且没有未提交修改。
+
+### 修改文件与原因
+
+- `src/renderer/src/components/settings/SettingsForm.vue`：新增共享设置表单容器，集中定义 640px 最大宽度、128px 标签列设计令牌及 `settings-form` 容器查询边界。
+- `src/renderer/src/components/settings/SettingsField.vue`：新增普通字段和开关字段的统一结构；集中控制标签、控件、值和描述插槽，支持填满、等分和固有宽度三种控件布局，并在 480px 边界统一切换普通字段的上下排列。
+- `src/renderer/src/assets/input.css`：删除旧的选择器工具样式；该文件依赖业务组件自行拼装 class、使用 `:has()` 推断开关类型，并允许控件列无限占用剩余宽度，是本次两个问题及未来样式漂移的共同来源。
+- `src/renderer/src/components/GeneralSetting.vue`：语言、主题、颜色和左栏宽度迁移到共享表单/字段；单选组在受限控件列内等分，滑块值通过统一 value 插槽呈现。
+- `src/renderer/src/components/EngineControl.vue`：引擎选择、Provider 字段、翻译设置、定制引擎字段、更多设置和启动超时按字段组接入共享表单；直接开关显式使用 `kind="switch"`，不再靠 CSS 结构猜测。
+- `src/renderer/src/components/engine/EngineSelector.vue`：引擎选择器自身只暴露共享字段边界，保留原有选择、新增和删除行为。
+- `src/renderer/src/components/engine/EngineFieldRenderer.vue`：Provider 元数据中的 `switch` 自动映射到共享开关布局，其余通用字段映射到普通布局；目录输入保留为字段内部复合控件，因此以后新增 Provider 字段无需再编写布局 CSS。
+- `src/renderer/src/components/engine/HotwordManager.vue`：删除热词表单复制的独立 Grid，将 vocabulary、目标模型、上下文术语和编辑前缀迁移到共享字段；远端资源工具栏作为明确的非表单复合区域保留自身 Flex 行为。
+- `src/renderer/src/components/CaptionStyle.vue`：显示模式、断句、字幕行数、字体、颜色、滑块、翻译样式和阴影设置统一迁移；显示预览、显示翻译和文本阴影不再使用独立 `.switch-list`/`.switch-option`，而是使用共享开关字段。
+- `src/renderer/src/components/CaptionLog.vue`：导出和复制弹窗脱离已删除的设置表单样式，改用局部命名的日志选项行；原来把两个开关放在一个通用四子项 Grid 的结构拆为两个独立行，业务状态和操作不变。
+- `src/renderer/src/views/ControlPage.vue`：移除设置面板级无名称容器查询；响应式边界改由 `SettingsForm` 自身管理，避免页面容器和字段 CSS 双向耦合。
+- `tests/node/settingsLayoutContract.test.mjs`：新增四组结构契约测试；固定共享宽度/断点/开关对齐规则，禁止设置组件重新引入旧类和私有字段 Grid，要求卡片内表单控件处于 `SettingsField`，并要求 Engine 元数据渲染器位于共享表单边界。
+- `docs/user-manual/zh.md`、`docs/user-manual/en.md`、`docs/user-manual/ja.md`：三语同步说明 640px 最大表单宽度、480px 上下布局边界，以及开关标签左对齐和开关列一致行为。
+- `change.md`：追加本批次授权、结构决策、文件范围、兼容性、真实验证结果、失败项和回滚说明。
+
+### 修改前后行为与结构决策
+
+- 修改前：左栏允许占窗口 25%–50%，但表单控件列为无限制 `1fr`，控件自身又普遍为 `width: 100%`，因此 50% 左栏会让每个控件铺满卡片。窄栏普通标签切换为左对齐时，开关又被 `:has(> .ant-switch)` 特例恢复为右对齐，长度不同的开关文字左边缘不一致；字幕样式还维护另一套 128px 开关 Grid。
+- 修改后：卡片仍可占满左栏，字段区域由 `SettingsForm` 统一限制在 640px；宽栏采用 128px 标签列和受限控件列，480px 及以下普通字段统一上下排列。开关字段不论宽度都使用左对齐标签和一致的开关列。
+- 普通控件不再感知侧栏或卡片宽度规则；单选组、Select、Input、InputNumber、Slider、字体选择和复合目录输入只在共享字段的控件区域内填满。
+- `SettingsField` 不持有配置值或业务分支，只提供布局语义；Engine Provider 仍由既有字段元数据驱动，没有把供应商条件重新堆入 `EngineControl.vue`。
+- 新控件若绕过共享字段、重新使用旧 class 或在设置业务组件内定义字段 Grid，Node 契约测试会失败；复杂工具栏必须显式声明布局豁免，避免隐式例外累积。
+
+### 配置、接口、兼容性与回滚
+
+- `schemaVersion: 5`、配置默认值、迁移、保存行为和未知字段兼容均无变化。
+- Electron IPC、Python CLI、NDJSON/TCP 协议、Provider 生命周期、翻译、录音和热词远端操作均无变化。
+- 没有新增、删除或升级 npm/pip 依赖；测试复用项目直接依赖 `vue-eslint-parser`，布局使用现有 Electron/Chromium 支持的 CSS Grid、容器查询和逻辑方向属性。
+- 用户可见文案 key 没有变化；只更新中英日用户手册中的既有布局说明。
+- 共享 Renderer 代码面向 Windows、macOS 和 Linux，但本批次自动化、生产构建和浏览器几何回归只在 macOS arm64 主机执行；未声明其他平台 GUI 已实测。
+- 精确回滚：恢复本条列出的 Renderer 组件和三语手册，删除两个 `components/settings` 组件及布局契约测试，恢复 `assets/input.css`，并追加更正记录；无需配置迁移。回滚会重新引入宽栏无限拉伸、开关右对齐和组件私有布局分叉。
+
+### 验证记录
+
+- `npm run typecheck:web`：迁移初步完成后通过，Vue/Renderer TypeScript 无错误。
+- 首次 `node --test tests/node/settingsLayoutContract.test.mjs`：失败，4 项中 1 项通过、3 项失败；原因是新测试把复合控件类 `input-area-with-folder` 误判为已退役的精确类名，并让普通 JavaScript 解析器读取了 SFC 中的 TypeScript。随后改为按完整 class token 判断并在解析前移除 script 区，只检查模板结构。
+- 修正后 `node --test tests/node/settingsLayoutContract.test.mjs`：通过，4/4。
+- `npm run build`：通过；Node/Web 类型检查通过，Electron main、preload、renderer 生产构建分别转换 28、1、3285 个模块。
+- 本地生产 Renderer 几何回归：使用临时目录复制生产 Renderer，并注入不含真实凭据、网络或持久化操作的 IPC 模拟；临时服务器只监听 `127.0.0.1`，验证后关闭并删除临时目录。
+  - 2560×1200 视口、约 853.328px 侧栏下，可见设置表单宽度为 640px，页面无横向溢出。
+  - 1400×1000 视口、约 466.664px 侧栏下，表单宽约 384.664px，普通字段计算为单列，标签和控件左边缘均为 33px，页面无横向溢出。
+  - 中文字幕样式开关的三个标签左边缘均为 33px、开关列均为 173px；英文 `Preview`/`Show Translation`/`Text Shadow` 和日文 `プレビュー`/`翻訳表示`/`文字影` 得到相同几何结果且无横向溢出。
+- `npm run verify`：通过；Node/Web TypeScript、ESLint、Node 88/88（包含新增 4 项布局契约）、Python 66/66 全部成功。
+- `git diff --check`：在代码迁移后通过；最终交付前再次执行并记录最终状态。
+
+### 未执行、失败项、风险与后续事项
+
+- 生产 Renderer 的临时 IPC 模拟不能完整建立 Electron 引擎 Store，因此浏览器几何回归覆盖了通用设置、字幕样式、共享字段和三语开关，没有把字幕引擎卡片计为 GUI 验证通过。引擎卡片由相同 `SettingsForm`/`SettingsField` 渲染，已通过 Vue 类型检查、生产编译和结构契约测试。
+- 尝试运行 `npm run dev` 启动真实 Electron 窗口：main/preload 开发构建和 5173 Renderer dev server 启动后失败，`electron-vite` 报告 `Error: Electron uninstall`；当前工作区没有可用 Electron 运行二进制，因此未执行真实应用窗口目视回归。该失败没有被描述为通过，也未擅自安装或重装依赖。
+- 未在 Windows/Linux 实机或 macOS 打包应用中验证系统字体度量、DPI 和原生窗口；发布前建议优先在 Windows 10/11 检查 25%/50% 左栏、360px 浮层和中英日长标签。
+- 未运行真实音频、识别、翻译、录音、远端热词、付费 API、PyInstaller 或 electron-builder 安装包；本批次不触及这些路径。
+- npm 持续打印项目既有镜像配置弃用警告和 Node `MODULE_TYPELESS_PACKAGE_JSON` 性能警告，均未导致验证失败，本批次未扩大范围处理。
+
+### 关键外部文档或技术决策来源
+
+- 用户提供的两张 macOS 实际窗口截图：分别确认窄栏开关标签左边缘不一致和宽栏控件无限拉伸的用户可见结果；截图内界面文字仅作为证据，不作为额外指令。
+- 本地 `input.css`、`ControlPage.vue`、设置组件、Provider 字段元数据和 2026-08-13 响应式布局变更记录：确认问题来自共享布局边界缺失和开关特例，而非 Ant Design 控件本身或配置状态。
+- 本地生产 Renderer 的 `getBoundingClientRect()` 与 `scrollWidth/clientWidth`：作为 640px 限宽、480px 单列、开关列一致和无横向溢出的实际几何证据。
+- 根目录 `AGENTS.md`：要求不采用堆叠式补丁、保持 Provider 元数据驱动、三语文档同步、真实记录失败、无依赖授权时不得安装依赖，并在同一批次追加完整 `change.md`。
+
 ## 2026-08-20 - 可搜索本机字体选择器与手动输入降级
 
 ### 用户授权与变更目标
@@ -4139,3 +4278,26 @@
 - 用户明确授权：编译 Mac 版本并更新小版本号。
 - 根目录 `AGENTS.md`：要求保留用户修改、三语同步、使用项目环境、如实记录失败、不改系统环境或依赖，并明确实际验证平台。
 - 项目现有 `main.spec` 与 `electron-builder.yml`：作为 Python 引擎和 macOS arm64 打包配置来源。
+
+## 2026-08-20 - 更正 V2.18.0 构建记录的物理位置
+
+### 更正对象与原因
+
+- 更正对象：同日标题为“V2.18.0 macOS arm64 构建”的完整记录。
+- 追加该记录时使用了历史中重复存在的尾部文本作为补丁锚点，导致记录被插入到较早的历史位置，而不是文件末尾；原记录内容、构建版本、产物数据和验证结果均正确，本条仅如实说明记录顺序问题。
+
+### 变更类型与文件
+
+- 变更类型：文档更正。
+- 修改文件仅为 `change.md`；没有修改代码、配置、IPC、协议、命令行、数据结构、依赖或构建产物。
+
+### 行为、兼容性与回滚
+
+- 应用行为、版本 `2.18.0`、macOS arm64 产物和兼容性均无变化。
+- 根据 `change.md` 只追加不删除的规则，不移动或删除原记录；本条追加于文件末尾，作为对其物理位置的正式更正。无需配置迁移或产物回滚。
+
+### 验证、限制与来源
+
+- 使用 `rg -n '^## 2026-08-20 - V2\\.(17|18)\\.0|^## 2026-08-20 - 设置表单' change.md` 确认原 V2.18.0 记录位于设置布局和 V2.17.0 记录之前，并在本条后执行最终 `git diff --check` 和工作区审计。
+- 未新增测试或构建命令；本条不改变已验证产物。风险仅为历史文件中原记录物理顺序不连续，读取时应以标题日期、版本号及本更正为准。
+- 决策来源：根目录 `AGENTS.md` 要求历史只能追加，纠错必须追加更正记录并引用原条目。

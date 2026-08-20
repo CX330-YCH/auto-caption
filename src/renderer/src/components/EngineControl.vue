@@ -6,43 +6,53 @@
       <a @click="cancelChange">{{ $t('engine.cancelChange') }}</a>
     </template>
 
-    <EngineSelector
-      v-model="draft.activeEngineId"
-      :builtin-options="builtinEngineOptions"
-      :custom-engines="draft.customEngines"
-      @add="openCustomEngineDialog"
-      @delete="deleteCustomEngine"
-    />
+    <SettingsForm>
+      <EngineSelector
+        v-model="draft.activeEngineId"
+        :builtin-options="builtinEngineOptions"
+        :custom-engines="draft.customEngines"
+        @add="openCustomEngineDialog"
+        @delete="deleteCustomEngine"
+      />
+    </SettingsForm>
 
     <template v-if="activeBuiltinProvider">
-      <EngineFieldRenderer
-        v-for="field in primaryFields"
-        :key="field.id"
-        :field="field"
-        :model-value="fieldValue(field)"
-        :accent-color="uiColor"
-        @update:model-value="updateField(field, $event)"
-        @browse="selectFolderPath(field)"
-      />
+      <SettingsForm>
+        <EngineFieldRenderer
+          v-for="field in primaryFields"
+          :key="field.id"
+          :field="field"
+          :model-value="fieldValue(field)"
+          :accent-color="uiColor"
+          @update:model-value="updateField(field, $event)"
+          @browse="selectFolderPath(field)"
+        />
 
-      <div v-if="translationSettingsAvailable" class="input-item">
-        <span class="input-label">{{ $t('engine.configureTranslation') }}</span>
-        <a-switch v-model:checked="showTranslationSettings" />
-      </div>
+        <SettingsField
+          v-if="translationSettingsAvailable"
+          :label="$t('engine.configureTranslation')"
+          kind="switch"
+          control-layout="intrinsic"
+        >
+          <a-switch v-model:checked="showTranslationSettings" />
+        </SettingsField>
+      </SettingsForm>
 
       <a-card
         v-show="translationSettingsAvailable && showTranslationSettings"
         size="small"
         :title="$t('engine.translationSettings')"
       >
-        <EngineFieldRenderer
-          v-for="field in translationFields"
-          :key="field.id"
-          :field="field"
-          :model-value="fieldValue(field)"
-          :accent-color="uiColor"
-          @update:model-value="updateField(field, $event)"
-        />
+        <SettingsForm>
+          <EngineFieldRenderer
+            v-for="field in translationFields"
+            :key="field.id"
+            :field="field"
+            :model-value="fieldValue(field)"
+            :accent-color="uiColor"
+            @update:model-value="updateField(field, $event)"
+          />
+        </SettingsForm>
       </a-card>
     </template>
 
@@ -55,42 +65,43 @@
           <a><InfoCircleOutlined />{{ $t('engine.custom.attention') }}</a>
         </a-popover>
       </template>
-      <div class="input-item">
-        <span class="input-label">{{ $t('engine.custom.app') }}</span>
-        <a-input v-model:value="activeCustomEngine.executable" class="input-area" />
-      </div>
-      <div class="input-item">
-        <span class="input-label">{{ $t('engine.custom.command') }}</span>
-        <a-input v-model:value="activeCustomEngine.command" class="input-area" />
-      </div>
+      <SettingsForm>
+        <SettingsField :label="$t('engine.custom.app')">
+          <a-input v-model:value="activeCustomEngine.executable" />
+        </SettingsField>
+        <SettingsField :label="$t('engine.custom.command')">
+          <a-input v-model:value="activeCustomEngine.command" />
+        </SettingsField>
+      </SettingsForm>
     </a-card>
 
-    <div class="input-item">
-      <span class="input-label">{{ $t('engine.showMore') }}</span>
-      <a-switch v-model:checked="showMore" />
-    </div>
+    <SettingsForm>
+      <SettingsField :label="$t('engine.showMore')" kind="switch" control-layout="intrinsic">
+        <a-switch v-model:checked="showMore" />
+      </SettingsField>
+    </SettingsForm>
 
     <a-card size="small" :title="$t('engine.showMore')" v-show="showMore" style="margin-top: 10px">
-      <EngineFieldRenderer
-        v-for="field in advancedFields"
-        :key="field.id"
-        :field="field"
-        :model-value="fieldValue(field)"
-        :accent-color="uiColor"
-        @update:model-value="updateField(field, $event)"
-        @browse="selectFolderPath(field)"
-      />
-      <div v-if="activeCustomEngine" class="input-item">
-        <span class="input-label">{{ $t('engine.startTimeout') }}</span>
-        <a-input-number
-          v-model:value="draft.common.startTimeoutSeconds"
-          class="input-area"
-          :min="10"
-          :max="120"
-          :step="5"
-          :addon-after="$t('engine.seconds')"
+      <SettingsForm>
+        <EngineFieldRenderer
+          v-for="field in advancedFields"
+          :key="field.id"
+          :field="field"
+          :model-value="fieldValue(field)"
+          :accent-color="uiColor"
+          @update:model-value="updateField(field, $event)"
+          @browse="selectFolderPath(field)"
         />
-      </div>
+        <SettingsField v-if="activeCustomEngine" :label="$t('engine.startTimeout')">
+          <a-input-number
+            v-model:value="draft.common.startTimeoutSeconds"
+            :min="10"
+            :max="120"
+            :step="5"
+            :addon-after="$t('engine.seconds')"
+          />
+        </SettingsField>
+      </SettingsForm>
       <HotwordManager
         v-if="hotwordManagerEnabled"
         id="fun-asr-hotwords"
@@ -129,6 +140,8 @@ import { useI18n } from 'vue-i18n'
 import EngineFieldRenderer from '@renderer/components/engine/EngineFieldRenderer.vue'
 import EngineSelector from '@renderer/components/engine/EngineSelector.vue'
 import HotwordManager from '@renderer/components/engine/HotwordManager.vue'
+import SettingsField from '@renderer/components/settings/SettingsField.vue'
+import SettingsForm from '@renderer/components/settings/SettingsForm.vue'
 import {
   applyEngineLanguageDefaults,
   getEngineDefinition,
@@ -144,10 +157,7 @@ import {
   setEngineConfigValue
 } from '@renderer/engines/form.ts'
 import type { EngineFieldDescriptor } from '@renderer/engines/types.ts'
-import {
-  getActiveBuiltinProvider,
-  getActiveCustomEngine
-} from '../../../shared/config/schema.ts'
+import { getActiveBuiltinProvider, getActiveCustomEngine } from '../../../shared/config/schema.ts'
 import { useGeneralSettingStore } from '@renderer/stores/generalSetting'
 import { useEngineControlStore } from '@renderer/stores/engineControl'
 
@@ -187,8 +197,10 @@ const translationSettingsAvailable = computed(() => {
   return getEngineDefinition(activeBuiltinProvider.value).capabilities.translation === 'external'
 })
 const hotwordManagerEnabled = computed(() => {
-  return activeBuiltinProvider.value !== null &&
+  return (
+    activeBuiltinProvider.value !== null &&
     getEngineDefinition(activeBuiltinProvider.value).capabilities.hotwords === 'manager'
+  )
 })
 
 function fieldValue(field: EngineFieldDescriptor): unknown {
@@ -236,7 +248,11 @@ function createCustomEngine(): void {
     customEngineNameError.value = t('engine.custom.nameRequired')
     return
   }
-  if (draft.value.customEngines.some((engine) => engine.name.toLocaleLowerCase() === name.toLocaleLowerCase())) {
+  if (
+    draft.value.customEngines.some(
+      (engine) => engine.name.toLocaleLowerCase() === name.toLocaleLowerCase()
+    )
+  ) {
     customEngineNameError.value = t('engine.custom.nameDuplicate')
     return
   }
@@ -283,8 +299,6 @@ watch(
 </script>
 
 <style scoped>
-@import url(../assets/input.css);
-
 .customize-note {
   padding: 10px 10px 0;
   max-width: min(40vw, 480px);

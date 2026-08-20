@@ -1,7 +1,6 @@
 <template>
-  <div class="input-item">
-    <span class="input-label">{{ $t('engine.captionEngine') }}</span>
-    <a-select class="input-area" :value="modelValue" @change="selectEngine">
+  <SettingsField :label="$t('engine.captionEngine')">
+    <a-select :value="modelValue" @change="selectEngine">
       <a-select-option
         v-for="option in builtinOptions"
         :key="String(option.value)"
@@ -23,11 +22,7 @@
             :cancel-text="$t('engine.cancelChange')"
             @confirm="deleteEngine(engine.id)"
           >
-            <DeleteOutlined
-              class="delete-engine"
-              @mousedown.stop
-              @click.stop
-            />
+            <DeleteOutlined class="delete-engine" @mousedown.stop @click.stop />
           </a-popconfirm>
         </span>
       </a-select-option>
@@ -35,13 +30,14 @@
         <PlusOutlined /> {{ $t('engine.custom.add') }}
       </a-select-option>
     </a-select>
-  </div>
+  </SettingsField>
 </template>
 
 <script setup lang="ts">
 import { DeleteOutlined, PlusOutlined } from '@ant-design/icons-vue'
 import type { CustomEngineConfig } from '../../../../shared/config/schema.ts'
 import type { EngineFieldOption } from '@renderer/engines/types.ts'
+import SettingsField from '@renderer/components/settings/SettingsField.vue'
 
 const ADD_CUSTOM_ENGINE = '__add_custom_engine__'
 
@@ -68,8 +64,6 @@ function deleteEngine(id: string): void {
 </script>
 
 <style scoped>
-@import url(../../assets/input.css);
-
 .custom-option {
   display: flex;
   align-items: center;

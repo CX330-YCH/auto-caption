@@ -6,211 +6,137 @@
       <a @click="resetStyle">{{ $t('style.resetStyle') }}</a>
     </template>
 
-    <div class="input-item">
-      <span class="input-label">{{ $t('style.displayMode') }}</span>
-      <a-radio-group
-        v-model:value="currentDisplayMode"
-        class="responsive-radio-group"
+    <SettingsForm>
+      <SettingsField :label="$t('style.displayMode')" control-layout="equal">
+        <a-radio-group v-model:value="currentDisplayMode">
+          <a-radio-button value="static">
+            {{ $t('style.displayModes.static') }}
+          </a-radio-button>
+          <a-radio-button value="rolling">
+            {{ $t('style.displayModes.rolling') }}
+          </a-radio-button>
+        </a-radio-group>
+      </SettingsField>
+
+      <SettingsField
+        v-if="currentDisplayMode === 'rolling'"
+        :label="$t('style.captionBoundaryMode')"
+        control-layout="equal"
       >
-        <a-radio-button value="static">
-          {{ $t('style.displayModes.static') }}
-        </a-radio-button>
-        <a-radio-button value="rolling">
-          {{ $t('style.displayModes.rolling') }}
-        </a-radio-button>
-      </a-radio-group>
-    </div>
+        <a-radio-group v-model:value="currentCaptionBoundaryMode">
+          <a-radio-button value="sentence">
+            {{ $t('style.captionBoundaryModes.sentence') }}
+          </a-radio-button>
+          <a-radio-button value="continuous">
+            {{ $t('style.captionBoundaryModes.continuous') }}
+          </a-radio-button>
+        </a-radio-group>
+      </SettingsField>
 
-    <div v-if="currentDisplayMode === 'rolling'" class="input-item">
-      <span class="input-label">{{ $t('style.captionBoundaryMode') }}</span>
-      <a-radio-group
-        v-model:value="currentCaptionBoundaryMode"
-        class="responsive-radio-group"
-      >
-        <a-radio-button value="sentence">
-          {{ $t('style.captionBoundaryModes.sentence') }}
-        </a-radio-button>
-        <a-radio-button value="continuous">
-          {{ $t('style.captionBoundaryModes.continuous') }}
-        </a-radio-button>
-      </a-radio-group>
-    </div>
+      <SettingsField :label="$t('style.lineNumber')" control-layout="equal">
+        <a-radio-group v-model:value="currentLineNumber">
+          <a-radio-button :value="1">1</a-radio-button>
+          <a-radio-button :value="2">2</a-radio-button>
+          <a-radio-button :value="3">3</a-radio-button>
+          <a-radio-button :value="4">4</a-radio-button>
+        </a-radio-group>
+      </SettingsField>
 
-    <div class="input-item">
-      <span class="input-label">{{ $t('style.lineNumber') }}</span>
-      <a-radio-group v-model:value="currentLineNumber" class="responsive-radio-group">
-        <a-radio-button :value="1">1</a-radio-button>
-        <a-radio-button :value="2">2</a-radio-button>
-        <a-radio-button :value="3">3</a-radio-button>
-        <a-radio-button :value="4">4</a-radio-button>
-      </a-radio-group>
-    </div>
+      <SettingsField :label="$t('style.longCaption')">
+        <a-select
+          v-model:value="currentLineBreak"
+          :disabled="currentDisplayMode === 'rolling'"
+          :options="captionStyle.iBreakOptions"
+        ></a-select>
+        <template v-if="currentDisplayMode === 'rolling'" #description>
+          {{ $t('style.rollingWrapHint') }}
+        </template>
+      </SettingsField>
 
-    <div class="input-item">
-      <span class="input-label">{{ $t('style.longCaption') }}</span>
-      <a-select
-        class="input-area"
-        v-model:value="currentLineBreak"
-        :disabled="currentDisplayMode === 'rolling'"
-        :options="captionStyle.iBreakOptions"
-      ></a-select>
-    </div>
-    <div v-if="currentDisplayMode === 'rolling'" class="mode-note">
-      {{ $t('style.rollingWrapHint') }}
-    </div>
+      <SettingsField :label="$t('style.fontFamily')" align="start">
+        <FontFamilySelect v-model="currentFontFamily" @validity-change="sourceFontValid = $event" />
+      </SettingsField>
 
-    <div class="input-item">
-      <span class="input-label">{{ $t('style.fontFamily') }}</span>
-      <FontFamilySelect
-        class="input-area"
-        v-model="currentFontFamily"
-        @validity-change="sourceFontValid = $event"
-      />
-    </div>
+      <SettingsField :label="$t('style.fontColor')">
+        <a-input type="color" v-model:value="currentFontColor" />
+        <template #value>{{ currentFontColor }}</template>
+      </SettingsField>
+      <SettingsField :label="$t('style.fontSize')">
+        <a-slider :min="0" :max="72" v-model:value="currentFontSize" />
+        <template #value>{{ currentFontSize }}px</template>
+      </SettingsField>
+      <SettingsField :label="$t('style.fontWeight')">
+        <a-slider :min="1" :max="9" v-model:value="currentFontWeight" />
+        <template #value>{{ currentFontWeight * 100 }}</template>
+      </SettingsField>
+      <SettingsField :label="$t('style.background')">
+        <a-input type="color" v-model:value="currentBackground" />
+        <template #value>{{ currentBackground }}</template>
+      </SettingsField>
+      <SettingsField :label="$t('style.opacity')">
+        <a-slider :min="0" :max="100" v-model:value="currentOpacity" />
+        <template #value>{{ currentOpacity }}%</template>
+      </SettingsField>
 
-    <div class="input-item">
-      <span class="input-label">{{ $t('style.fontColor') }}</span>
-      <a-input
-        class="input-area"
-        type="color"
-        v-model:value="currentFontColor"
-      />
-      <div class="input-item-value">{{ currentFontColor }}</div>
-    </div>
-    <div class="input-item">
-      <span class="input-label">{{ $t('style.fontSize') }}</span>
-      <a-slider
-        class="input-area"
-        :min="0" :max="72"
-        v-model:value="currentFontSize"
-      />
-      <div class="input-item-value">{{ currentFontSize }}px</div>
-    </div>
-    <div class="input-item">
-      <span class="input-label">{{ $t('style.fontWeight') }}</span>
-      <a-slider
-        class="input-area"
-        :min="1" :max="9"
-        v-model:value="currentFontWeight"
-      />
-      <div class="input-item-value">{{ currentFontWeight*100 }}</div>
-    </div>
-    <div class="input-item">
-      <span class="input-label">{{ $t('style.background') }}</span>
-      <a-input
-        class="input-area"
-        type="color"
-        v-model:value="currentBackground"
-      />
-      <div class="input-item-value">{{ currentBackground }}</div>
-    </div>
-    <div class="input-item">
-      <span class="input-label">{{ $t('style.opacity') }}</span>
-      <a-slider
-        class="input-area"
-        :min="0"
-        :max="100"
-        v-model:value="currentOpacity"
-      />
-      <div class="input-item-value">{{ currentOpacity }}%</div>
-    </div>
-
-    <div class="switch-list">
-      <div class="switch-option">
-        <span class="switch-label">{{ $t('style.preview') }}</span>
+      <SettingsField :label="$t('style.preview')" kind="switch" control-layout="intrinsic">
         <a-switch v-model:checked="currentPreview" />
-      </div>
-      <div class="switch-option">
-        <span class="switch-label">{{ $t('style.translation') }}</span>
+      </SettingsField>
+      <SettingsField :label="$t('style.translation')" kind="switch" control-layout="intrinsic">
         <a-switch v-model:checked="currentTransDisplay" />
-      </div>
-      <div class="switch-option">
-        <span class="switch-label">{{ $t('style.textShadow') }}</span>
+      </SettingsField>
+      <SettingsField :label="$t('style.textShadow')" kind="switch" control-layout="intrinsic">
         <a-switch v-model:checked="currentTextShadow" />
-      </div>
-    </div>
+      </SettingsField>
+    </SettingsForm>
 
     <div v-show="currentTransDisplay">
       <a-card size="small" :title="$t('style.trans.title')">
         <template #extra>
           <a @click="useSameStyle">{{ $t('style.trans.useSame') }}</a>
         </template>
-        <div class="input-item">
-          <span class="input-label">{{ $t('style.fontFamily') }}</span>
-          <FontFamilySelect
-            class="input-area"
-            v-model="currentTransFontFamily"
-            @validity-change="translationFontValid = $event"
-          />
-        </div>
-        <div class="input-item">
-          <span class="input-label">{{ $t('style.fontColor') }}</span>
-          <a-input
-            class="input-area"
-            type="color"
-            v-model:value="currentTransFontColor"
-          />
-          <div class="input-item-value">{{ currentTransFontColor }}</div>
-        </div>
-        <div class="input-item">
-          <span class="input-label">{{ $t('style.fontSize') }}</span>
-          <a-slider
-            class="input-area"
-            :min="0" :max="72"
-            v-model:value="currentTransFontSize"
-          />
-          <div class="input-item-value">{{ currentTransFontSize }}px</div>
-        </div>
-        <div class="input-item">
-          <span class="input-label">{{ $t('style.fontWeight') }}</span>
-          <a-slider
-            class="input-area"
-            :min="1" :max="9"
-            v-model:value="currentTransFontWeight"
-          />
-          <div class="input-item-value">{{ currentTransFontWeight*100 }}</div>
-        </div>
+        <SettingsForm>
+          <SettingsField :label="$t('style.fontFamily')" align="start">
+            <FontFamilySelect
+              v-model="currentTransFontFamily"
+              @validity-change="translationFontValid = $event"
+            />
+          </SettingsField>
+          <SettingsField :label="$t('style.fontColor')">
+            <a-input type="color" v-model:value="currentTransFontColor" />
+            <template #value>{{ currentTransFontColor }}</template>
+          </SettingsField>
+          <SettingsField :label="$t('style.fontSize')">
+            <a-slider :min="0" :max="72" v-model:value="currentTransFontSize" />
+            <template #value>{{ currentTransFontSize }}px</template>
+          </SettingsField>
+          <SettingsField :label="$t('style.fontWeight')">
+            <a-slider :min="1" :max="9" v-model:value="currentTransFontWeight" />
+            <template #value>{{ currentTransFontWeight * 100 }}</template>
+          </SettingsField>
+        </SettingsForm>
       </a-card>
     </div>
 
-    <div v-show="currentTextShadow" style="margin-top:10px;">
+    <div v-show="currentTextShadow" style="margin-top: 10px">
       <a-card size="small" :title="$t('style.shadow.title')">
-        <div class="input-item">
-          <span class="input-label">{{ $t('style.shadow.offsetX') }}</span>
-          <a-slider
-            class="input-area"
-            :min="-10" :max="10"
-            v-model:value="currentOffsetX"
-          />
-          <div class="input-item-value">{{ currentOffsetX }}px</div>
-        </div>
-        <div class="input-item">
-          <span class="input-label">{{ $t('style.shadow.offsetY') }}</span>
-          <a-slider
-            class="input-area"
-            :min="-10" :max="10"
-            v-model:value="currentOffsetY"
-          />
-          <div class="input-item-value">{{ currentOffsetY }}px</div>
-        </div>
-        <div class="input-item">
-          <span class="input-label">{{ $t('style.shadow.blur') }}</span>
-          <a-slider
-            class="input-area"
-            :min="0" :max="12"
-            v-model:value="currentBlur"
-          />
-          <div class="input-item-value">{{ currentBlur }}px</div>
-        </div>
-        <div class="input-item">
-          <span class="input-label">{{ $t('style.shadow.color') }}</span>
-          <a-input
-            class="input-area"
-            type="color"
-            v-model:value="currentTextShadowColor"
-          />
-          <div class="input-item-value">{{ currentTextShadowColor }}</div>
-        </div>
+        <SettingsForm>
+          <SettingsField :label="$t('style.shadow.offsetX')">
+            <a-slider :min="-10" :max="10" v-model:value="currentOffsetX" />
+            <template #value>{{ currentOffsetX }}px</template>
+          </SettingsField>
+          <SettingsField :label="$t('style.shadow.offsetY')">
+            <a-slider :min="-10" :max="10" v-model:value="currentOffsetY" />
+            <template #value>{{ currentOffsetY }}px</template>
+          </SettingsField>
+          <SettingsField :label="$t('style.shadow.blur')">
+            <a-slider :min="0" :max="12" v-model:value="currentBlur" />
+            <template #value>{{ currentBlur }}px</template>
+          </SettingsField>
+          <SettingsField :label="$t('style.shadow.color')">
+            <a-input type="color" v-model:value="currentTextShadowColor" />
+            <template #value>{{ currentTextShadowColor }}</template>
+          </SettingsField>
+        </SettingsForm>
       </a-card>
     </div>
   </a-card>
@@ -230,7 +156,6 @@
       />
     </div>
   </Teleport>
-
 </template>
 
 <script setup lang="ts">
@@ -242,6 +167,8 @@ import { useI18n } from 'vue-i18n'
 import { useCaptionLogStore } from '@renderer/stores/captionLog'
 import FontFamilySelect from './FontFamilySelect.vue'
 import CaptionViewport from './caption/CaptionViewport.vue'
+import SettingsField from '@renderer/components/settings/SettingsField.vue'
+import SettingsForm from '@renderer/components/settings/SettingsForm.vue'
 import type {
   CaptionBoundaryMode,
   CaptionDisplayMode,
@@ -318,7 +245,7 @@ const fallbackCaptions = computed<CaptionItem[]>(() =>
 )
 
 function addOpicityToColor(color: string, opicity: number): string {
-  const opicityValue = Math.round(opicity * 255 / 100)
+  const opicityValue = Math.round((opicity * 255) / 100)
   const opicityHex = opicityValue.toString(16).padStart(2, '0')
   return `${color}${opicityHex}`
 }
@@ -399,7 +326,7 @@ function resetStyle(): void {
 }
 
 watch(changeSignal, (val): void => {
-  if(val === true) {
+  if (val === true) {
     backStyle()
     captionStyle.changeSignal = false
   }
@@ -407,7 +334,6 @@ watch(changeSignal, (val): void => {
 </script>
 
 <style scoped>
-@import url(../assets/input.css);
 .general-note {
   padding: 10px 10px 0;
   max-width: min(36vw, 400px);
@@ -419,27 +345,6 @@ watch(changeSignal, (val): void => {
   font-weight: bold;
 }
 
-.mode-note {
-  margin: -4px 0 12px;
-  color: #888;
-  font-size: 12px;
-}
-
-.switch-option {
-  min-width: 0;
-  display: grid;
-  grid-template-columns: minmax(112px, 128px) auto;
-  align-items: center;
-  justify-content: start;
-  column-gap: 12px;
-}
-
-.switch-list {
-  display: grid;
-  row-gap: 10px;
-  margin: 12px 0;
-}
-
 .preview-container {
   box-sizing: border-box;
   width: 100%;
@@ -448,5 +353,4 @@ watch(changeSignal, (val): void => {
   border-radius: 10px;
   overflow-wrap: anywhere;
 }
-
 </style>

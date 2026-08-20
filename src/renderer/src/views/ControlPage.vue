@@ -323,8 +323,4 @@ watch(uiLanguage, (val) => {
   margin-inline-start: auto;
   white-space: normal;
 }
-
-.settings-panel {
-  container-type: inline-size;
-}
 </style>
