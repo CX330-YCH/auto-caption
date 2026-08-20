@@ -3997,3 +3997,145 @@
 - 用户明确授权：编译 Mac 版本并更新小版本号。
 - 根目录 `AGENTS.md`：要求保留用户修改、三语同步、使用项目环境、如实记录失败、不改系统环境或依赖，并明确实际验证平台。
 - 项目现有 `main.spec` 与 `electron-builder.yml`：作为 Python 引擎和 macOS arm64 打包配置来源。
+
+## 2026-08-20 - 可搜索本机字体选择器与手动输入降级
+
+### 用户授权与变更目标
+
+- 用户在完成技术评估和完整方案后明确要求“实施修改”；本批次将字幕原文和译文的自由文本字体输入升级为可搜索的本机字体选择器，同时完整保留手动输入单字体名称或 CSS 字体栈的能力。
+- 授权范围包括 Renderer 字体枚举、选择器组件、草稿校验、三语界面、离线测试和相关使用文档；非目标包括安装或升级依赖、改变配置 schema、修改字幕引擎或进程协议、发布、提交、推送、PR、真实外部 API 和平台安装包构建。
+- 修改前完整阅读根目录 `AGENTS.md`，确认 `src/`、`tests/`、`docs/` 无子目录规则，执行 `git status --short --branch` 得到干净的 `main...origin/main`，并阅读字幕样式组件、Pinia 配置链路、主进程配置验证、精确换行组件、现有测试和三语文档。
+
+### 变更类型
+
+- 功能、测试、文档。
+
+### 修改文件与原因
+
+- `src/renderer/src/components/FontFamilySelect.vue`：新增独立字体控件；在用户展开列表或点击刷新时枚举本机字体，提供搜索、虚拟列表、字体示例、系统字体/手动输入切换、不可用字体保留、访问错误提示和输入有效性事件。
+- `src/renderer/src/components/CaptionStyle.vue`：用同一个字体控件替换原文和译文的普通输入框，继续使用既有本地草稿、实时预览、应用、取消、重置和“使用原文样式”流程；任一字体值无效时阻止应用并显示三语错误通知。
+- `src/renderer/src/utils/fontFamily.ts`：新增不依赖 Vue 的字体领域逻辑；对字体族按 Unicode NFC 和不区分大小写键去重，固定提供通用字体，安全序列化含空格、引号、反斜杠或逗号的单个字体族，识别旧的带/不带引号单字体值并保留完整 CSS 字体栈。
+- `src/renderer/src/utils/localFonts.ts`：封装 Chromium `queryLocalFonts()` 能力检测、单 Renderer 内存缓存、显式刷新、只读取字体元数据以及 denied/unsupported/failed 错误分类；不读取 `FontData.blob()` 或持久化字体清单。
+- `src/renderer/src/i18n/lang/zh.ts`、`en.ts`、`ja.ts`：同步系统字体、手动输入、刷新、加载、拒绝、不支持、失败、字体不可用、自定义栈、校验和预览文案。
+- `tests/node/localFontFamily.test.mjs`：覆盖通用/本机字体排序去重、Unicode 和旧配置匹配、CSS 字体序列化、超长字体过滤、枚举缓存/刷新以及拒绝和不支持降级。
+- `tests/node/configDocument.test.mjs`：确认带引号的系统字体值和旧 CSS 字体栈继续通过 V5 配置解析，不需要迁移。
+- `README.md`、`README_en.md`、`README_ja.md`：把功能摘要更新为可搜索本机字体并保留手动 CSS 字体栈。
+- `docs/user-manual/zh.md`、`en.md`、`ja.md`：说明首次展开才枚举、列表只在本机内存使用、不读取/上传字体文件或清单、失败降级、旧配置保留和点击应用后才同步字幕窗口。
+- `docs/CHANGELOG.md`：在未发布版本记录本机字体选择器和手动降级。
+- `change.md`：追加本次授权、文件、行为、兼容性、验证、失败、限制、回滚和技术来源记录。
+
+### 修改前后行为
+
+- 修改前：原文和译文各有一个普通文本框；用户必须知道并准确输入系统字体名称，拼错或字体缺失时只能由 Chromium 静默 fallback。
+- 修改后：两处共用可搜索选择器；固定提供 `sans-serif`、`serif`、`monospace`、`system-ui`，其余选项来自当前系统允许 Chromium 枚举的字体实例并按 `family` 去重。不同字重/样式不重复占用选项，仍由现有字重滑块控制。
+- 枚举只在首次展开或用户明确刷新时发生，同一 Renderer 会话内缓存字体元数据；失败、拒绝或不支持时自动切换手动输入且不覆盖当前值。旧的 `Arial`、`"Arial"`、完整字体栈和已卸载字体都可继续显示、编辑和应用。
+- 从列表选择的单字体族序列化为安全的带引号 CSS 值；通用字体保持 CSS 关键字。手动值用浏览器 `CSS.supports`、非空和 256 字符上限校验，非法草稿不发送配置。
+- 字体仍是 CaptionStyle 本地草稿；选择后只更新既有预览，点击“应用”才写 Pinia 并通过原 IPC 同步字幕窗口。取消、重置、译文复制、精确换行和滚动模式布局重排语义不变。
+
+### 配置、IPC、协议、命令行、数据结构与依赖
+
+- 持久化配置继续为 V5，仍使用 `styles.fontFamily` 和 `styles.transFontFamily` 字符串；没有新增默认值、字段、schemaVersion 或迁移。主进程现有非空/256 字符验证继续作为不可信 IPC 边界，Renderer 的 CSS 校验只提供更早的用户反馈。
+- `control.captionConfig.change`、`both.captionConfig.set` 和所有 Electron IPC 名称/载荷均未变化；Python stdout NDJSON、本地 TCP command、自定义字幕引擎协议、CLI 参数、字幕 partial/final 和翻译关联均无变化。
+- 新增的 `LocalFontMetadata`、`FontFamilyOption` 和访问状态只属于 Renderer 内部，不跨 IPC 或持久化边界。
+- 没有新增、删除或升级 npm/pip 依赖，没有修改 `package.json` 或锁文件，没有访问付费 API。
+
+### 权限、安全和兼容性决策
+
+- 只读取 `family`、`fullName`、`postscriptName`、`style` 元数据，不调用字体二进制 `blob()`，不记录、上传或持久化完整字体清单；用户输入只通过 Vue style 对象进入 CSS 属性，不拼接 HTML 或 `<style>` 文本。
+- Electron 43.4.0 随附类型没有把 `local-fonts` 列入 `setPermissionRequestHandler` 的可识别联合类型，运行时可能按 `unknown` 报告。为避免把未知权限整体放行，本批次不新增全局 session handler，使用 Electron 本地可信 Renderer 的既有权限行为并在 API 缺失/拒绝/失败时降级。若未来 Electron 为该权限提供稳定名称，应单独进行会话权限收紧和剪贴板回归，不与本功能混合。
+- Local Font Access 只在桌面 Chromium 可用且需要安全上下文/用户激活；调用直接发生在展开或刷新用户事件中。开发 HTTP、本地打包 `file://` 和各操作系统实际授权行为仍需要目标平台实机确认。
+- 字体清单和字形度量天然因 Windows、macOS、Linux 而异；选择器改善当前机器的可发现性，但不会打包字体，也不能保证配置复制到另一台机器仍有同一字体。缺失字形或字体由 Chromium 按 CSS fallback 处理。
+- 回滚时恢复上述 Renderer、测试、三语 README/用户手册/CHANGELOG 并删除本条记录即可；配置没有升级或远端资源，因此无需迁移回滚，也不得回退任务开始前的 V5、精确换行或其他历史修改。
+
+### 验证记录
+
+- 初次实现纯字体逻辑后 `npm run test:node`：通过，Node `81/81`。
+- 接入选择器和三语文案后 `npm run typecheck && npm run test:node`：通过；Node/Web TypeScript 无错误，Node `81/81`。
+- 扩展缓存/拒绝和配置兼容测试后 `npm run lint && npm run test:node`：ESLint 通过，Node 测试失败；`localFonts.ts` 的 TypeScript 构造器参数属性不受 Node `--experimental-strip-types` 支持，测试文件加载时报 `ERR_UNSUPPORTED_TYPESCRIPT_SYNTAX`，结果为 `77/78` 个已运行测试通过且一个测试文件失败。改为显式只读属性后重跑 `npm run test:node`：通过，Node `84/84`。
+- 本地 Renderer GUI：`electron-vite --rendererOnly` 首次在沙箱内因 `listen EPERM ::1:5173` 失败；获准在沙箱外重跑后本地服务启动，但项目 Electron 二进制缺失并报 `Electron uninstall`。随后用同一项目 Vite/Vue 配置启动只监听 `127.0.0.1` 的临时测试页，并在受控浏览器中模拟既有 Electron IPC 和确定性字体元数据。
+- GUI 交互结果：控制页同时呈现原文/译文选择器；首次展开得到四个通用字体及去重后的 Arial、Noto Sans CJK SC、游ゴシック；搜索 `Noto` 只保留目标项；确认后原文值为 `"Noto Sans CJK SC"`，预览计算 `font-family` 同步变化且译文仍为 `sans-serif`；手动输入非法 `,` 显示错误并阻止“应用样式”；刷新模拟抛出 `NotAllowedError` 后自动显示手动输入，改回有效 `Arial` 时保留值并显示访问拒绝提示。
+- GUI 首次直接打开普通 Renderer 入口时因浏览器环境没有 Electron preload 出现预期的 `window.electron` 未定义错误；改用无自动入口的隔离测试页后功能交互成功。所有临时测试 HTML、Vite 配置、浏览器标签和本地服务器均已移除或关闭，未留在 Git 变更中。
+- 最终 `npm run verify`：通过；Node/Web TypeScript 与 ESLint 无错误，Node `84/84`、Python `66/66` 全部通过。命令仅出现项目既有 npm mirror 配置弃用警告和 Node `MODULE_TYPELESS_PACKAGE_JSON` 性能警告。
+- 最终 `npm run build`：通过；Electron main、preload、renderer 分别转换 28、1、3280 个模块，生产 Renderer 成功包含字体选择器、错误降级和三语文案。
+- 最终 `git diff --check`：通过；`git status --short --branch` 仅包含本批次预期的 Renderer、测试、三语 README/用户手册、CHANGELOG 和 `change.md`，没有锁文件、依赖、临时 GUI 测试文件、密钥或意外全仓格式化。普通构建刷新了 Git 忽略的 `out/`，未纳入变更。
+
+### 未执行、风险与后续事项
+
+- 尚未在真实 Electron 窗口或 Windows/Linux/macOS 打包应用中接受真实 `local-fonts` 权限并枚举真实字体；本地 GUI 使用确定性字体元数据模拟，证明组件交互但不能替代平台授权和真实字体清单回归。Windows 是发布重点，发布前必须优先验证 Windows 10/11 打包版。
+- 未运行真实麦克风/系统音频、云端识别/翻译、付费 API、PyInstaller 或 electron-builder 安装包；本批次只改变 Renderer 字体选择方式，不需要这些外部或平台构建操作。
+- 字体很多的机器依赖 Ant Design Vue Select 既有虚拟列表；纯逻辑按 family 去重并过滤无效/超长名称，但未在安装数千字体的真实工作站测量交互性能。
+- Local Font Access API 属于 WICG 社区草案而非 W3C Recommendation；Electron/Chromium 未来可能改变权限、字段或可用条件，功能检测和手动输入是长期兼容边界。
+
+### 关键外部文档或技术决策来源
+
+- Chrome for Developers Local Font Access：桌面 Chrome 103 起提供 `queryLocalFonts()`，返回 family/fullName/postscriptName/style，并要求本地字体权限；https://developer.chrome.com/docs/capabilities/web-apis/local-fonts
+- WICG Local Font Access 草案：要求安全上下文、顶层 Frame、用户激活，并说明字体枚举的隐私/指纹风险；https://wicg.github.io/local-font-access/
+- Electron Session 与安全文档：权限 handler 是会话级边界且应验证来源；项目锁定版本的类型不包含 `local-fonts`，因此没有用 `unknown` 进行不安全放行；https://www.electronjs.org/docs/latest/api/session 和 https://www.electronjs.org/docs/latest/tutorial/security
+- 根目录 `AGENTS.md`：要求用户可见文本中英日一致、保持配置/IPC 兼容、如实记录失败和未执行验证、不新增无必要依赖，并在同一批次追加完整 `change.md`。
+
+## 2026-08-20 - V2.17.0 macOS arm64 构建
+
+### 用户授权与变更目标
+
+- 用户明确要求编译 Mac 版本并更新小版本号；本批次将 `2.16.0` 更新为 `2.17.0`，使用项目内既有 `.venv` 编译 Python 引擎，并基于当前工作区生成 macOS arm64 应用、ZIP 和 DMG。
+- 非目标：不安装、删除或升级依赖，不修改系统 Python、Node、PATH 或其他系统环境，不发布 Release，不提交或推送 Git，不修改本批次之外的功能。
+- 修改前完整阅读根目录 `AGENTS.md`，确认没有子目录规则，执行 `git status --short --branch` 并阅读版本目标文件现有 diff。工作区已有未提交的可搜索本机字体选择器功能；本次完整保留，因此最终产物包含该功能。
+
+### 变更类型
+
+- 构建、配置、文档。
+
+### 修改文件与原因
+
+- `package.json`、`package-lock.json`：将应用和锁文件根包版本从 `2.16.0` 更新为 `2.17.0`；依赖及依赖约束未变化。
+- `src/renderer/index.html`、`src/renderer/src/components/EngineStatus.vue`：同步窗口标题和关于页可见版本。
+- `README.md`、`README_en.md`、`README_ja.md`：在保留既有字体选择器说明的基础上，同步中英日 README 版本和发布提示。
+- `docs/user-manual/zh.md`、`docs/user-manual/en.md`、`docs/user-manual/ja.md`：在保留既有本机字体说明的基础上，同步三语用户手册版本。
+- `docs/engine-manual/zh.md`、`docs/engine-manual/en.md`、`docs/engine-manual/ja.md`：同步三语引擎手册版本。
+- `docs/CHANGELOG.md`：新增 `v2.17.0` 条目，将当前未发布的本机字体选择器功能归入该版本，并记录版本同步和 macOS 构建。
+- `change.md`：追加本批次授权、范围、构建、验证、兼容性和风险记录。
+- `engine/dist/main`、`dist/mac-arm64/Auto Caption.app`、`dist/Auto Caption-2.17.0-arm64-mac.zip`、`dist/auto-caption-2.17.0.dmg` 及对应 blockmap/`latest-mac.yml`：由既有 PyInstaller/electron-builder 配置和系统打包工具生成或刷新，位于 Git 忽略目录，不作为源文件提交。
+
+### 修改前后行为
+
+- 修改前：源码、界面和三语文档显示 `2.16.0`，没有本批次的 `2.17.0` macOS 产物。
+- 修改后：版本统一为 `2.17.0`；产物的 `CFBundleShortVersionString` 和 `CFBundleVersion` 均为 `2.17.0`，Electron 主程序和内置 Python 引擎均为 arm64。
+- 本批次没有改变业务运行逻辑；应用基于当前工作区构建，因此包含此前未提交的可搜索本机字体选择器及手动 CSS 字体栈降级功能。
+
+### 配置、IPC、协议、命令行、数据结构与依赖
+
+- 本批次没有新增或修改配置字段、迁移、IPC、Python/Electron 进程协议、CLI 参数或业务数据结构。
+- 未执行 npm/pip 安装或升级命令；`package-lock.json` 仅修改根包版本。PyInstaller 使用 `engine/.venv`，临时配置目录为 `/private/tmp/auto-caption-pyinstaller-config`，没有修改系统环境。
+- electron-builder 使用项目锁定的 Electron `43.4.0` 和现有依赖，仅在沙箱 DNS 限制后按授权访问项目配置的下载镜像。npm 输出 `11.11.1 -> 11.19.0` 更新提示，但没有执行升级。
+
+### 兼容性、迁移与回滚
+
+- 实际构建及验证平台仅为 macOS arm64；未声明 macOS x64/universal、Windows 或 Linux 产物已验证。
+- 应用使用 ad-hoc 签名，没有 Apple Developer ID 和 TeamIdentifier，未执行 notarization；正式公开分发仍应使用 Developer ID 签名并完成 Apple 公证。
+- 回滚本批次可恢复上述版本源文件和文档到 `2.16.0`，并移除忽略目录中的 `2.17.0` 构建产物；不得回退本任务开始前已有的字体选择器修改。
+
+### 验证记录
+
+- `npm run verify`：通过；Node/Web TypeScript、ESLint、Node `84/84`、Python `66/66` 全部成功。
+- `npm run build`：通过；Electron main、preload、renderer 分别转换 28、1、3280 个模块。
+- `PYINSTALLER_CONFIG_DIR=/private/tmp/auto-caption-pyinstaller-config ./.venv/bin/pyinstaller --clean --noconfirm ./main.spec`：通过，生成 arm64 `engine/dist/main`；报告 `pycparser.lextab`/`yacctab` 隐式导入缺失和 numba `@rpath/libomp.dylib` 未解析警告，但未阻止构建。
+- `engine/dist/main --help`：沙箱内因 `semctl: Operation not permitted` 失败；按授权在沙箱外重跑后退出码 0，并输出完整 CLI 帮助。
+- `npx electron-builder --mac`：沙箱内因 `npmmirror.com` DNS 受限失败；按授权联网重跑后成功。构建器报告重复依赖引用，并因没有 Developer ID 跳过发布签名。
+- `file` 和 `plutil`：通过；主程序和内置引擎均为 Mach-O arm64，Info.plist 两个版本字段均为 `2.17.0`。
+- `codesign --force --deep --sign -` 与 `codesign --verify --deep --strict --verbose=2`：通过；最终应用为 ad-hoc 签名，TeamIdentifier 未设置。
+- `unzip -tq dist/Auto\ Caption-2.17.0-arm64-mac.zip`：通过，无压缩数据错误。
+- `hdiutil verify dist/auto-caption-2.17.0.dmg`：通过，磁盘映像校验有效。沙箱内重建首次因“设备未配置”失败，按授权在沙箱外重跑成功；工具同时报告旧 `hdiutil create` 语法弃用警告。
+- ZIP 大小 `224969657` 字节，SHA-256 `9323ba080503a79acf758e297fb69f22ea4086f11a4052b726bcdec8bb543e82`；DMG 大小 `244952167` 字节，SHA-256 `18bd741122675d8de48a630c9556fb5946688268348b8d4f7d910185a7ac013b`。已按最终签名产物重建 blockmap，并同步 `latest-mac.yml` 的 SHA-512、大小和日期。
+- npm 持续打印项目既有镜像配置弃用警告和 Node `MODULE_TYPELESS_PACKAGE_JSON` 性能警告；不影响测试或构建结果。
+
+### 未执行、风险与后续事项
+
+- 未执行 Developer ID 发布签名、Apple notarization、真实 Electron GUI/音频设备、云端识别翻译、付费 API 或自动更新端到端测试。
+- 未验证其他 CPU 架构和操作系统；ZIP 约 215 MiB，DMG 约 234 MiB，均为本机 arm64 产物。
+- PyInstaller 的 `libomp` 警告可能影响实际使用 numba OpenMP 后端的路径；CLI 启动自检已通过，但正式发布前建议进行真实音频引擎、字体权限和字幕窗口人工回归。
+
+### 关键外部文档或技术决策来源
+
+- 用户明确授权：编译 Mac 版本并更新小版本号。
+- 根目录 `AGENTS.md`：要求保留用户修改、三语同步、使用项目环境、如实记录失败、不改系统环境或依赖，并明确实际验证平台。
+- 项目现有 `main.spec` 与 `electron-builder.yml`：作为 Python 引擎和 macOS arm64 打包配置来源。

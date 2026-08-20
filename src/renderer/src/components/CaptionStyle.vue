@@ -61,9 +61,10 @@
 
     <div class="input-item">
       <span class="input-label">{{ $t('style.fontFamily') }}</span>
-      <a-input
+      <FontFamilySelect
         class="input-area"
-        v-model:value="currentFontFamily"
+        v-model="currentFontFamily"
+        @validity-change="sourceFontValid = $event"
       />
     </div>
 
@@ -136,9 +137,10 @@
         </template>
         <div class="input-item">
           <span class="input-label">{{ $t('style.fontFamily') }}</span>
-          <a-input
+          <FontFamilySelect
             class="input-area"
-            v-model:value="currentTransFontFamily"
+            v-model="currentTransFontFamily"
+            @validity-change="translationFontValid = $event"
           />
         </div>
         <div class="input-item">
@@ -238,6 +240,7 @@ import { storeToRefs } from 'pinia'
 import { notification } from 'ant-design-vue'
 import { useI18n } from 'vue-i18n'
 import { useCaptionLogStore } from '@renderer/stores/captionLog'
+import FontFamilySelect from './FontFamilySelect.vue'
 import CaptionViewport from './caption/CaptionViewport.vue'
 import type {
   CaptionBoundaryMode,
@@ -259,6 +262,7 @@ const currentCaptionBoundaryMode = ref<CaptionBoundaryMode>('sentence')
 const currentLineNumber = ref<number>(1)
 const currentLineBreak = ref<number>(0)
 const currentFontFamily = ref<string>('sans-serif')
+const sourceFontValid = ref(true)
 const currentFontSize = ref<number>(24)
 const currentFontColor = ref<string>('#000000')
 const currentFontWeight = ref<number>(4)
@@ -267,6 +271,7 @@ const currentOpacity = ref<number>(50)
 const currentPreview = ref<boolean>(true)
 const currentTransDisplay = ref<boolean>(true)
 const currentTransFontFamily = ref<string>('sans-serif')
+const translationFontValid = ref(true)
 const currentTransFontSize = ref<number>(24)
 const currentTransFontColor = ref<string>('#000000')
 const currentTransFontWeight = ref<number>(4)
@@ -326,6 +331,14 @@ function useSameStyle(): void {
 }
 
 function applyStyle(): void {
+  if (!sourceFontValid.value || !translationFontValid.value) {
+    notification.error({
+      placement: 'topLeft',
+      message: t('style.fontPicker.invalidTitle'),
+      description: t('style.fontPicker.invalidValue')
+    })
+    return
+  }
   captionStyle.displayMode = currentDisplayMode.value
   captionStyle.captionBoundaryMode = currentCaptionBoundaryMode.value
   captionStyle.lineNumber = currentLineNumber.value

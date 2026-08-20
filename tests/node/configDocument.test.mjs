@@ -244,3 +244,24 @@ test('validates nested values while preserving V5 extension fields', () => {
     /Invalid leftBarWidth/
   )
 })
+
+test('accepts selected local font values and legacy CSS font stacks', () => {
+  const config = createDefaultConfig('/recordings')
+  const selectedFont = parseConfigDocumentV5({
+    ...config,
+    caption: {
+      ...config.caption,
+      styles: {
+        ...config.caption.styles,
+        fontFamily: '"Noto Sans CJK SC"',
+        transFontFamily: '"游ゴシック", sans-serif'
+      }
+    }
+  })
+
+  assert.equal(selectedFont.caption.styles.fontFamily, '"Noto Sans CJK SC"')
+  assert.equal(
+    selectedFont.caption.styles.transFontFamily,
+    '"游ゴシック", sans-serif'
+  )
+})
