@@ -7,6 +7,11 @@ import {
   segmentGraphemes
 } from '../../src/renderer/src/captions/visualLines.ts'
 import {
+  normalizeRollingCaptionLineCount,
+  rollingCaptionTrackHeight,
+  ROLLING_CAPTION_LINE_HEIGHT
+} from '../../src/renderer/src/captions/captionGeometry.ts'
+import {
   buildCaptionTrackSegments,
   buildRollingCaptionLines,
   captionTrackAnchorAtOffset,
@@ -18,6 +23,16 @@ import {
   selectRollingCaptionLines,
   shouldJustifyRollingLine
 } from '../../src/renderer/src/captions/captionTracks.ts'
+
+test('normalizes rolling line capacity and derives stable track height', () => {
+  assert.equal(ROLLING_CAPTION_LINE_HEIGHT, 1.6)
+  assert.equal(normalizeRollingCaptionLineCount(Number.NaN), 1)
+  assert.equal(normalizeRollingCaptionLineCount(0), 1)
+  assert.equal(normalizeRollingCaptionLineCount(2.9), 2)
+  assert.equal(normalizeRollingCaptionLineCount(8), 4)
+  assert.ok(Math.abs(rollingCaptionTrackHeight(2, 24) - 76.8) < 1e-9)
+  assert.equal(rollingCaptionTrackHeight(4, 0), 0)
+})
 
 test('segments Unicode text without splitting surrogate pairs or combining marks', () => {
   const segments = segmentGraphemes('A👩‍💻e\u0301中')

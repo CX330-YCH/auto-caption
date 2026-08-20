@@ -8,6 +8,7 @@
 .settings-form {
   --settings-form-max-width: 640px;
   --settings-field-label-width: 128px;
+  --settings-field-control-min-width: 220px;
 
   box-sizing: border-box;
   width: 100%;

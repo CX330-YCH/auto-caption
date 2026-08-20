@@ -1,5 +1,10 @@
 <template>
-  <div class="rolling-caption-track" :data-kind="kind">
+  <div
+    class="rolling-caption-track"
+    :data-kind="kind"
+    :data-line-capacity="visibleLineCount"
+    :style="trackStyle"
+  >
     <TransitionGroup
       name="rolling-line"
       tag="div"
@@ -54,6 +59,11 @@ import {
   type CaptionTrackSegment,
   type RollingCaptionLine
 } from '../../captions/captionTracks'
+import {
+  normalizeRollingCaptionLineCount,
+  rollingCaptionTrackHeight,
+  ROLLING_CAPTION_LINE_HEIGHT
+} from '../../captions/captionGeometry'
 import type { VisualLineSlice } from '../../captions/visualLines'
 import ExactCaptionText from './ExactCaptionText.vue'
 
@@ -98,16 +108,28 @@ const composedTrack = computed(() => composeCaptionTrack(
   props.boundaryMode
 ))
 
+const visibleLineCount = computed(() =>
+  normalizeRollingCaptionLineCount(props.lineNumber)
+)
+
 const visibleRows = computed(() => selectRollingCaptionLines(
   measuredRows.value,
-  props.lineNumber
+  visibleLineCount.value
 ))
+
+const trackStyle = computed(() => ({
+  height: `${rollingCaptionTrackHeight(
+    visibleLineCount.value,
+    props.fontSize
+  )}px`
+}))
 
 const lineStyle = computed(() => ({
   fontFamily: props.fontFamily,
   fontSize: `${props.fontSize}px`,
   color: props.fontColor,
-  fontWeight: props.fontWeight * 100
+  fontWeight: props.fontWeight * 100,
+  lineHeight: String(ROLLING_CAPTION_LINE_HEIGHT)
 }))
 
 const measurementPhase = computed<CaptionPhase>(() => {
@@ -176,7 +198,7 @@ function handleLineSlicesChange(
 }
 
 function adjustMeasurementWindow(lines: readonly VisualLineSlice[]): void {
-  const targetRows = Math.max(1, Math.floor(props.lineNumber)) + 2
+  const targetRows = visibleLineCount.value + 2
   if (lines.length >= targetRows) {
     const firstRetainedLine = lines[lines.length - targetRows]
     const anchor = captionTrackAnchorAtOffset(
@@ -246,11 +268,18 @@ function sameAnchor(
   overflow: hidden;
 }
 
+.rolling-line-list {
+  display: flex;
+  height: 100%;
+  flex-direction: column;
+  justify-content: flex-end;
+}
+
 .rolling-line {
   box-sizing: border-box;
   width: 100%;
   min-width: 0;
-  line-height: 1.6em;
+  flex: none;
   text-align: left;
   white-space: pre-wrap;
   overflow-wrap: anywhere;

@@ -85,16 +85,38 @@ function hasAttribute(element, attributeName) {
   )
 }
 
-test('centralizes settings form width, responsive and switch alignment rules', () => {
+test('centralizes settings form width and wide/narrow switch alignment rules', () => {
   const formSource = readSource('src/renderer/src/components/settings/SettingsForm.vue')
   const fieldSource = readSource('src/renderer/src/components/settings/SettingsField.vue')
 
   assert.match(formSource, /--settings-form-max-width:\s*640px/)
+  assert.match(formSource, /--settings-field-label-width:\s*128px/)
+  assert.match(formSource, /--settings-field-control-min-width:\s*220px/)
   assert.match(formSource, /container-name:\s*settings-form/)
-  assert.match(fieldSource, /@container settings-form \(max-width:\s*480px\)/)
+  assert.match(fieldSource, /@container settings-form \(max-width:\s*360px\)/)
+  const narrowContainerSource = fieldSource.slice(
+    fieldSource.indexOf('@container settings-form (max-width: 360px)')
+  )
+  const wideContainerSource = fieldSource.slice(
+    0,
+    fieldSource.indexOf('@container settings-form (max-width: 360px)')
+  )
+
+  assert.doesNotMatch(
+    wideContainerSource,
+    /\.settings-field--switch\s*>\s*\.settings-field__label\s*{[^}]*text-align:\s*start/
+  )
   assert.match(
-    fieldSource,
-    /\.settings-field--switch\s*>\s*\.settings-field__label[\s\S]*?text-align:\s*start/
+    narrowContainerSource,
+    /\.settings-field--switch\s*>\s*\.settings-field__label\s*{[^}]*text-align:\s*start/
+  )
+  assert.match(
+    wideContainerSource,
+    /\.settings-field__label\s*{[\s\S]*?text-align:\s*end/
+  )
+  assert.match(
+    narrowContainerSource,
+    /\.settings-field--switch\s*{[^}]*grid-template-columns:\s*max-content\s+auto;[^}]*justify-content:\s*start/
   )
 })
 

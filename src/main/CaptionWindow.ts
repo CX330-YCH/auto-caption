@@ -4,6 +4,12 @@ import { is } from '@electron-toolkit/utils'
 import icon from '../../build/icon.png?asset'
 import { controlWindow } from './ControlWindow'
 import { allConfig } from './utils/AllConfig'
+import {
+  CAPTION_WINDOW_INITIAL_HEIGHT,
+  CAPTION_WINDOW_MAX_WIDTH,
+  CAPTION_WINDOW_MIN_WIDTH,
+  lockCaptionWindowHeight
+} from './CaptionWindowGeometry'
 
 class CaptionWindow {
   window: BrowserWindow | undefined;
@@ -12,8 +18,11 @@ class CaptionWindow {
     this.window = new BrowserWindow({
       icon: icon,
       width: allConfig.captionWindowWidth,
-      height: 100,
-      minWidth: 480,
+      height: CAPTION_WINDOW_INITIAL_HEIGHT,
+      minWidth: CAPTION_WINDOW_MIN_WIDTH,
+      maxWidth: CAPTION_WINDOW_MAX_WIDTH,
+      minHeight: CAPTION_WINDOW_INITIAL_HEIGHT,
+      maxHeight: CAPTION_WINDOW_INITIAL_HEIGHT,
       show: false,
       frame: false,
       transparent: true,
@@ -65,10 +74,10 @@ class CaptionWindow {
       }
     })
 
-    ipcMain.on('caption.windowHeight.change', (_, height) => {
-      if(this.window){
-        this.window.setSize(this.window.getSize()[0], height)
-      }
+    ipcMain.on('caption.windowHeight.change', (event, height) => {
+      const window = this.window
+      if (!window || event.sender !== window.webContents) return
+      lockCaptionWindowHeight(window, height)
     })
 
     ipcMain.on('caption.window.close', () => {

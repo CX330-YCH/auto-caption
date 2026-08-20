@@ -40,7 +40,7 @@ withDefaults(
   display: grid;
   grid-template-columns:
     minmax(96px, var(--settings-field-label-width, 128px))
-    minmax(0, 1fr);
+    minmax(var(--settings-field-control-min-width, 220px), 1fr);
   align-items: center;
   column-gap: 12px;
   row-gap: 6px;
@@ -64,7 +64,6 @@ withDefaults(
 
 .settings-field--switch > .settings-field__label {
   padding-top: 0;
-  text-align: start;
 }
 
 .settings-field__control,
@@ -111,7 +110,7 @@ withDefaults(
   font-size: 12px;
 }
 
-@container settings-form (max-width: 480px) {
+@container settings-form (max-width: 360px) {
   .settings-field--standard {
     grid-template-columns: minmax(0, 1fr);
   }
@@ -129,10 +128,12 @@ withDefaults(
   }
 
   .settings-field--switch {
-    grid-template-columns:
-      minmax(96px, var(--settings-field-label-width, 128px))
-      auto;
+    grid-template-columns: max-content auto;
     justify-content: start;
+  }
+
+  .settings-field--switch > .settings-field__label {
+    text-align: start;
   }
 }
 </style>

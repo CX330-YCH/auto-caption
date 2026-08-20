@@ -3998,6 +3998,125 @@
 - 根目录 `AGENTS.md`：要求保留用户修改、三语同步、使用项目环境、如实记录失败、不改系统环境或依赖，并明确实际验证平台。
 - 项目现有 `main.spec` 与 `electron-builder.yml`：作为 Python 引擎和 macOS arm64 打包配置来源。
 
+## 2026-08-20 - V2.20.0 macOS arm64 构建
+
+### 用户授权与变更目标
+
+- 用户明确要求编译 Mac 版本并更新小版本号；本批次将当前工作区版本从 `2.19.0` 更新为 `2.20.0`，使用项目内既有 `engine/.venv` 编译 Python 引擎，并生成 macOS arm64 应用、ZIP 和 DMG。
+- 非目标：不安装、删除或升级依赖，不修改系统 Python、Node、PATH 或其他系统环境，不发布 Release，不提交或推送 Git，不额外调整业务功能。
+- 修改前已完整阅读根目录 `AGENTS.md`，确认没有子目录规则，执行 `git status --short --branch` 并检查相关文件现有 diff。工作区已有未提交修改均被保留；最终产物包含当前的设置布局、固定字幕行容量和字幕窗口防纵向裁切等修改。
+
+### 变更类型
+
+- 构建、配置、文档。
+
+### 修改文件与原因
+
+- `package.json`、`package-lock.json`：将应用及锁文件根包版本更新为 `2.20.0`；依赖列表和版本约束未变化。
+- `src/renderer/index.html`、`src/renderer/src/components/EngineStatus.vue`：同步窗口标题和关于页可见版本。
+- `README.md`、`README_en.md`、`README_ja.md`：同步中英日 README 的版本与发布提示。
+- `docs/user-manual/zh.md`、`docs/user-manual/en.md`、`docs/user-manual/ja.md`：同步三语用户手册版本。
+- `docs/engine-manual/zh.md`、`docs/engine-manual/en.md`、`docs/engine-manual/ja.md`：同步三语引擎手册版本。
+- `docs/CHANGELOG.md`：新增 `v2.20.0` 条目，记录悬浮窄设置栏开关紧凑左对齐、版本同步及本次 macOS 构建。
+- `change.md`：追加本批次授权、范围、构建、验证、兼容性与风险记录。
+- `engine/dist/main`、`dist/mac-arm64/Auto Caption.app`、`dist/Auto Caption-2.20.0-arm64-mac.zip`、`dist/auto-caption-2.20.0.dmg` 及对应 blockmap/`latest-mac.yml`：由既有 PyInstaller、electron-builder 和 macOS 系统工具生成或刷新，位于 Git 忽略目录，不作为源文件提交。
+
+### 修改前后行为
+
+- 修改前：当前工作区版本为 `2.19.0`，没有本批次的 `2.20.0` macOS 产物。
+- 修改后：应用、界面和中英日文档统一显示 `2.20.0`；产物的 `CFBundleShortVersionString` 与 `CFBundleVersion` 均为 `2.20.0`，Electron 主程序和内置 Python 引擎均为 arm64。
+- 本批次没有新增业务运行逻辑；产物基于当前完整工作区构建，因此包含悬浮展开的窄设置栏中标签与开关紧凑左对齐，以及此前已有的设置布局、字幕固定行容量和窗口高度锁定修改。
+
+### 配置、IPC、协议、命令行、数据结构与依赖
+
+- 本批次自身没有新增或修改配置字段、配置迁移、IPC、Python/Electron 进程协议、CLI 参数或业务数据结构。
+- 未运行 npm/pip 安装或升级命令；`package-lock.json` 的直接变化仅为根包版本。PyInstaller 使用 `engine/.venv`，临时配置目录为 `/private/tmp/auto-caption-pyinstaller-config`，未修改系统环境。
+- electron-builder 使用项目现有 Electron `43.4.0` 与已锁定依赖；沙箱 DNS 受限后，仅按授权在沙箱外访问项目配置的 Electron 下载镜像。
+
+### 兼容性、迁移与回滚
+
+- 实际构建和验证平台仅为 macOS arm64；未声明 macOS x64/universal、Windows 或 Linux 产物已验证。
+- 应用使用 ad-hoc 签名，没有 Apple Developer ID、TeamIdentifier 或 notarization；公开分发前仍应使用 Developer ID 签名并完成 Apple 公证。
+- 回滚本批次可将上述版本源文件和文档恢复到 `2.19.0`，并移除 Git 忽略目录中的 `2.20.0` 产物；不得回退任务开始前已有的用户修改。
+
+### 验证记录
+
+- `npm run verify`：通过；Node/Web TypeScript、ESLint、Node `92/92`、Python `66/66` 全部成功。
+- `npm run build`：通过；Electron main、preload、renderer 分别转换 29、1、3286 个模块。
+- `PYINSTALLER_CONFIG_DIR=/private/tmp/auto-caption-pyinstaller-config ./.venv/bin/pyinstaller --clean --noconfirm ./main.spec`：通过，生成 arm64 `engine/dist/main`；报告 `pycparser.lextab`/`yacctab` 隐式导入缺失和 numba `@rpath/libomp.dylib` 未解析警告，但未阻止构建。
+- `engine/dist/main --help`：沙箱内因 `semctl: Operation not permitted` 失败；按授权在沙箱外重跑后退出码 0并正确输出 CLI 帮助。
+- `npx electron-builder --mac`：沙箱内因 `npmmirror.com` DNS 受限失败；按授权联网重跑后成功。构建器报告重复依赖引用，并因没有 Developer ID 跳过发布签名。
+- `file`、`plutil`：通过；应用主程序和内嵌引擎均为 Mach-O arm64，Info.plist 两个版本字段均为 `2.20.0`。
+- `codesign --force --deep --sign -` 与 `codesign --verify --deep --strict --verbose=2`：通过；最终应用为 ad-hoc 签名，TeamIdentifier 未设置。
+- `unzip -tq dist/Auto\ Caption-2.20.0-arm64-mac.zip`：通过，无压缩数据错误。
+- `hdiutil verify dist/auto-caption-2.20.0.dmg`：通过，磁盘映像校验有效。沙箱内重建首次因“设备未配置”失败，按授权在沙箱外重跑成功；工具同时报告旧 `hdiutil create` 语法弃用警告。
+- ZIP 大小 `224981101` 字节，SHA-256 `8dd69686a80f4d94ec269b377484c4dfcd2ca6e550e1b51fc77adf13940c5865`；DMG 大小 `244944387` 字节，SHA-256 `ba1838b7f379409b89c66d2005c11e34d09b7f3eb25ef0c8a05262743890248a`。已基于最终签名产物重建 blockmap，并同步 `latest-mac.yml` 的 SHA-512、大小和日期。
+- npm 持续打印项目既有镜像配置弃用警告；不影响测试或构建结果。
+
+### 未执行、风险与后续事项
+
+- 未执行 Developer ID 发布签名、Apple notarization、真实 Electron GUI/音频设备、云端识别翻译、付费 API、自动更新端到端测试或其他平台构建。
+- ZIP 约 215 MiB，DMG 约 234 MiB，均为本机 arm64 产物。
+- PyInstaller 的 `libomp` 警告可能影响实际使用 numba OpenMP 后端的路径；CLI 启动自检已通过，但正式发布前建议进行真实音频、字幕呈现、窗口边缘拖拽和悬浮窄设置栏回归。
+
+### 关键外部文档或技术决策来源
+
+- 用户明确授权：编译 Mac 版本并更新小版本号。
+- 根目录 `AGENTS.md`：要求保留用户修改、三语同步、使用项目环境、如实记录失败、不改系统环境或依赖，并明确实际验证平台。
+- 项目现有 `main.spec` 与 `electron-builder.yml`：作为 Python 引擎及 macOS arm64 打包配置来源。
+
+## 2026-08-20 - 修复悬浮展开设置栏的开关组横向错位
+
+### 用户授权与变更目标
+
+- 用户提供 v2.19.0 悬浮展开设置栏截图，明确指出文字与开关仍然错位；本次继续完成已授权的设置布局修复。
+- 目标：修正共享字段的窄容器布局契约，使悬浮展开栏中的开关文字和开关作为一个紧凑单元从内容区左侧同行显示，同时保留常规宽栏的右对齐标签列；以后新增开关只要使用共享 `SettingsField` 即自动继承规则。
+- 非目标：不在字幕引擎业务组件中增加覆盖样式，不改变普通字段的 360px 堆叠断点，不修改配置、字幕呈现、窗口尺寸、引擎协议、IPC、依赖、版本或构建产物，不提交、推送或发布。
+- 修改前执行 `git status --short --branch`，识别并保留当前工作区已有的完整修复和 v2.19.0 构建变更；阅读目标共享组件、契约测试及同文件现有 diff，确认没有子目录 `AGENTS.md`。
+
+### 变更类型
+
+- 修复、测试、文档。
+
+### 修改文件与原因
+
+- `src/renderer/src/components/settings/SettingsField.vue`：在既有 360px 容器查询内，将开关的固定 128px 标签列改为 `max-content auto`，并只在该窄容器分支把开关标签设为左对齐；宽容器继续使用共享 128px 右对齐标签列。
+- `tests/node/settingsLayoutContract.test.mjs`：把宽栏右对齐、窄栏左对齐、窄栏内容宽度标签列和 12px 共享列间距所依赖的结构写入集中契约，避免后续新增控件或重构恢复错误固定列。
+- `docs/user-manual/zh.md`、`docs/user-manual/en.md`、`docs/user-manual/ja.md`：三语同步说明宽栏和悬浮窄栏采用不同但统一管理的开关对齐方式。
+- `docs/CHANGELOG.md`：修正 v2.19.0 设置布局条目，明确悬浮窄栏的紧凑左对齐同行行为。
+- `change.md`：追加本批次授权、范围、行为、验证和风险记录。
+
+### 修改前后行为
+
+- 修改前：不超过 360px 的普通字段已经上下排列，但开关仍保留 128px 固定标签列和右对齐文字，导致“标签 + 开关”整体从内容区左侧向右偏移，在悬浮展开栏中看起来靠近中间。
+- 修改后：不超过 360px 时，开关使用内容宽度标签列，文字左对齐，文字与开关保持同行且间距仍为共享的 12px，整个组合从表单内容左边缘开始；大于 360px 时，开关继续和普通字段共用 128px 右对齐标签列及控件列线。
+- 业务组件没有新增布局分支；通用设置、字幕引擎设置、字幕样式设置及未来新增的共享开关字段都通过同一组件自动获得该行为。
+
+### 配置、协议、兼容性与回滚
+
+- 配置 schema、默认值、迁移、Pinia 状态、Electron IPC、Python/Electron 进程协议、命令行、Provider、字幕数据结构和依赖均无变化，不需要迁移。
+- 修改仅使用既有 CSS Grid、容器查询和 Vue 共享组件能力，不增加平台专属 API；实际几何回归在本机 Chromium 执行，不宣称 Windows/Linux 原生 Electron 已单独验证。
+- 回滚时应作为一个批次恢复本记录列出的共享组件、测试和三语文档；不得回退同一工作区中用户已有的 v2.19.0 版本、字幕行容量、窗口高度或其他修复。
+
+### 验证记录
+
+- `node --test tests/node/settingsLayoutContract.test.mjs`：通过，`4/4`；确认共享最大宽度、标签/控件令牌、360px 断点、宽/窄开关对齐以及业务组件禁止自建 Grid 的契约。
+- 真实 Chromium 本地几何回归：首次在沙箱内启动仅监听 `127.0.0.1:4173` 的临时 Vite 页因 `listen EPERM` 失败；按授权在沙箱外启动后成功。310px 表单下普通字段上下排列，开关标签左边缘与表单左边缘一致，标签和开关垂直同行，实测间距 12px、`text-align: start`；380px 表单下普通字段和开关均同行，开关标签与普通标签列右边缘一致，实测间距 12px、`text-align: end`。测试标签、服务器和全部临时文件/缓存已清理，未进入仓库。
+- `npm run verify`：通过；Node/Web TypeScript、ESLint、Node `92/92`、Python `66/66` 全部成功。输出仅包含项目既有 npm mirror 弃用警告和 Node `MODULE_TYPELESS_PACKAGE_JSON` 性能警告。
+- `npm run build`：通过；Electron main、preload、renderer 分别转换 29、1、3286 个模块，生产构建成功。
+- `git diff --check`：代码和文档记录追加前通过；完成本记录后执行最终复核。
+
+### 未执行、风险与后续事项
+
+- 未启动已打包 Electron 应用重做截图中的真实鼠标悬浮流程，也未重新生成 v2.19.0 DMG/ZIP；本次源代码晚于现有构建产物，若要分发此修复必须重新打包。共享组件已通过真实 Chromium 的窄/宽容器几何测量，但正式发布前仍建议在目标 macOS/Windows 窗口中复核悬浮展开、点击固定展开和中英日三种界面文本。
+- `max-content` 标签列适用于当前中英日开关标签；未来新增异常长的开关文案时应在共享契约中评估可用宽度，不应在业务组件内截断或增加局部偏移。
+
+### 关键技术决策来源
+
+- 用户提供的悬浮展开截图：确认错误不是开关换行，而是窄容器仍保留宽栏固定标签列造成整个组合右移。
+- 根目录 `AGENTS.md`：要求通用开关使用共享表单渲染、禁止业务组件堆叠布局补丁、三语同步、真实记录失败与验证，并追加完整 `change.md`。
+- 现有 `SettingsForm`/`SettingsField` 容器查询边界：作为设置布局和未来新增字段的单一事实来源。
+
 ## 2026-08-20 - V2.18.0 macOS arm64 构建
 
 ### 用户授权与变更目标
@@ -4301,3 +4420,153 @@
 - 使用 `rg -n '^## 2026-08-20 - V2\\.(17|18)\\.0|^## 2026-08-20 - 设置表单' change.md` 确认原 V2.18.0 记录位于设置布局和 V2.17.0 记录之前，并在本条后执行最终 `git diff --check` 和工作区审计。
 - 未新增测试或构建命令；本条不改变已验证产物。风险仅为历史文件中原记录物理顺序不连续，读取时应以标题日期、版本号及本更正为准。
 - 决策来源：根目录 `AGENTS.md` 要求历史只能追加，纠错必须追加更正记录并引用原条目。
+
+## 2026-08-20 - 修复设置字段对齐、滚动字幕行容量和窗口纵向裁切
+
+### 用户授权与变更目标
+
+- 用户先提供控制窗口和字幕窗口截图，指出：25% 左栏下标签与选项错误分行；开关在窄栏发生标签/控件分离、在宽栏贴住卡片左侧；选择两行后预览与字幕窗口未维持两行；字幕窗口可被纵向压缩并裁字。用户随后明确要求“执行完整修复”。
+- 目标：修正共享设置布局契约而不增加业务组件补丁；让逐行模式按原文/译文分别建立配置的固定视觉行容量；让字幕窗口高度始终由内容测量结果控制并禁止人工纵向裁切；为以后新增普通字段和开关提供强制共享边界与防回归测试。
+- 非目标：不改变整句模式的最近字幕条数语义，不修改配置 schema、默认值或迁移，不修改字幕引擎 partial/final/翻译协议，不改变 Provider、热词、音频、命令行或持久化窗口宽度，不增加或升级依赖，不打包发布，不提交、推送或创建 PR。
+- 修改前完整阅读根目录 `AGENTS.md`，使用 `rg --files -g 'AGENTS.md'` 确认没有子目录补充规则；`git status --short --branch` 为 `main...origin/main` 且工作区干净。随后阅读共享设置组件和契约测试、字幕配置/轨道/精确换行/预览/窗口、Electron 43.4.0 本地类型、IPC 文档和中英日用户手册。
+
+### 变更类型
+
+- 修复、最小必要重构、测试、文档。
+
+### 修改文件与原因
+
+- `src/renderer/src/components/settings/SettingsForm.vue`：在既有 640px 最大宽度和 128px 标签列之外集中定义 220px 最小控件宽度，作为双列布局边界的统一设计令牌。
+- `src/renderer/src/components/settings/SettingsField.vue`：普通字段的控件列使用共享最小宽度；上下布局断点由错误覆盖 25% 常用侧栏的 480px 调整为按 `128 + 12 + 220` 得出的 360px；删除开关标签左对齐特例，使开关与普通字段共用右对齐标签列。业务组件没有新增媒体查询、Grid 或覆盖样式。
+- `tests/node/settingsLayoutContract.test.mjs`：把最大宽度、标签列、最小控件宽度、360px 容器断点和开关右对齐写入共享契约；继续禁止设置业务组件重新引入旧类、局部 Grid 或脱离 `SettingsForm > SettingsField` 的表单控件。
+- `src/renderer/src/captions/captionGeometry.ts`：新增逐行字幕几何单一来源，集中 1–4 行规范化、`1.6` 行高和基于字号的轨道高度计算。
+- `src/renderer/src/components/caption/RollingCaptionTrack.vue`：使用规范化行容量选择可见行和测量安全窗口；每个原文/译文轨道固定为 `行数 × 字号 × 1.6` 高度，行列表从底部排列并禁止行项目收缩。预览和字幕窗口继续通过公共 `CaptionViewport` 共享该实现。
+- `tests/node/captionPresentation.test.mjs`：新增非法、过小、非整数和过大行数规范化及 2 行/24px 轨道高度测试；既有精确换行、轨道独立、partial、断句和有界测量测试继续执行。
+- `src/main/CaptionWindowGeometry.ts`：新增可离线测试的原生窗口几何边界，集中 480–10000px 宽度、22–16384px 内容高度验证及“先释放旧约束、设置内容高度、再把最小/最大高度锁为同值”的跨平台调用顺序。
+- `src/main/CaptionWindow.ts`：窗口创建时即锁定初始 100px 高度；`caption.windowHeight.change` 只接受当前字幕窗口 `webContents` 发出的消息，并通过共享几何边界更新尺寸。保持 `resizable: true` 和原宽度范围，因此只禁止纵向裁切，不取消横向调整。
+- `src/renderer/src/views/CaptionPage.vue`：内容高度由向下取整改为向上取整后再补边框，避免小数像素被截掉。
+- `tests/node/captionWindowGeometry.test.mjs`：覆盖高度类型/有限性/上下界、分数向上取整、宽度保持、原生约束调用顺序和非法报告零副作用。
+- `docs/user-manual/zh.md`、`docs/user-manual/en.md`、`docs/user-manual/ja.md`：三语同步设置字段断点/开关列、固定行容量、空余行槽和字幕窗口只允许横向调整的用户行为。
+- `docs/api-docs/caption-presentation.md`：记录字幕几何单一来源、固定轨道行槽以及 Renderer 测量到主进程高度锁定的数据流。
+- `docs/api-docs/electron-ipc.md`：补充既有高度 IPC 的发送方验证、有限数字、22–16384px 范围和锁定语义。
+- `docs/CHANGELOG.md`：在未发布部分记录三类用户可见修复。
+- `change.md`：追加本次授权、范围、文件、行为、验证、兼容性和风险记录。
+
+### 修改前后行为
+
+- 修改前：表单宽度不超过 480px 时所有普通字段上下排列，导致 25% 常用侧栏也分行；开关标签被特例强制左对齐，窄栏与开关本体分离、宽栏贴住卡片左侧；契约测试反而固定了这两个错误规则。
+- 修改后：表单宽度大于 360px 时普通标签/控件统一同行，小于等于 360px 时才堆叠；开关在所有宽度使用同一右对齐标签列和控件列起点。以后新增受支持控件只要进入共享字段边界，即继承相同行为，契约测试会拒绝重新建立局部布局。
+- 修改前：`lineNumber` 只用于 `slice(-N)`，是当前已测行的上限；宽窗口中内容只形成一行时，选择两行仍只有一行高度。
+- 修改后：逐行模式中原文和译文各自拥有固定 N 行容量并独立滚动；文本不足时保留空槽而不复制字幕，最新内容靠底部显示。整句模式仍按最近 N 条字幕呈现，不改变历史语义。
+- 修改前：字幕窗口只设最小宽度且 Electron 默认允许纵向缩放；Renderer 仅在内容高度变化时报告高度，人工压缩不会触发恢复，因而可以持续裁字。
+- 修改后：字幕窗口高度始终锁定为合法的内容测量高度；内容、字体、行数或横向重排改变时自动更新，用户仍可调整左右宽度，但不能通过上下边缘或角落把高度压低。
+
+### 配置、IPC、协议、数据结构与依赖
+
+- `schemaVersion: 5`、`Styles.lineNumber` 字段、默认值和 V2→V3→V4→V5 迁移均无变化，不需要配置迁移；窗口宽度仍使用既有 `captionWindowWidth` 并在关闭时持久化。
+- `caption.windowHeight.change` 的通道名和 `number` 载荷类型不变；本次只收紧发送方、有限性和范围验证，并改变主进程接收后的原生高度约束。其他 Electron IPC 不变。
+- Python stdout NDJSON、本地 TCP command、字幕/翻译事件、Provider 生命周期、CLI 和引擎参数均无变化。
+- 新增的 `captionGeometry.ts` 和 `CaptionWindowGeometry.ts` 是进程内部纯几何边界，不是配置或公开协议；没有新增、删除或升级 npm/pip 依赖，锁文件未修改。
+
+### 兼容性、回滚与安全
+
+- Electron 43.4.0 的 `setMinimumSize`/`setMaximumSize`/`setSize` 在 BrowserWindow 公共接口中可用；没有采用只声明支持 macOS/Windows 的 `will-resize` 事件拦截，从结构上保留 Linux 路径。实际 GUI 回归平台仅为本机 Chromium，不宣称 Windows/Linux 原生窗口已经实测。
+- 高度 IPC 现在验证 `event.sender === captionWindow.webContents`，并拒绝字符串、NaN、无穷值及范围外高度；非法数据不改变原生窗口约束。没有处理或记录凭据、用户字幕内容或其他敏感信息。
+- 回滚应作为一个批次恢复上述共享设置、字幕几何、窗口几何、测试和文档，并删除两个新增几何文件及窗口测试；配置和远端资源不需要迁移回滚，不得回退本任务之前的 V5、字体选择器、字幕轨道或引擎架构。
+
+### 验证记录
+
+- `node --test tests/node/settingsLayoutContract.test.mjs`：通过，设置布局契约 `4/4`。
+- 首次执行 Node 测试时新增轨道高度用严格浮点相等比较，得到 `88/89` 通过、1 项因 JavaScript `76.80000000000001` 与 `76.8` 表示差异失败；改为误差比较后，针对性 `node --experimental-strip-types --test tests/node/captionPresentation.test.mjs tests/node/captionWindowGeometry.test.mjs tests/node/settingsLayoutContract.test.mjs` 通过 `21/21`。
+- 首次 `npm run typecheck`：Node 类型检查失败，Electron `BrowserWindow.getSize()` 的声明为 `number[]`，而初始测试适配接口过窄地声明为二元 tuple。接口改为 `number[]` 并验证/规范化报告宽度后重跑通过；Web 类型检查也通过。
+- 真实 Chromium 本地布局回归：沙箱内启动 Vite 临时页因 `listen EPERM 127.0.0.1:4173` 失败；获准在沙箱外仅监听 `127.0.0.1` 后成功。420px 表单下普通字段和开关均同行，标签 `text-align: end`，标签右边到控件左边实测 12px；350px 下普通字段上下排列，开关仍同行且标签右对齐。24px 字号、2 行配置下，原文和译文轨道各自 `data-line-capacity=2`，实测高度均为 `76.796875px`，当前各只有一行文本时高度不收缩；公共字幕区域总高度为 `173.59375px`（两轨加 20px 安全边距）。临时页面、Vite 缓存、标签和服务器均已清理，未进入仓库。
+- `npm run verify`：通过；Node/Web TypeScript、ESLint、Node `92/92`、Python `66/66` 全部成功。仅出现项目既有 npm mirror 弃用警告和 Node `MODULE_TYPELESS_PACKAGE_JSON` 性能警告。
+- `npm run build`：通过；Electron main、preload、renderer 分别转换 29、1、3286 个模块，生产构建成功。
+- `git diff --check`：文档追加前通过；完成记录后再次执行最终检查和工作区审计。
+
+### 未执行、风险与后续事项
+
+- 未执行真实 Electron 字幕窗口拖拽回归，因为 `node_modules/electron/dist/Electron.app/Contents/MacOS/Electron` 不存在（本地依赖状态为 `executable-missing`）；没有未经授权安装或修复 Electron。纯函数测试覆盖高度验证和原生调用顺序，Chromium 测试覆盖内容行高，但不能替代 macOS/Windows/Linux 原生窗口边缘拖拽。
+- 未执行 Windows 10/11、Linux 或 macOS 打包应用回归，未运行真实麦克风/系统音频、云端识别/翻译、付费 API、PyInstaller 或 electron-builder 安装包。Windows 是发布重点，正式发布前应优先确认左右拖动可改宽、上下和四角不能裁字，以及不同系统缩放比例下内容高度稳定。
+- 极端字体回退可能产生与标称字号不同的字形外框，但 CSS 行盒仍使用统一 `1.6` 行高；Renderer 最终报告实际根节点高度并向上取整，可吸收子像素误差。若未来允许 4 行以上或 72px 以上字号，必须同时调整配置校验和纯几何上限，不应在组件内增加第二套常量。
+
+### 关键技术决策来源
+
+- 用户截图和明确授权“执行完整修复”：确定四个现象、25% 同行要求、避免补丁堆叠及最终实施范围。
+- 根目录 `AGENTS.md`：要求通用设置字段使用共享渲染边界、主进程验证 Renderer IPC、保持中英日用户行为一致、记录失败测试和未验证平台，并追加完整 `change.md`。
+- 项目锁定的 Electron 43.4.0 本地 `electron.d.ts`：确认 `setMinimumSize`、`setMaximumSize` 和 `setSize` 是跨平台 BrowserWindow 尺寸接口，而 `will-resize` 事件只声明 macOS/Windows，因此采用动态最小/最大高度锁定。
+- 现有 `CaptionViewport`、`RollingCaptionTrack` 和 `captionTracks.ts`：作为预览/字幕窗口共享呈现、原文/译文独立轨道和精确视觉行测量的单一既有边界。
+
+## 2026-08-20 - V2.19.0 macOS arm64 构建
+
+### 用户授权与变更目标
+
+- 用户明确要求编译 Mac 版本并更新小版本号；本批次将 `2.18.0` 更新为 `2.19.0`，使用项目内既有 `.venv` 编译 Python 引擎，并基于当前工作区生成 macOS arm64 应用、ZIP 和 DMG。
+- 非目标：不安装、删除或升级依赖，不修改系统 Python、Node、PATH 或其他系统环境，不发布 Release，不提交或推送 Git，不修改本批次之外的功能。
+- 修改前完整阅读根目录 `AGENTS.md`，确认没有子目录规则，执行 `git status --short --branch` 并阅读版本目标文件现有 diff。工作区已有未提交的设置字段对齐、固定字幕行容量和窗口防纵向裁切修复；本次完整保留，因此最终产物包含这些修复。
+
+### 变更类型
+
+- 构建、配置、文档。
+
+### 修改文件与原因
+
+- `package.json`、`package-lock.json`：将应用和锁文件根包版本从 `2.18.0` 更新为 `2.19.0`；依赖及依赖约束未变化。
+- `src/renderer/index.html`、`src/renderer/src/components/EngineStatus.vue`：同步窗口标题和关于页可见版本。
+- `README.md`、`README_en.md`、`README_ja.md`：同步中英日 README 版本和发布提示。
+- `docs/user-manual/zh.md`、`docs/user-manual/en.md`、`docs/user-manual/ja.md`：在保留既有设置和字幕窗口说明修改的基础上，同步三语用户手册版本。
+- `docs/engine-manual/zh.md`、`docs/engine-manual/en.md`、`docs/engine-manual/ja.md`：同步三语引擎手册版本。
+- `docs/CHANGELOG.md`：新增 `v2.19.0` 条目，将当前未发布的设置字段对齐、固定行容量和窗口高度锁定修复归入该版本，并记录版本同步和 macOS 构建。
+- `change.md`：追加本批次授权、范围、构建、验证、兼容性和风险记录。
+- `engine/dist/main`、`dist/mac-arm64/Auto Caption.app`、`dist/Auto Caption-2.19.0-arm64-mac.zip`、`dist/auto-caption-2.19.0.dmg` 及对应 blockmap/`latest-mac.yml`：由既有 PyInstaller/electron-builder 配置和系统打包工具生成或刷新，位于 Git 忽略目录，不作为源文件提交。
+
+### 修改前后行为
+
+- 修改前：源码、界面和三语文档显示 `2.18.0`，没有本批次的 `2.19.0` macOS 产物。
+- 修改后：版本统一为 `2.19.0`；产物的 `CFBundleShortVersionString` 和 `CFBundleVersion` 均为 `2.19.0`，Electron 主程序和内置 Python 引擎均为 arm64。
+- 本批次没有额外改变业务运行逻辑；应用基于当前工作区构建，因此包含此前未提交的设置布局修复、原文/译文固定视觉行容量、字幕窗口高度 IPC 校验和防纵向裁切行为。
+
+### 配置、IPC、协议、命令行、数据结构与依赖
+
+- 本批次自身没有新增或修改配置字段、迁移、IPC、Python/Electron 进程协议、CLI 参数或业务数据结构；产物包含工作区既有的 `caption.windowHeight.change` 发送方和范围校验收紧，但通道名及载荷类型未变化。
+- 未执行 npm/pip 安装或升级命令；`package-lock.json` 仅修改根包版本。PyInstaller 使用 `engine/.venv`，临时配置目录为 `/private/tmp/auto-caption-pyinstaller-config`，没有修改系统环境。
+- electron-builder 使用项目锁定的 Electron `43.4.0` 和现有依赖，仅在沙箱 DNS 限制后按授权访问项目配置的下载镜像。
+
+### 兼容性、迁移与回滚
+
+- 实际构建及验证平台仅为 macOS arm64；未声明 macOS x64/universal、Windows 或 Linux 产物已验证。
+- 应用使用 ad-hoc 签名，没有 Apple Developer ID 和 TeamIdentifier，未执行 notarization；正式公开分发仍应使用 Developer ID 签名并完成 Apple 公证。
+- 回滚本批次可恢复上述版本源文件和文档到 `2.18.0`，并移除忽略目录中的 `2.19.0` 构建产物；不得回退本任务开始前已有的设置和字幕窗口修复。
+
+### 验证记录
+
+- `npm run verify`：通过；Node/Web TypeScript、ESLint、Node `92/92`、Python `66/66` 全部成功。
+- `npm run build`：通过；Electron main、preload、renderer 分别转换 29、1、3286 个模块。
+- `PYINSTALLER_CONFIG_DIR=/private/tmp/auto-caption-pyinstaller-config ./.venv/bin/pyinstaller --clean --noconfirm ./main.spec`：通过，生成 arm64 `engine/dist/main`；报告 `pycparser.lextab`/`yacctab` 隐式导入缺失和 numba `@rpath/libomp.dylib` 未解析警告，但未阻止构建。
+- `engine/dist/main --help`：沙箱内因 `semctl: Operation not permitted` 失败；按授权在沙箱外重跑后退出码 0，并输出 CLI 帮助。
+- `npx electron-builder --mac`：沙箱内因 `npmmirror.com` DNS 受限失败；按授权联网重跑后成功。构建器报告重复依赖引用，并因没有 Developer ID 跳过发布签名。
+- `file` 和 `plutil`：通过；主程序和内置引擎均为 Mach-O arm64，Info.plist 两个版本字段均为 `2.19.0`。
+- `codesign --force --deep --sign -` 与 `codesign --verify --deep --strict --verbose=2`：通过；最终应用为 ad-hoc 签名，TeamIdentifier 未设置。
+- `unzip -tq dist/Auto\ Caption-2.19.0-arm64-mac.zip`：通过，无压缩数据错误。
+- `hdiutil verify dist/auto-caption-2.19.0.dmg`：通过，磁盘映像校验有效。沙箱内重建首次因“设备未配置”失败，按授权在沙箱外重跑成功；工具同时报告旧 `hdiutil create` 语法弃用警告。
+- ZIP 大小 `224979488` 字节，SHA-256 `500fd6a3e65a5c897bce9d106fa77e1193f6a3dd670a1df5d440ba1aa2b7527f`；DMG 大小 `244941557` 字节，SHA-256 `7468e2ece026944f265569a97db926a3cfc676f240004740c95fa630534d90b4`。已按最终签名产物重建 blockmap，并同步 `latest-mac.yml` 的 SHA-512、大小和日期。
+- npm 持续打印项目既有镜像配置弃用警告和 Node `MODULE_TYPELESS_PACKAGE_JSON` 性能警告；不影响测试或构建结果。
+
+### 未执行、风险与后续事项
+
+- 未执行 Developer ID 发布签名、Apple notarization、真实 Electron GUI/音频设备、云端识别翻译、付费 API 或自动更新端到端测试。
+- 未验证其他 CPU 架构和操作系统；ZIP 约 215 MiB，DMG 约 234 MiB，均为本机 arm64 产物。
+- PyInstaller 的 `libomp` 警告可能影响实际使用 numba OpenMP 后端的路径；CLI 启动自检已通过，但正式发布前建议进行真实音频引擎、字幕行容量和窗口边缘拖拽回归。
+
+### 关键外部文档或技术决策来源
+
+- 用户明确授权：编译 Mac 版本并更新小版本号。
+- 根目录 `AGENTS.md`：要求保留用户修改、三语同步、使用项目环境、如实记录失败、不改系统环境或依赖，并明确实际验证平台。
+- 项目现有 `main.spec` 与 `electron-builder.yml`：作为 Python 引擎和 macOS arm64 打包配置来源。
+
+## 2026-08-20 - 更正：V2.20.0 记录顺序
+
+- 更正对象：本文件第 4001 行开始的“V2.20.0 macOS arm64 构建”记录。
+- 更正原因：追加该记录时使用了历史中重复出现的锚点，导致记录被插入到 V2.19.0 记录之前；为遵守只追加、不重写历史的要求，不移动或删除原记录，在文件末尾补充本顺序说明。
+- 正确时间顺序：V2.19.0 构建记录在先，V2.20.0 构建记录在后；V2.20.0 原记录中的授权、文件、构建命令、校验结果、哈希和风险信息仍然有效。
+- 本更正仅补充 `change.md` 的历史顺序说明，不改变代码、配置、构建产物、测试结果或版本号，因此不需要新增验证命令。

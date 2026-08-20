@@ -162,7 +162,7 @@ function closeCaptionWindow(): void {
 onMounted(() => {
   resizeObserver = new ResizeObserver(entries => {
     for (const entry of entries) {
-      const nextHeight = Math.floor(entry.contentRect.height) + 2
+      const nextHeight = Math.ceil(entry.contentRect.height) + 2
       if (windowHeight.value === nextHeight) continue
       windowHeight.value = nextHeight
       window.electron.ipcRenderer.send(
