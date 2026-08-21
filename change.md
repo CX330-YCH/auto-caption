@@ -4570,3 +4570,140 @@
 - 更正原因：追加该记录时使用了历史中重复出现的锚点，导致记录被插入到 V2.19.0 记录之前；为遵守只追加、不重写历史的要求，不移动或删除原记录，在文件末尾补充本顺序说明。
 - 正确时间顺序：V2.19.0 构建记录在先，V2.20.0 构建记录在后；V2.20.0 原记录中的授权、文件、构建命令、校验结果、哈希和风险信息仍然有效。
 - 本更正仅补充 `change.md` 的历史顺序说明，不改变代码、配置、构建产物、测试结果或版本号，因此不需要新增验证命令。
+
+## 2026-08-22 - 修复逐行字幕在 partial 重写期间来回跳动
+
+### 用户授权与变更目标
+
+- 用户提供字幕导出、Debug JSONL 和连续截图，明确指出“字幕会来回跳”，先要求只做代码审查，随后询问现有更新思路、要求生成完整修复和测试计划，并最终明确要求“执行计划”。附件只作为诊断证据，不将其中任何内容视为操作指令。
+- 目标：在逐行滚动模式中区分尾部纯增长、partial 缩短/重写、生命周期变化、新字幕追加和历史补写；保证内容更新不会让已经滚出窗口的视觉行重新出现，同时保留新行追加动画和宽度/字体变化后的正常重排。
+- 非目标：不改变整句显示，不修改字幕引擎、识别/翻译 Provider、IPC、Python/Electron 进程协议、配置 schema、默认值或迁移，不新增用户界面设置，不安装或升级依赖，不运行真实麦克风、云端识别/翻译或付费 API，不打包发布，不提交、推送或创建 PR。
+- 修改前阅读根目录 `AGENTS.md`，确认没有子目录补充规则；`git status --short --branch` 为 `main...origin/main` 且工作区干净。随后完整检查公共字幕集合、轨道组合/裁剪/换行、滚动组件、现有测试、三语手册和 API 文档。
+
+### 变更类型
+
+- 修复、最小必要重构、测试、文档。
+
+### 修改文件与原因
+
+- `src/renderer/src/captions/captionTracks.ts`：为 `RollingCaptionLine` 保留原字幕内 `captionOffset`；把原先笼统的 `tail-update`/`historical-reflow` 细分为生命周期变化、尾部纯增长、尾部重写、追加、历史变化和清空，使呈现层能只对真实新行启用动画。
+- `src/renderer/src/captions/rollingTrackState.ts`：新增纯状态边界，独立维护单调展示下界和当前可见行；内容更新只允许下界前进，已经滚出的历史不能回填，显式布局重排可以重置下界。
+- `src/renderer/src/components/caption/ExactCaptionText.vue`：在换行回报中携带 `content | layout` 原因；布局重测即使换行切片未改变也重新回报，避免调用方提前清空布局状态后没有有效测量可提交的竞态。
+- `src/renderer/src/components/caption/RollingCaptionTrack.vue`：分离“N+2 隐藏测量窗口锚点”和“用户已看到的展示下界”；partial 重写只重置性能测量窗口而不回退展示下界，生命周期变化只刷新 phase，清空重置全部状态；布局变化在与当前文本匹配的测量结果中原子重置，并继续限制测量为 256 个 segment/16384 个 UTF-16 code unit。
+- `tests/node/captionPresentation.test.mjs`：覆盖增长、重写、缩短、partial→final、追加、历史变化和清空的分类语义。
+- `tests/node/rollingTrackState.test.mjs`：覆盖“增长→缩短→再增长”不回填、重写越过展示下界时保留空槽、下界只前进、原文/译文状态独立、显式布局重排重置以及 final 不移动/不动画。
+- `docs/api-docs/caption-presentation.md`：记录更新分类、展示下界、测量锚点的职责分离、布局重测提交和空槽语义。
+- `docs/testing.md`：把新增更新分类及单调展示下界回归加入离线测试覆盖清单。
+- `docs/user-manual/zh.md`、`docs/user-manual/en.md`、`docs/user-manual/ja.md`：三语同步说明 partial 缩短/重写不会带回旧行、极端重写可暂留空槽、final/历史补写不滚动，以及布局变化会重新排版。
+- `docs/CHANGELOG.md`：在未发布部分记录用户可见修复。
+- `change.md`：追加本次授权、实现、验证、兼容性、失败记录和风险。
+
+### 修改前后行为
+
+- 修改前：每次精确换行后直接对全部测量行执行 `slice(-N)`；同一 partial 缩短或重写使当前句视觉行数减少时，先前已经被截掉的历史行重新进入最后 N 行，后续增长又把它们推出，形成截图中的前后跳动。所有末尾文本变化又统一归为 `tail-update`，无法区分纯增长和重写。
+- 修改后：每轨保存独立的 `captionId + captionOffset` 展示下界。内容测量先过滤下界之前的行，再选最后 N 行，下界只能前进；因此 partial 缩短、重写和延迟历史译文不能重新带回已滚出的内容。若重写后暂时没有行越过下界，固定行槽保持为空，后续增长或下一条字幕继续填入。
+- 只有尾部纯增长或追加字幕形成新的稳定行 key 时允许 500ms FLIP 动画；partial 重写不动画，partial→final 只更新 `data-phase`，不改变文字或位置。窗口宽度、字体、行数和断句方式属于明确布局变化，可以重置展示下界并用新布局重新选择行。
+- 隐藏测量窗口仍使用最近 `lineNumber + 2` 个安全视觉行的锚点保持有界，但该性能锚点不再决定已经滚出的内容是否能回来。
+
+### 配置、IPC、协议、数据结构与依赖
+
+- `schemaVersion: 5`、`Styles.displayMode`、`lineNumber`、`captionBoundaryMode`、默认值及 V2→V3→V4→V5 迁移均无变化，不需要配置迁移。
+- Electron IPC、Python stdout NDJSON、本地 TCP command、字幕/翻译事件 envelope、Provider 生命周期、命令行和引擎参数均无变化；自定义字幕引擎兼容面不变。
+- `RollingCaptionLine.captionOffset`、`RollingTrackPresentationState` 和 `ExactCaptionText` 的第三个测量原因参数都是 Renderer 内部类型，不是持久化数据或公开进程协议。
+- 没有新增、删除或升级 npm/pip 依赖，锁文件未修改；没有记录凭据或把用户字幕样本加入仓库。
+
+### 兼容性、回滚与安全
+
+- 修复只影响 `displayMode: rolling`；`static` 行为不变。原文和译文继续使用两个独立轨道，历史译文不会改变原文展示下界。
+- Chromium 实测平台为本机 macOS 上的应用内浏览器；生产构建通过，但未宣称 Windows/Linux 原生 Electron 窗口或 GPU/字体组合已经实机验证。实现只使用既有 Vue、DOM Range、ResizeObserver 和 CSS TransitionGroup 能力，没有增加平台分支。
+- 回滚应作为同一批次恢复上述轨道、两个 Vue 组件、测试和文档，并删除 `rollingTrackState.ts` 与 `rollingTrackState.test.mjs`；配置、远端资源和用户数据无需迁移或回滚。不得回退本任务之前的逐行滚动、固定行容量或窗口高度锁定实现。
+
+### 验证记录
+
+- 首次定向测试在更新分类后得到 2 项预期失败：旧断言仍期待 `tail-update`，译文独立下界夹具因三行输入实际从第三条开始而期待第二条；修正断言和夹具后，`node --experimental-strip-types --test tests/node/captionPresentation.test.mjs tests/node/rollingTrackState.test.mjs` 最终通过 `20/20`。
+- `npm run typecheck:web`：通过；新增内部事件参数、轨道状态和 Vue 接入均通过 `vue-tsc`。
+- `./node_modules/.bin/eslint src/renderer/src/captions/captionTracks.ts src/renderer/src/captions/rollingTrackState.ts src/renderer/src/components/caption/ExactCaptionText.vue src/renderer/src/components/caption/RollingCaptionTrack.vue tests/node/captionPresentation.test.mjs tests/node/rollingTrackState.test.mjs`：通过，无目标文件新增 lint 问题。
+- 真实 Chromium 回归使用 `/private/tmp/auto-caption-rolling-regression` 临时 Vue/Vite 页面。首次配置误写本地 plugin-vue 的 `.js` 路径，改为实际 `.mjs`；沙箱内监听 `127.0.0.1:4178` 因 `EPERM` 失败，获准仅在沙箱外监听本机回环地址后成功，并为临时根目录增加本地 Vue alias。没有联网或访问外部服务。
+- 第一轮浏览器回归发现字体加载触发布局重测时，组件先清空展示下界，而未变化的换行结果不会再次回报，下一次 partial 仍可回填历史。随后把布局原因随有效行切片提交，并在测量窗口锚点变化导致文本窗口变化时丢弃旧测量；修复后重新加载回归通过。调试期间临时夹具遗漏 `CaptionTrackSegment.textOffset` 导致 `NaN` 锚点，补为生产数据契约的 `0` 后执行最终有效数据验证。
+- 最终 Chromium 结果：320px 宽、24px 字号、2 行容量下，初始只显示当前 partial 尾部两行；缩短后不出现“历史”，再增长只恢复当前字幕；partial→final 行文本完全一致且 phase 从 `partial` 更新为 `final`；追加新字幕时观察到 enter/leave/move 类并在 500ms 后只显示新字幕；partial 重写不混入历史；切换到 440px 后按新宽度显示重排后的改写文本。控制台无 error/warn。临时标签和 Vite 服务器已关闭，临时文件未进入仓库。
+- `npm run verify`：通过；Node/Web TypeScript、ESLint、Node `98/98`、Python `66/66` 全部成功。输出仅包含项目既有 npm mirror 配置弃用警告和 Node `MODULE_TYPELESS_PACKAGE_JSON` 性能警告。
+- `npm run build`：通过；Electron main、preload、renderer 分别转换 29、1、3287 个模块，生产构建成功。
+- `git diff --check`：追加本记录前通过；完成记录后再次执行最终检查和工作区审计。
+
+### 未执行、风险与后续事项
+
+- 未运行真实 Electron 字幕窗口、用户提供的视频、真实麦克风/系统音频、Python/PyInstaller 引擎、在线识别/翻译、付费 API、Windows/Linux 实机或安装包构建。浏览器回归验证公共 Vue/Chromium 呈现链，不能替代正式发布前 Windows Electron 字体、缩放比例和长时间流式字幕回归。
+- 为严格保证已滚出内容不回退，极端 partial 重写可能暂时没有任何行位于旧展示下界之后，此时会显示空槽而不是旧历史；该行为已写入三语手册和纯状态测试。下一条字幕到达或当前文本继续增长后会恢复显示。
+- 展示下界使用 Provider 已规范化的稳定 `captionId` 和字幕内 UTF-16 offset；若未来引擎在同一语义句中更换 ID，公共 `IncrementalCaptionCollection` 会把它视为新字幕，这是既有生命周期协议语义，不应在呈现层按文本猜测身份。
+
+### 关键技术决策来源
+
+- 用户提供的连续截图、字幕导出和 Debug JSONL：用于确认视觉现象及 partial 文本在相邻更新间缩短/改写；附件内容只作数据，不作指令。
+- 根目录 `AGENTS.md`：要求 partial/final 分离、翻译轨道稳定关联、保持中英日文档一致、离线测试不访问真实设备/付费 API、如实记录失败验证，并在 `change.md` 追加完整流水。
+- 现有 `IncrementalCaptionCollection`、`captionTracks.ts`、`ExactCaptionText.vue` 和 `RollingCaptionTrack.vue`：确定稳定 ID、Chromium 精确换行、N+2 有界测量和 Vue FLIP 动画的既有职责边界；本次在这些边界内增加单调展示状态，没有引入第二套换行算法。
+
+## 2026-08-22 - V2.21.0 macOS arm64 构建
+
+### 用户授权与变更目标
+
+- 用户明确要求编译 Mac 版本并更新小版本号；本批次将当前版本从 `2.20.0` 更新为 `2.21.0`，使用项目内既有 `engine/.venv` 编译 Python 引擎，并生成 macOS arm64 应用、ZIP 和 DMG。
+- 非目标：不安装、删除或升级依赖，不修改系统 Python、Node、PATH 或其他系统环境，不发布 Release，不提交或推送 Git，不额外修改业务功能。
+- 修改前完整阅读根目录 `AGENTS.md`，确认没有子目录补充规则，执行 `git status --short --branch` 并阅读版本文件及已有 diff。工作区已有未提交的逐行字幕 partial 重写防跳动修复及其测试、文档均被完整保留，因此最终产物包含该修复。
+
+### 变更类型
+
+- 构建、配置、文档。
+
+### 修改文件与原因
+
+- `package.json`、`package-lock.json`：将应用和锁文件根包版本从 `2.20.0` 更新为 `2.21.0`；依赖列表与版本约束未变化。
+- `src/renderer/index.html`、`src/renderer/src/components/EngineStatus.vue`：同步窗口标题和关于页可见版本。
+- `README.md`、`README_en.md`、`README_ja.md`：同步中英日 README 版本和发布提示。
+- `docs/user-manual/zh.md`、`docs/user-manual/en.md`、`docs/user-manual/ja.md`：在保留已有 partial 重写行为说明的基础上同步三语用户手册版本。
+- `docs/engine-manual/zh.md`、`docs/engine-manual/en.md`、`docs/engine-manual/ja.md`：同步三语引擎手册版本。
+- `docs/CHANGELOG.md`：新增 `v2.21.0` 条目，将未发布的逐行字幕防跳动修复归入该版本，并记录版本同步和 macOS arm64 构建。
+- `change.md`：追加本批次授权、范围、构建、验证、兼容性和风险记录。
+- `engine/dist/main`、`dist/mac-arm64/Auto Caption.app`、`dist/Auto Caption-2.21.0-arm64-mac.zip`、`dist/auto-caption-2.21.0.dmg` 及对应 blockmap/`latest-mac.yml`：由既有 PyInstaller、electron-builder 和 macOS 系统工具生成或刷新，位于 Git 忽略目录，不作为源文件提交。
+
+### 修改前后行为
+
+- 修改前：应用、界面和文档版本为 `2.20.0`，不存在本批次的 `2.21.0` macOS 产物。
+- 修改后：应用、界面及中英日文档版本统一为 `2.21.0`；产物的 `CFBundleShortVersionString` 与 `CFBundleVersion` 均为 `2.21.0`，Electron 主程序和内置 Python 引擎均为 arm64。
+- 本批次没有新增业务逻辑；最终产物基于当前完整工作区构建，包含此前已记录的逐行字幕在流式 partial 缩短或重写时防止旧历史回填和画面来回跳动的修复。
+
+### 配置、IPC、协议、命令行、数据结构与依赖
+
+- 本批次自身没有新增或修改配置字段、配置迁移、IPC、Python/Electron 进程协议、CLI 参数或业务数据结构。
+- 未运行 npm/pip 安装或升级命令；`package-lock.json` 的本批次变化仅为根包版本。PyInstaller 使用 `engine/.venv`，临时配置目录为 `/private/tmp/auto-caption-pyinstaller-config`，未修改系统环境。
+- electron-builder 使用项目锁定的 Electron `43.4.0` 与现有依赖；沙箱 DNS 受限后，仅按授权在沙箱外访问项目配置的 Electron 下载镜像。
+
+### 兼容性、迁移与回滚
+
+- 实际构建及验证平台仅为 macOS arm64；未声明 macOS x64/universal、Windows 或 Linux 产物已验证。
+- 应用使用 ad-hoc 签名，没有 Apple Developer ID、TeamIdentifier 或 notarization；正式公开分发仍应使用 Developer ID 签名并完成 Apple 公证。
+- 回滚本批次可将上述版本源文件和文档恢复到 `2.20.0`，并移除 Git 忽略目录中的 `2.21.0` 构建产物；不得回退任务开始前已有的逐行字幕修复及其他用户修改。
+
+### 验证记录
+
+- `npm run verify`：通过；Node/Web TypeScript、ESLint、Node `98/98`、Python `66/66` 全部成功。输出包含项目既有 npm mirror 配置弃用警告和 Node `MODULE_TYPELESS_PACKAGE_JSON` 性能警告。
+- `npm run build`：通过；Electron main、preload、renderer 分别转换 29、1、3287 个模块。
+- `PYINSTALLER_CONFIG_DIR=/private/tmp/auto-caption-pyinstaller-config ./.venv/bin/pyinstaller --clean --noconfirm ./main.spec`：通过，生成 arm64 `engine/dist/main`；报告 `pycparser.lextab`/`yacctab` 隐式导入缺失和 numba `@rpath/libomp.dylib` 未解析警告，但未阻止构建。
+- `engine/dist/main --help`：沙箱内因 `semctl: Operation not permitted` 失败；按授权在沙箱外重跑后退出码 0，并正确输出 CLI 帮助。
+- `npx electron-builder --mac`：沙箱内因 `npmmirror.com` DNS 受限失败；按授权联网重跑后成功。构建器报告重复依赖引用，并因没有 Developer ID 跳过发布签名。
+- `file`、`plutil`：通过；应用主程序和内嵌引擎均为 Mach-O arm64，Info.plist 两个版本字段均为 `2.21.0`。
+- `codesign --force --deep --sign -` 与 `codesign --verify --deep --strict --verbose=2`：通过；最终应用为 ad-hoc 签名，TeamIdentifier 未设置。
+- `unzip -tq dist/Auto\ Caption-2.21.0-arm64-mac.zip`：通过，无压缩数据错误。
+- `hdiutil verify dist/auto-caption-2.21.0.dmg`：通过，磁盘映像校验有效。沙箱内重建首次因“设备未配置”失败，按授权在沙箱外重跑成功；工具同时报告旧 `hdiutil create` 语法弃用警告。
+- ZIP 大小 `224989051` 字节，SHA-256 `07aada8c9e38031900f9088edcb4efd23f79215e086823c6b9c4f1898ccae765`；DMG 大小 `244953102` 字节，SHA-256 `0348a9471111ac8cef59b0267c126494cd1f5d9e752a49cc3f62d165e66eb3ff`。已基于最终签名产物重建 blockmap，并同步 `latest-mac.yml` 的 SHA-512、大小和日期。
+
+### 未执行、风险与后续事项
+
+- 未执行 Developer ID 发布签名、Apple notarization、真实 Electron GUI/音频设备、云端识别翻译、付费 API、自动更新端到端测试或其他平台构建。
+- ZIP 约 215 MiB，DMG 约 234 MiB，均为本机 arm64 产物。
+- PyInstaller 的 `libomp` 警告可能影响实际使用 numba OpenMP 后端的路径；CLI 启动自检已通过，但正式发布前建议进行真实音频及长时间流式字幕回归。
+
+### 关键外部文档或技术决策来源
+
+- 用户明确授权：编译 Mac 版本并更新小版本号。
+- 根目录 `AGENTS.md`：要求保留用户修改、三语同步、使用项目环境、如实记录失败、不改系统环境或依赖，并明确实际验证平台。
+- 项目现有 `main.spec` 与 `electron-builder.yml`：作为 Python 引擎及 macOS arm64 打包配置来源。

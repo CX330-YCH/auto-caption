@@ -45,7 +45,11 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   beforeMeasure: [reason: MeasurementReason]
-  lineSlicesChange: [text: string, lines: VisualLineSlice[]]
+  lineSlicesChange: [
+    text: string,
+    lines: VisualLineSlice[],
+    reason: MeasurementReason
+  ]
 }>()
 
 const container = ref<HTMLElement>()
@@ -71,9 +75,12 @@ function scheduleMeasurement(reason: MeasurementReason): void {
     pendingReason = reason
   }
   if (!props.wrap) {
-    updateLines(props.text
-      ? [{ text: props.text, start: 0, end: props.text.length }]
-      : [])
+    updateLines(
+      props.text
+        ? [{ text: props.text, start: 0, end: props.text.length }]
+        : [],
+      pendingReason
+    )
     return
   }
   if (animationFrame !== undefined) cancelAnimationFrame(animationFrame)
@@ -81,12 +88,16 @@ function scheduleMeasurement(reason: MeasurementReason): void {
     animationFrame = undefined
     const mirror = measurement.value
     if (!mirror) return
-    emit('beforeMeasure', pendingReason)
-    updateLines(measureVisualLineSlices(mirror, props.text))
+    const reason = pendingReason
+    emit('beforeMeasure', reason)
+    updateLines(measureVisualLineSlices(mirror, props.text), reason)
   })
 }
 
-function updateLines(nextLines: VisualLineSlice[]): void {
+function updateLines(
+  nextLines: VisualLineSlice[],
+  reason: MeasurementReason
+): void {
   const unchanged =
     lines.value.length === nextLines.length &&
     lines.value.every((line, index) => {
@@ -97,9 +108,14 @@ function updateLines(nextLines: VisualLineSlice[]): void {
         line.end === next.end
     })
   if (!unchanged) lines.value = nextLines
-  if (unchanged && hasReportedLines) return
+  if (unchanged && hasReportedLines && reason !== 'layout') return
   hasReportedLines = true
-  emit('lineSlicesChange', props.text, nextLines.map(line => ({ ...line })))
+  emit(
+    'lineSlicesChange',
+    props.text,
+    nextLines.map(line => ({ ...line })),
+    reason
+  )
 }
 
 function handleFontLoading(): void {

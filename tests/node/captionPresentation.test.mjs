@@ -220,7 +220,7 @@ test('justifies only complete soft-wrapped rows with multiple graphemes', () => 
   }), false)
 })
 
-test('classifies tail changes separately from historical translation backfill', () => {
+test('classifies growth, revision, lifecycle, append, and historical changes', () => {
   const first = buildCaptionTrackSegments([
     caption('1', 'one', ''),
     caption('2', 'two', '', 'partial')
@@ -228,6 +228,18 @@ test('classifies tail changes separately from historical translation backfill', 
   const partial = buildCaptionTrackSegments([
     caption('1', 'one', ''),
     caption('2', 'two updated', '', 'partial')
+  ], 'source')
+  const revised = buildCaptionTrackSegments([
+    caption('1', 'one', ''),
+    caption('2', 'rewritten', '', 'partial')
+  ], 'source')
+  const shortened = buildCaptionTrackSegments([
+    caption('1', 'one', ''),
+    caption('2', 'two', '', 'partial')
+  ], 'source')
+  const finalized = buildCaptionTrackSegments([
+    caption('1', 'one', ''),
+    caption('2', 'two updated', '', 'final')
   ], 'source')
   const appended = buildCaptionTrackSegments([
     caption('1', 'one', ''),
@@ -241,12 +253,19 @@ test('classifies tail changes separately from historical translation backfill', 
     caption('3', 'three', '', 'partial')
   ], 'source')
 
-  assert.equal(classifyCaptionTrackMutation(first, partial), 'tail-update')
+  assert.equal(classifyCaptionTrackMutation(first, partial), 'tail-growth')
+  assert.equal(classifyCaptionTrackMutation(partial, revised), 'tail-revision')
+  assert.equal(classifyCaptionTrackMutation(partial, shortened), 'tail-revision')
+  assert.equal(
+    classifyCaptionTrackMutation(partial, finalized),
+    'lifecycle-only'
+  )
   assert.equal(classifyCaptionTrackMutation(partial, appended), 'tail-append')
   assert.equal(
     classifyCaptionTrackMutation(appended, backfilled),
-    'historical-reflow'
+    'historical-change'
   )
+  assert.equal(classifyCaptionTrackMutation(first, []), 'clear')
 })
 
 test('bounds the measured track window and preserves cropped caption offsets', () => {

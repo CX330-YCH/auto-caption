@@ -40,6 +40,7 @@ export interface RollingCaptionLine {
   key: string
   captionId: string
   kind: CaptionTrackKind
+  captionOffset: number
   start: number
   end: number
   text: string
@@ -51,9 +52,12 @@ export type RollingLineBreakKind = 'soft' | 'hard' | 'end'
 
 export type CaptionTrackMutation =
   | 'unchanged'
-  | 'tail-update'
+  | 'lifecycle-only'
+  | 'tail-growth'
+  | 'tail-revision'
   | 'tail-append'
-  | 'historical-reflow'
+  | 'historical-change'
+  | 'clear'
 
 const DEFAULT_MAX_SEGMENTS = 256
 const DEFAULT_MAX_CHARACTERS = 16_384
@@ -215,6 +219,7 @@ export function buildRollingCaptionLines(
       key: `${track.kind}:${captionId}:${captionOffset}`,
       captionId,
       kind: track.kind,
+      captionOffset,
       start: line.start,
       end: line.end,
       text: line.text,
@@ -262,7 +267,7 @@ export function classifyCaptionTrackMutation(
 ): CaptionTrackMutation {
   if (sameTrackContent(previous, next)) return 'unchanged'
   if (previous.length === 0 && next.length > 0) return 'tail-append'
-  if (next.length === 0) return 'historical-reflow'
+  if (next.length === 0) return 'clear'
 
   if (previous.length === next.length && sameTrackIds(previous, next)) {
     const changedTextPositions = previous
@@ -272,11 +277,16 @@ export function classifyCaptionTrackMutation(
       changedTextPositions.length === 1 &&
       changedTextPositions[0] === previous.length - 1
     ) {
-      return 'tail-update'
+      const previousText = previous.at(-1)?.text ?? ''
+      const nextText = next.at(-1)?.text ?? ''
+      return nextText.length > previousText.length &&
+        nextText.startsWith(previousText)
+        ? 'tail-growth'
+        : 'tail-revision'
     }
     return changedTextPositions.length === 0
-      ? 'unchanged'
-      : 'historical-reflow'
+      ? 'lifecycle-only'
+      : 'historical-change'
   }
 
   if (next.length > previous.length) {
@@ -290,7 +300,7 @@ export function classifyCaptionTrackMutation(
     if (prefixIsStable) return 'tail-append'
   }
 
-  return 'historical-reflow'
+  return 'historical-change'
 }
 
 function sameTrackContent(

@@ -32,7 +32,6 @@
         :font-color="fontColor"
         :font-weight="fontWeight"
         :phase="measurementPhase"
-        @before-measure="handleBeforeMeasure"
         @line-slices-change="handleLineSlicesChange"
       />
     </div>
@@ -56,9 +55,13 @@ import {
   shouldJustifyRollingLine,
   type CaptionTrackKind,
   type CaptionTrackAnchor,
-  type CaptionTrackSegment,
-  type RollingCaptionLine
+  type CaptionTrackSegment
 } from '../../captions/captionTracks'
+import {
+  createRollingTrackPresentationState,
+  resetRollingTrackDisplayFloor,
+  updateRollingTrackPresentation
+} from '../../captions/rollingTrackState'
 import {
   normalizeRollingCaptionLineCount,
   rollingCaptionTrackHeight,
@@ -83,10 +86,11 @@ const props = defineProps<{
 
 const requestedSegments = ref(INITIAL_SEGMENT_WINDOW)
 const windowAnchor = ref<CaptionTrackAnchor>()
-const measuredRows = ref<RollingCaptionLine[]>([])
+const presentationState = ref(createRollingTrackPresentationState())
 const lastVisualLines = ref<VisualLineSlice[]>([])
 const animateRows = ref(false)
 let trackInitialized = false
+let nextMeasurementAnimationEligible = false
 
 const selectedSegments = computed(() => {
   if (windowAnchor.value) {
@@ -113,7 +117,7 @@ const visibleLineCount = computed(() =>
 )
 
 const visibleRows = computed(() => selectRollingCaptionLines(
-  measuredRows.value,
+  presentationState.value.visibleRows,
   visibleLineCount.value
 ))
 
@@ -151,14 +155,19 @@ watch(
       return
     }
     const mutation = classifyCaptionTrackMutation(previous, next)
-    animateRows.value = mutation === 'tail-append' || mutation === 'tail-update'
-    if (mutation === 'tail-update' || mutation === 'historical-reflow') {
+    nextMeasurementAnimationEligible = mutation === 'tail-append' ||
+      mutation === 'tail-growth'
+    animateRows.value = false
+    if (mutation === 'tail-revision' || mutation === 'historical-change') {
       resetMeasurementAnchor()
     }
-    if (next.length === 0) {
+    if (mutation === 'lifecycle-only') {
+      refreshPresentationFromLastMeasurement()
+    }
+    if (mutation === 'clear') {
       requestedSegments.value = INITIAL_SEGMENT_WINDOW
       windowAnchor.value = undefined
-      measuredRows.value = []
+      presentationState.value = createRollingTrackPresentationState()
       lastVisualLines.value = []
     }
   },
@@ -168,7 +177,7 @@ watch(
 watch(
   () => props.boundaryMode,
   () => {
-    animateRows.value = false
+    resetPresentationForLayout()
     resetMeasurementAnchor()
   }
 )
@@ -176,28 +185,74 @@ watch(
 watch(
   () => props.lineNumber,
   () => {
-    animateRows.value = false
-    adjustMeasurementWindow(lastVisualLines.value)
+    resetPresentationForLayout()
+    if (resetMeasurementAnchor()) return
+    if (expandInitialMeasurementWindow(lastVisualLines.value)) return
+    refreshPresentationFromLastMeasurement()
+    updateMeasurementAnchor(lastVisualLines.value)
   }
 )
 
-function handleBeforeMeasure(reason: 'content' | 'layout'): void {
-  if (reason !== 'layout') return
-  animateRows.value = false
-  resetMeasurementAnchor()
-}
-
 function handleLineSlicesChange(
   measuredText: string,
-  lines: VisualLineSlice[]
+  lines: VisualLineSlice[],
+  reason: 'content' | 'layout'
 ): void {
   if (measuredText !== composedTrack.value.text) return
+  if (reason === 'layout') {
+    resetPresentationForLayout()
+    if (
+      resetMeasurementAnchor() &&
+      measuredText !== composedTrack.value.text
+    ) return
+  }
   lastVisualLines.value = lines.map(line => ({ ...line }))
-  measuredRows.value = buildRollingCaptionLines(composedTrack.value, lines)
-  adjustMeasurementWindow(lines)
+  if (
+    !presentationState.value.displayFloor &&
+    expandInitialMeasurementWindow(lines)
+  ) {
+    nextMeasurementAnimationEligible = false
+    return
+  }
+  updatePresentation(
+    lines,
+    nextMeasurementAnimationEligible
+  )
+  nextMeasurementAnimationEligible = false
+  updateMeasurementAnchor(lines)
 }
 
-function adjustMeasurementWindow(lines: readonly VisualLineSlice[]): void {
+function refreshPresentationFromLastMeasurement(): void {
+  if (lastVisualLines.value.length === 0) return
+  updatePresentation(lastVisualLines.value, false)
+}
+
+function updatePresentation(
+  lines: readonly VisualLineSlice[],
+  animationEligible: boolean
+): void {
+  const track = composedTrack.value
+  const measuredRows = buildRollingCaptionLines(track, lines)
+  const update = updateRollingTrackPresentation(
+    presentationState.value,
+    track,
+    measuredRows,
+    visibleLineCount.value,
+    animationEligible
+  )
+  presentationState.value = update.state
+  animateRows.value = update.animate
+}
+
+function resetPresentationForLayout(): void {
+  nextMeasurementAnimationEligible = false
+  animateRows.value = false
+  presentationState.value = resetRollingTrackDisplayFloor(
+    presentationState.value
+  )
+}
+
+function updateMeasurementAnchor(lines: readonly VisualLineSlice[]): void {
   const targetRows = visibleLineCount.value + 2
   if (lines.length >= targetRows) {
     const firstRetainedLine = lines[lines.length - targetRows]
@@ -206,17 +261,20 @@ function adjustMeasurementWindow(lines: readonly VisualLineSlice[]): void {
       firstRetainedLine.start
     )
     if (!sameAnchor(windowAnchor.value, anchor)) {
-      animateRows.value = false
       windowAnchor.value = anchor
     }
-    return
   }
+}
 
+function expandInitialMeasurementWindow(
+  lines: readonly VisualLineSlice[]
+): boolean {
+  const targetRows = visibleLineCount.value + 2
+  if (lines.length >= targetRows) return false
   const currentStartIndex = firstSelectedSegmentIndex()
-  if (currentStartIndex <= 0) return
-  if (requestedSegments.value >= MAX_SEGMENT_WINDOW) return
+  if (currentStartIndex <= 0) return false
+  if (requestedSegments.value >= MAX_SEGMENT_WINDOW) return false
 
-  animateRows.value = false
   windowAnchor.value = undefined
   const currentWindowSize = props.segments.length - currentStartIndex
   requestedSegments.value = Math.min(
@@ -226,10 +284,11 @@ function adjustMeasurementWindow(lines: readonly VisualLineSlice[]): void {
       currentWindowSize * 2
     )
   )
+  return true
 }
 
-function resetMeasurementAnchor(): void {
-  if (!windowAnchor.value) return
+function resetMeasurementAnchor(): boolean {
+  if (!windowAnchor.value) return false
   const currentStartIndex = firstSelectedSegmentIndex()
   const currentWindowSize = currentStartIndex < 0
     ? INITIAL_SEGMENT_WINDOW
@@ -239,6 +298,7 @@ function resetMeasurementAnchor(): void {
     Math.max(INITIAL_SEGMENT_WINDOW, currentWindowSize + 4)
   )
   windowAnchor.value = undefined
+  return true
 }
 
 function firstSelectedSegmentIndex(): number {
