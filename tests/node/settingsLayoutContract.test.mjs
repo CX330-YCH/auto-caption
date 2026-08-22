@@ -7,26 +7,14 @@ const settingComponentFiles = [
   'src/renderer/src/components/GeneralSetting.vue',
   'src/renderer/src/components/EngineControl.vue',
   'src/renderer/src/components/CaptionStyle.vue',
-  'src/renderer/src/components/settings/FontFamilyField.vue',
   'src/renderer/src/components/engine/EngineSelector.vue',
   'src/renderer/src/components/engine/EngineFieldRenderer.vue',
   'src/renderer/src/components/engine/HotwordManager.vue'
 ]
 
-const sharedFieldComponentFiles = [
-  'src/renderer/src/components/settings/FontFamilyField.vue',
-  'src/renderer/src/components/engine/EngineSelector.vue',
-  'src/renderer/src/components/engine/EngineFieldRenderer.vue'
-]
-
 const fieldOwnerFiles = settingComponentFiles.filter(
-  (file) => !sharedFieldComponentFiles.includes(file)
+  (file) => !file.endsWith('EngineSelector.vue') && !file.endsWith('EngineFieldRenderer.vue')
 )
-
-const controlOwnerFiles = [
-  ...fieldOwnerFiles,
-  'src/renderer/src/components/settings/FontFamilyField.vue'
-]
 
 const formControlNames = new Set([
   'a-input',
@@ -35,7 +23,8 @@ const formControlNames = new Set([
   'a-select',
   'a-slider',
   'a-switch',
-  'a-textarea'
+  'a-textarea',
+  'fontfamilyselect'
 ])
 
 const retiredClassNames = new Set([
@@ -96,32 +85,28 @@ function hasAttribute(element, attributeName) {
   )
 }
 
-test('centralizes settings geometry, safe boundaries, and responsive threshold', () => {
+test('centralizes settings form width and wide/narrow switch alignment rules', () => {
   const formSource = readSource('src/renderer/src/components/settings/SettingsForm.vue')
   const fieldSource = readSource('src/renderer/src/components/settings/SettingsField.vue')
 
   assert.match(formSource, /--settings-form-max-width:\s*640px/)
-  assert.match(formSource, /--settings-form-safe-inline:\s*16px/)
-  assert.match(formSource, /--settings-field-label-width:\s*96px/)
-  assert.match(formSource, /--settings-field-column-gap:\s*12px/)
+  assert.match(formSource, /--settings-field-label-width:\s*128px/)
   assert.match(formSource, /--settings-field-control-min-width:\s*220px/)
   assert.match(formSource, /container-name:\s*settings-form/)
-  assert.match(formSource, /\.settings-form__content\s*{[\s\S]*?padding-inline:\s*var\(--settings-form-safe-inline\)/)
-  assert.equal(16 + 96 + 12 + 220 + 16, 360)
-  assert.match(fieldSource, /@container settings-form \(max-width:\s*359px\)/)
+  assert.match(fieldSource, /@container settings-form \(max-width:\s*360px\)/)
   const narrowContainerSource = fieldSource.slice(
-    fieldSource.indexOf('@container settings-form (max-width: 359px)')
+    fieldSource.indexOf('@container settings-form (max-width: 360px)')
   )
   const wideContainerSource = fieldSource.slice(
     0,
-    fieldSource.indexOf('@container settings-form (max-width: 359px)')
+    fieldSource.indexOf('@container settings-form (max-width: 360px)')
   )
 
   assert.doesNotMatch(
     wideContainerSource,
     /\.settings-field--switch\s*>\s*\.settings-field__label\s*{[^}]*text-align:\s*start/
   )
-  assert.doesNotMatch(
+  assert.match(
     narrowContainerSource,
     /\.settings-field--switch\s*>\s*\.settings-field__label\s*{[^}]*text-align:\s*start/
   )
@@ -130,25 +115,8 @@ test('centralizes settings geometry, safe boundaries, and responsive threshold',
     /\.settings-field__label\s*{[\s\S]*?text-align:\s*end/
   )
   assert.match(
-    wideContainerSource,
-    /\.settings-field__label\s*{[\s\S]*?grid-row:\s*1;[\s\S]*?align-self:\s*center;[\s\S]*?overflow-wrap:\s*anywhere/
-  )
-  assert.match(
-    wideContainerSource,
-    /\.settings-field__control\s*{[\s\S]*?grid-row:\s*1;[\s\S]*?align-self:\s*center/
-  )
-  assert.match(
-    wideContainerSource,
-    /\.settings-field__supporting\s*{[\s\S]*?grid-row:\s*2/
-  )
-  assert.match(
-    wideContainerSource,
-    /\.settings-field__control--fill\s*>\s*\.ant-slider\s*{[^}]*width:\s*auto/
-  )
-  assert.doesNotMatch(fieldSource, /settings-field--align|align\?:/)
-  assert.match(
     narrowContainerSource,
-    /\.settings-field--switch\s*{[^}]*grid-template-columns:\s*var\(--settings-field-label-width, 96px\)\s+auto;[^}]*justify-content:\s*start/
+    /\.settings-field--switch\s*{[^}]*grid-template-columns:\s*max-content\s+auto;[^}]*justify-content:\s*start/
   )
 })
 
@@ -170,10 +138,10 @@ test('keeps legacy and component-specific settings grids out of setting componen
 })
 
 test('requires setting controls to use the shared field boundary', () => {
-  for (const file of controlOwnerFiles) {
+  for (const file of fieldOwnerFiles) {
     for (const element of templateElements(file)) {
       if (!formControlNames.has(element.rawName)) continue
-      if (!sharedFieldComponentFiles.includes(file) && !hasAncestor(element, 'a-card')) continue
+      if (!hasAncestor(element, 'a-card')) continue
       if (hasAttribute(element, 'data-settings-layout-exempt')) continue
       assert.equal(
         hasAncestor(element, 'SettingsField'),
@@ -201,17 +169,13 @@ test('keeps shared fields and metadata renderers inside shared forms', () => {
           `${file} contains ${element.rawName} outside SettingsForm`
         )
       }
-      if (element.rawName === 'FontFamilyField') {
-        assert.equal(
-          hasAncestor(element, 'SettingsForm'),
-          true,
-          `${file} contains FontFamilyField outside SettingsForm`
-        )
-      }
     }
   }
 
-  for (const file of sharedFieldComponentFiles) {
+  for (const file of [
+    'src/renderer/src/components/engine/EngineSelector.vue',
+    'src/renderer/src/components/engine/EngineFieldRenderer.vue'
+  ]) {
     assert.ok(
       templateElements(file).some((element) => element.rawName === 'SettingsField'),
       `${file} does not expose the shared field boundary`
@@ -221,13 +185,4 @@ test('keeps shared fields and metadata renderers inside shared forms', () => {
   const rendererSource = readSource('src/renderer/src/components/engine/EngineFieldRenderer.vue')
   assert.match(rendererSource, /field\.control === 'switch' \? 'switch' : 'standard'/)
   assert.match(rendererSource, /field\.control === 'switch' \? 'intrinsic' : 'fill'/)
-})
-
-test('keeps caption source and nested style sections in one responsive form scope', () => {
-  const source = readSource('src/renderer/src/components/CaptionStyle.vue')
-
-  assert.equal((source.match(/<SettingsForm>/g) ?? []).length, 1)
-  assert.equal((source.match(/<\/SettingsForm>/g) ?? []).length, 1)
-  assert.equal((source.match(/<SettingsSection/g) ?? []).length, 2)
-  assert.equal((source.match(/<a-card\s+size="small"/g) ?? []).length, 1)
 })

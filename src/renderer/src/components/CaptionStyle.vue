@@ -53,11 +53,9 @@
         </template>
       </SettingsField>
 
-      <FontFamilyField
-        v-model="currentFontFamily"
-        :label="$t('style.fontFamily')"
-        @validity-change="sourceFontValid = $event"
-      />
+      <SettingsField :label="$t('style.fontFamily')" align="start">
+        <FontFamilySelect v-model="currentFontFamily" @validity-change="sourceFontValid = $event" />
+      </SettingsField>
 
       <SettingsField :label="$t('style.fontColor')">
         <a-input type="color" v-model:value="currentFontColor" />
@@ -89,48 +87,58 @@
       <SettingsField :label="$t('style.textShadow')" kind="switch" control-layout="intrinsic">
         <a-switch v-model:checked="currentTextShadow" />
       </SettingsField>
-      <SettingsSection v-show="currentTransDisplay" :title="$t('style.trans.title')">
+    </SettingsForm>
+
+    <div v-show="currentTransDisplay">
+      <a-card size="small" :title="$t('style.trans.title')">
         <template #extra>
           <a @click="useSameStyle">{{ $t('style.trans.useSame') }}</a>
         </template>
-        <FontFamilyField
-          v-model="currentTransFontFamily"
-          :label="$t('style.fontFamily')"
-          @validity-change="translationFontValid = $event"
-        />
-        <SettingsField :label="$t('style.fontColor')">
-          <a-input type="color" v-model:value="currentTransFontColor" />
-          <template #value>{{ currentTransFontColor }}</template>
-        </SettingsField>
-        <SettingsField :label="$t('style.fontSize')">
-          <a-slider :min="0" :max="72" v-model:value="currentTransFontSize" />
-          <template #value>{{ currentTransFontSize }}px</template>
-        </SettingsField>
-        <SettingsField :label="$t('style.fontWeight')">
-          <a-slider :min="1" :max="9" v-model:value="currentTransFontWeight" />
-          <template #value>{{ currentTransFontWeight * 100 }}</template>
-        </SettingsField>
-      </SettingsSection>
+        <SettingsForm>
+          <SettingsField :label="$t('style.fontFamily')" align="start">
+            <FontFamilySelect
+              v-model="currentTransFontFamily"
+              @validity-change="translationFontValid = $event"
+            />
+          </SettingsField>
+          <SettingsField :label="$t('style.fontColor')">
+            <a-input type="color" v-model:value="currentTransFontColor" />
+            <template #value>{{ currentTransFontColor }}</template>
+          </SettingsField>
+          <SettingsField :label="$t('style.fontSize')">
+            <a-slider :min="0" :max="72" v-model:value="currentTransFontSize" />
+            <template #value>{{ currentTransFontSize }}px</template>
+          </SettingsField>
+          <SettingsField :label="$t('style.fontWeight')">
+            <a-slider :min="1" :max="9" v-model:value="currentTransFontWeight" />
+            <template #value>{{ currentTransFontWeight * 100 }}</template>
+          </SettingsField>
+        </SettingsForm>
+      </a-card>
+    </div>
 
-      <SettingsSection v-show="currentTextShadow" :title="$t('style.shadow.title')">
-        <SettingsField :label="$t('style.shadow.offsetX')">
-          <a-slider :min="-10" :max="10" v-model:value="currentOffsetX" />
-          <template #value>{{ currentOffsetX }}px</template>
-        </SettingsField>
-        <SettingsField :label="$t('style.shadow.offsetY')">
-          <a-slider :min="-10" :max="10" v-model:value="currentOffsetY" />
-          <template #value>{{ currentOffsetY }}px</template>
-        </SettingsField>
-        <SettingsField :label="$t('style.shadow.blur')">
-          <a-slider :min="0" :max="12" v-model:value="currentBlur" />
-          <template #value>{{ currentBlur }}px</template>
-        </SettingsField>
-        <SettingsField :label="$t('style.shadow.color')">
-          <a-input type="color" v-model:value="currentTextShadowColor" />
-          <template #value>{{ currentTextShadowColor }}</template>
-        </SettingsField>
-      </SettingsSection>
-    </SettingsForm>
+    <div v-show="currentTextShadow" style="margin-top: 10px">
+      <a-card size="small" :title="$t('style.shadow.title')">
+        <SettingsForm>
+          <SettingsField :label="$t('style.shadow.offsetX')">
+            <a-slider :min="-10" :max="10" v-model:value="currentOffsetX" />
+            <template #value>{{ currentOffsetX }}px</template>
+          </SettingsField>
+          <SettingsField :label="$t('style.shadow.offsetY')">
+            <a-slider :min="-10" :max="10" v-model:value="currentOffsetY" />
+            <template #value>{{ currentOffsetY }}px</template>
+          </SettingsField>
+          <SettingsField :label="$t('style.shadow.blur')">
+            <a-slider :min="0" :max="12" v-model:value="currentBlur" />
+            <template #value>{{ currentBlur }}px</template>
+          </SettingsField>
+          <SettingsField :label="$t('style.shadow.color')">
+            <a-input type="color" v-model:value="currentTextShadowColor" />
+            <template #value>{{ currentTextShadowColor }}</template>
+          </SettingsField>
+        </SettingsForm>
+      </a-card>
+    </div>
   </a-card>
 
   <Teleport defer to="#caption-preview-host">
@@ -157,11 +165,10 @@ import { storeToRefs } from 'pinia'
 import { notification } from 'ant-design-vue'
 import { useI18n } from 'vue-i18n'
 import { useCaptionLogStore } from '@renderer/stores/captionLog'
+import FontFamilySelect from './FontFamilySelect.vue'
 import CaptionViewport from './caption/CaptionViewport.vue'
-import FontFamilyField from '@renderer/components/settings/FontFamilyField.vue'
 import SettingsField from '@renderer/components/settings/SettingsField.vue'
 import SettingsForm from '@renderer/components/settings/SettingsForm.vue'
-import SettingsSection from '@renderer/components/settings/SettingsSection.vue'
 import type {
   CaptionBoundaryMode,
   CaptionDisplayMode,

@@ -4065,6 +4065,71 @@
 - 根目录 `AGENTS.md`：要求保留用户修改、三语同步、使用项目环境、如实记录失败、不改系统环境或依赖，并明确实际验证平台。
 - 项目现有 `main.spec` 与 `electron-builder.yml`：作为 Python 引擎及 macOS arm64 打包配置来源。
 
+## 2026-08-22 - 回滚设置表单中线、标签换行与安全边界重构
+
+### 用户授权与变更目标
+
+- 用户明确要求“回滚这次改动”，即回滚上一批设置表单中线左移、标签换行与垂直中线、左右安全边界、字体复合字段和字幕样式统一响应式作用域改动。
+- 执行前确认工作区干净，当前 `v2.22.0` 提交同时包含上述布局改动和后续版本发布内容。为避免扩大回滚范围，本次只恢复布局源码、布局测试和对应用户说明，保留 `2.22.0` 版本号、README、引擎手册、版本发布记录及既有构建产物。
+- 非目标：不回退 v2.22.0 版本号，不删除或重建 macOS 发布产物，不修改字幕呈现、引擎、翻译、配置、IPC 或进程协议，不提交、推送或创建 PR。
+
+### 变更类型
+
+- 回滚、文档、测试。
+
+### 修改文件与原因
+
+- `src/renderer/src/components/CaptionStyle.vue`：恢复 v2.21.0 的嵌套字幕样式表单和旧字体选择器使用方式。
+- `src/renderer/src/components/engine/HotwordManager.vue`：恢复文本域字段原有 `align="start"` 行为。
+- `src/renderer/src/components/settings/SettingsForm.vue`：恢复原有 640px 最大宽度、128px 标签列和无新增左右安全内边距的实现。
+- `src/renderer/src/components/settings/SettingsField.vue`：恢复原有对齐属性、360px 及以下响应式规则、说明和值布局以及滑块通用宽度行为。
+- `src/renderer/src/components/FontFamilySelect.vue`：恢复旧字体选择组件及原路径。
+- `src/renderer/src/components/settings/FontFamilyField.vue`：删除本次被回滚的复合字段组件。
+- `src/renderer/src/components/settings/SettingsSection.vue`：删除本次被回滚的共享子设置分区。
+- `tests/node/settingsLayoutContract.test.mjs`：恢复 v2.21.0 的四项布局契约，不再断言被回滚的 16px 安全区、96px 标签列、359px 断点、滑块安全余量和单一字幕样式表单作用域。
+- `docs/user-manual/zh.md`、`docs/user-manual/en.md`、`docs/user-manual/ja.md`：三语恢复 v2.21.0 的设置布局行为说明，同时保留文档中的 v2.22.0 版本信息。
+- `docs/CHANGELOG.md`：在“未发布”部分明确记录 v2.22.0 布局改动已被回滚；保留 v2.22.0 发布条目作为历史事实。
+- `change.md`：按只追加原则保留原变更和 v2.22.0 构建历史，并追加本次回滚记录。
+
+### 修改前后行为
+
+- 回滚前：表单左右各有 16px 安全距离，标签列为 96px，360px 及以上控件起点为 124px；标签允许换行并与主控件垂直居中；开关始终使用同一标签列；字幕原文、译文和阴影区域共享一个响应式表单作用域。
+- 回滚后：恢复 v2.21.0 布局：表单仍限制最大宽度 640px，标签列恢复为 128px；普通字段在宽度大于 360px 时同行，在 360px 及以下堆叠；宽栏开关使用共享右对齐标签列，窄栏开关恢复为从内容边缘开始的紧凑同行；字幕译文和阴影区域恢复各自的嵌套卡片与表单。
+- 字体选择器恢复为字段内部的旧组件，热词文本域和字体字段重新使用顶部对齐例外。本次回滚会重新带回用户要求撤销前的布局行为及其已知限制。
+
+### 配置、IPC、协议、数据结构与依赖
+
+- `schemaVersion: 5`、用户配置、默认值、迁移、Electron IPC、Python/Electron 协议、命令行参数和字幕事件均无变化。
+- 只恢复 Renderer 内部 Vue 组件接口与 CSS 布局；不需要用户数据迁移。
+- 没有新增、删除或升级 npm/pip 依赖，`package.json` 和锁文件保持 v2.22.0 提交状态。
+
+### 兼容性、回滚与构建产物
+
+- 六个恢复文件通过 Git blob 哈希逐一确认与父提交 `db9d5c4` 的对应文件完全一致；新增的两个布局组件已删除，旧 `FontFamilySelect.vue` 已恢复。
+- 版本仍为 `2.22.0`。现有 Git 忽略目录中的 v2.22.0 ZIP、DMG 和应用包是在回滚前生成，仍包含被回滚布局；本次没有删除或重建这些发布产物。若要分发回滚后的源码，应另行重新构建安装包。
+- 再次恢复本次被回滚的布局可重新应用 v2.22.0 提交中的对应组件、测试和三语说明；不得覆盖之后可能出现的其他修改。
+
+### 验证记录
+
+- 首次哈希核对命令误将 zsh 特殊变量 `path` 用作循环变量，导致该单次 shell 的命令搜索路径被覆盖，`git` 和 `rg` 报告找不到；该 shell 退出后没有环境残留或文件影响。改用 `file_path` 后重新执行成功。
+- `git hash-object` 对比 `git rev-parse db9d5c4:<file>`：`CaptionStyle.vue`、`HotwordManager.vue`、`SettingsField.vue`、`SettingsForm.vue`、`FontFamilySelect.vue` 和 `settingsLayoutContract.test.mjs` 全部完全一致，无哈希不匹配。
+- `rg` 检查：源码和测试中不再包含 `FontFamilyField`、`SettingsSection`、`settings-form-safe-inline` 或 96px 标签 token。
+- `npm run verify`：通过；Node/Web TypeScript、ESLint、Node `98/98`、Python `66/66` 全部成功。输出仅包含项目既有 npm mirror 配置弃用警告和 Node `MODULE_TYPELESS_PACKAGE_JSON` 性能警告。
+- `npm run build`：通过；Electron main、preload、renderer 分别转换 29、1、3287 个模块。
+- 完成本记录后执行 `git diff --check` 和最终工作区审计。
+
+### 未执行、风险与后续事项
+
+- 未执行真实 Electron GUI、浏览器多宽度像素矩阵、Windows/Linux 实机、特殊 DPI、安装包重建、真实音频或在线识别/翻译；本次通过精确恢复已验证的 v2.21.0 文件和全量测试/构建确认回滚完整性。
+- 回滚按用户要求恢复旧布局，因此此前报告的中线位置、标签换行、多行中线、安全边界和字幕译文布局不一致问题会重新出现。
+- v2.22.0 的已生成发布产物与当前源码布局不一致；在用户明确要求重新构建前不修改或删除这些产物。
+
+### 关键技术决策来源
+
+- 用户明确回滚授权。
+- 根目录 `AGENTS.md`：要求只回退本次产生的改动、保留其他修改、`change.md` 只追加历史并如实记录验证和风险。
+- v2.22.0 提交 `071995c` 及其父提交 `db9d5c4`：用于区分布局重构与后续版本发布范围，并作为逐文件恢复基线。
+
 ## 2026-08-22 - 重构设置表单中线、标签换行与安全边界
 
 ### 用户授权与变更目标

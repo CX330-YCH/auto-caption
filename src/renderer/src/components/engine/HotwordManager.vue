@@ -16,7 +16,7 @@
           @update:value="updateTargetModel"
         />
       </SettingsField>
-      <SettingsField :label="$t('engine.hotwords.contextTerms')">
+      <SettingsField :label="$t('engine.hotwords.contextTerms')" align="start">
         <a-textarea
           :value="contextText"
           :maxlength="400"
