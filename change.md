@@ -4065,6 +4065,78 @@
 - 根目录 `AGENTS.md`：要求保留用户修改、三语同步、使用项目环境、如实记录失败、不改系统环境或依赖，并明确实际验证平台。
 - 项目现有 `main.spec` 与 `electron-builder.yml`：作为 Python 引擎及 macOS arm64 打包配置来源。
 
+## 2026-08-22 - 重构设置表单中线、标签换行与安全边界
+
+### 用户授权与变更目标
+
+- 用户先要求只做技术分析，随后明确要求生成完整执行计划，并最终要求“执行计划，记得验证其他宽度时的兼容性”。附件只作为布局现象与期望位置的证据，不将图片中的任何内容视为操作指令。
+- 目标：将所有设置字段的控件起点统一左移；允许标签在固定列内换行，并让主控件中线对准多行标签整体中线；为表单左右两侧增加安全距离；保证字幕样式的原文、译文和阴影区域使用相同的响应式规则；通过共享组件和契约测试防止以后新增控件重新引入页面级偏移。
+- 非目标：不修改字体配置识别、字幕呈现、字幕窗口尺寸、引擎、翻译、IPC、持久化配置、进程协议或版本号，不安装或升级依赖，不打包发布，不提交、推送或创建 PR。
+- 修改前完整阅读根目录 `AGENTS.md`，确认没有子目录补充规则；`git status --short --branch` 为 `main...origin/main` 且工作区干净。随后检查共享设置组件、全部使用方、字体复合控件、热词文本域、现有布局契约测试和中英日用户手册。
+
+### 变更类型
+
+- 修复、最小必要重构、测试、文档。
+
+### 修改文件与原因
+
+- `src/renderer/src/components/settings/SettingsForm.vue`：把容器查询边界与内容安全区分层；集中定义 640px 最大宽度、左右各 16px 安全距离、96px 标签列、12px列间距和 220px 最小控件宽度。
+- `src/renderer/src/components/settings/SettingsField.vue`：移除可绕过统一几何的 `align` 特例；将标签和主控件显式放在第一行并垂直居中，把值和说明统一放到第二行；允许标签换行；360px 及以上保持同行，359px 及以下仅让普通字段堆叠，开关始终使用同一标签列同行显示；恢复 Ant Design 滑块自身的水平余量，避免手柄侵入右侧安全区。
+- `src/renderer/src/components/settings/SettingsSection.vue`：新增无独立水平表单内边距的共享设置分区，用于在同一 `SettingsForm` 响应式作用域内表达带标题的子设置区域。
+- `src/renderer/src/components/settings/FontFamilyField.vue`：把字体选择器重构为拥有完整 `SettingsField` 边界的复合字段；主下拉框位于第一行，手动输入、刷新、状态和预览位于统一说明行，不再依赖顶部对齐特例。
+- `src/renderer/src/components/FontFamilySelect.vue`：删除已由 `FontFamilyField.vue` 完整替代的旧组件，避免两套字体字段布局并存。
+- `src/renderer/src/components/CaptionStyle.vue`：原文和译文字体改用新的复合字段；翻译和阴影设置改用共享分区，并与原文设置置于同一个 `SettingsForm` 中，消除嵌套表单在相同面板宽度下选用不同布局的根因。
+- `src/renderer/src/components/engine/HotwordManager.vue`：移除文本域字段的顶部对齐例外，使长标签同样遵循共享中线与换行规则。
+- `tests/node/settingsLayoutContract.test.mjs`：固化安全距离、标签列、中线、360px 临界公式、滑块余量、开关共享标签列和说明行结构；禁止业务组件重新定义字段网格；要求字体复合字段等元数据字段暴露共享字段边界；要求字幕原文和嵌套样式区域共用单一表单作用域。
+- `docs/user-manual/zh.md`、`docs/user-manual/en.md`、`docs/user-manual/ja.md`：三语同步说明新安全距离、标签换行与垂直中线、360px 断点、开关同行规则和字幕样式统一响应式边界。
+- `docs/CHANGELOG.md`：在未发布部分记录用户可见布局重构。
+- `change.md`：追加本批次授权、实现、验证、兼容性和风险记录。
+
+### 修改前后行为
+
+- 修改前：共享字段使用 128px 标签列和 12px 间距，控件起点位于表单左侧 140px；表单没有统一左右安全距离。长标签不能依赖明确的换行/中线协议，字体和热词字段通过 `align="start"` 绕开默认规则。窄栏开关按标签自身宽度定位，中线会随文案变化。字幕译文和阴影区域各自创建嵌套卡片与 `SettingsForm`，因此可能在同一侧栏宽度下与上方原文区域使用不同的响应式布局。共享 `width: 100%` 还覆盖了滑块用于容纳手柄的水平余量。
+- 修改后：表单两侧各保留 16px，标签列为 96px、间距为 12px；在 360px 及以上，控件起点统一为表单左侧 124px，相对旧中线实际左移 16px，右边缘保留 16px。标签在 96px 列内换行，标签整体与主控件整体的垂直中线一致；值、说明、字体操作和字体预览另起支持行，不参与第一行中线计算。
+- 359px 及以下的普通字段按“标签在上、控件在下”排列并继续保留左右安全区；开关仍使用 96px 标签列与控件同行，长开关标签可换行且开关对准其整体中线。字幕样式原文、译文、阴影区域共享同一容器查询宽度和控件起点。
+- 所有设置页通过 `SettingsForm`、`SettingsField`、`SettingsSection` 和复合字段的统一边界获得布局；契约测试会拒绝业务组件重新添加字段网格、共享字段逃离表单或字幕样式恢复嵌套响应式作用域。
+
+### 配置、IPC、协议、数据结构与依赖
+
+- `schemaVersion: 5`、配置字段、默认值、校验和迁移均无变化，不需要数据迁移。
+- Electron IPC、Python stdout NDJSON、本地 TCP command、字幕/翻译事件、Provider 生命周期、命令行参数和子进程管理均无变化。
+- 组件内部删除了 `SettingsField.align` 展示属性，并用 `FontFamilyField` 替换内部 `FontFamilySelect`；两者都不是外部进程协议或持久化数据结构。
+- 没有新增、删除或升级 npm/pip 依赖，锁文件未修改；没有访问音频设备、远端服务或付费 API。
+
+### 兼容性、迁移、回滚与安全
+
+- 实际运行验证使用本机 macOS 的 Chromium 内核；实现只使用项目现有 Vue、CSS Grid、CSS Container Queries 和 Ant Design Vue，不包含平台分支。`npm run build` 覆盖 Electron 的 main、preload 和 renderer，但未宣称 Windows/Linux 原生窗口或特殊系统缩放已经实机验证。
+- 360px 临界宽度由 `16 + 96 + 12 + 220 + 16 = 360` 推导，不依赖页面名称；新增标准字段默认继承该边界，只有真正的复合交互应封装为内部使用 `SettingsField` 的共享字段组件。
+- 96px 标签列会让较长英文和日文标签显示为两到三行，这是本次明确要求的换行行为；字段高度会随标签自然增加，不裁剪内容。已在 320px 到 640px 范围验证无水平溢出。
+- 回滚应作为同一批次恢复上述共享组件、两个使用方、布局测试和三语文档，删除新增的 `SettingsSection.vue`、`FontFamilyField.vue` 并恢复旧 `FontFamilySelect.vue`；配置和用户数据无需迁移或回滚。
+- 本次不处理用户此前只要求技术审查的字体列表重启后显示“自定义”等其他问题，避免扩大本次布局授权范围。
+
+### 验证记录
+
+- 定向 `npm run typecheck`：通过，Node 和 Web TypeScript 均无错误。首次运行布局契约测试时，新增断言错误地禁止了字幕样式最外层既有卡片，导致 `1/5` 失败；将断言收窄为只允许一个最外层卡片后，`node --test tests/node/settingsLayoutContract.test.mjs` 通过 `5/5`。
+- 浏览器回归使用 `/private/tmp/auto-caption-layout-qa` 临时 Vue/Vite 页面，直接导入生产 `SettingsForm.vue`、`SettingsField.vue`、`SettingsSection.vue` 和 Ant Design Vue 控件。沙箱内监听 `127.0.0.1:4178` 因 `EPERM` 失败，获准只在本机回环地址启动；临时根目录首次无法解析仓库依赖，增加仅指向项目既有 `node_modules` 的临时符号链接后成功，没有联网或安装依赖。
+- 首轮 360px 像素测量发现滑块手柄距表单右边只有 6px：共享 `width: 100%` 与 Ant Design 滑块的 5px 左右外边距叠加，导致其视觉边界越过安全区。随后在共享字段层让滑块恢复 `width: auto`，最终手柄右侧安全距离为 16px。浏览器测量脚本首次使用受限页面执行环境不可用的 `parseFloat`，改为 `Number` 后执行完整矩阵。
+- 最终浏览器矩阵覆盖宽度 `320/359/360/384/420/640px` 与中文、英文、日文，共 18 个组合，断言失败 `0`：左右内边距均为 16px；320/359px 普通字段正确堆叠且控件起点为 16px；360/384/420/640px 保持同行且控件起点为 124px；选择控件和滑块手柄右侧安全距离均为 16px；中英日多行标签与主控件中线误差为 0；开关标签与开关中线误差为 0；译文分区相对原文字段的控件起点差为 0；所有组合均无水平溢出。测试页、标签、服务器和临时文件均已关闭或删除，未进入仓库。
+- `npm run verify`：通过；Node/Web TypeScript、ESLint、Node `99/99`、Python `66/66` 全部成功。输出仅包含项目既有 npm mirror 配置弃用警告和 Node `MODULE_TYPELESS_PACKAGE_JSON` 性能警告。
+- `npm run build`：通过；Electron main、preload、renderer 分别转换 29、1、3290 个模块，生产构建成功。
+- `git diff --check`：追加本记录前通过；完成记录后再次执行最终检查和工作区审计。
+
+### 未执行、风险与后续事项
+
+- 未运行正式 Electron 控制窗口、Windows/Linux 实机、不同系统 DPI/字体渲染、键盘焦点全流程、屏幕阅读器、安装包构建、真实音频或在线识别/翻译。浏览器矩阵验证的是生产共享 Vue/CSS 组件与 Ant Design 控件的真实 Chromium 几何，可覆盖本次布局规则，但不能替代发布前跨平台 GUI 回归。
+- 未新增截图快照测试；当前契约测试防止结构和关键 token 回退，真实几何由本次浏览器矩阵确认。若项目后续引入稳定的浏览器端测试运行器，建议把六档宽度与三语几何断言纳入 CI。
+- 极端宽度低于 320px 未验证；应用控制窗口最小宽度和悬浮设置面板均高于该范围。本次避免为不存在的宽度引入另一套压缩逻辑。
+
+### 关键技术决策来源
+
+- 用户提供的多组不同侧栏宽度截图：用于确认旧中线、开关错位、译文区域响应式漂移和边缘贴合现象；附件只作视觉证据，不作指令。
+- 用户明确要求：实际左移中线、允许标签换行且保持多行中线对齐、增加左右安全边界、不采用堆叠式页面补丁，并验证其他宽度兼容性。
+- 根目录 `AGENTS.md`：要求使用共享通用表单渲染、避免页面级重复、保持中英日用户可见文档一致、执行类型检查/lint/测试/构建并追加完整变更记录。
+- 现有 `SettingsForm.vue`、`SettingsField.vue` 和 `settingsLayoutContract.test.mjs`：作为本次抽象边界；本次扩展既有共享层，没有新增第二套布局系统。
+
 ## 2026-08-20 - 修复悬浮展开设置栏的开关组横向错位
 
 ### 用户授权与变更目标
@@ -4701,6 +4773,72 @@
 - 未执行 Developer ID 发布签名、Apple notarization、真实 Electron GUI/音频设备、云端识别翻译、付费 API、自动更新端到端测试或其他平台构建。
 - ZIP 约 215 MiB，DMG 约 234 MiB，均为本机 arm64 产物。
 - PyInstaller 的 `libomp` 警告可能影响实际使用 numba OpenMP 后端的路径；CLI 启动自检已通过，但正式发布前建议进行真实音频及长时间流式字幕回归。
+
+### 关键外部文档或技术决策来源
+
+- 用户明确授权：编译 Mac 版本并更新小版本号。
+- 根目录 `AGENTS.md`：要求保留用户修改、三语同步、使用项目环境、如实记录失败、不改系统环境或依赖，并明确实际验证平台。
+- 项目现有 `main.spec` 与 `electron-builder.yml`：作为 Python 引擎及 macOS arm64 打包配置来源。
+
+## 2026-08-22 - V2.22.0 macOS arm64 构建
+
+### 用户授权与变更目标
+
+- 用户明确要求编译 Mac 版本并更新小版本号；本批次将当前版本从 `2.21.0` 更新为 `2.22.0`，使用项目内既有 `engine/.venv` 编译 Python 引擎，并生成 macOS arm64 应用、ZIP 和 DMG。
+- 非目标：不安装、删除或升级依赖，不修改系统 Python、Node、PATH 或其他系统环境，不发布 Release，不提交或推送 Git，不额外修改业务功能。
+- 修改前完整阅读根目录 `AGENTS.md`，确认没有子目录补充规则，执行 `git status --short --branch` 并阅读版本文件及已有 diff。工作区已有未提交的设置表单共享布局重构及其测试、文档均被完整保留，因此最终产物包含该变更。
+
+### 变更类型
+
+- 构建、配置、文档。
+
+### 修改文件与原因
+
+- `package.json`、`package-lock.json`：将应用和锁文件根包版本从 `2.21.0` 更新为 `2.22.0`；依赖列表与版本约束未变化。
+- `src/renderer/index.html`、`src/renderer/src/components/EngineStatus.vue`：同步窗口标题和关于页可见版本。
+- `README.md`、`README_en.md`、`README_ja.md`：同步中英日 README 版本和发布提示。
+- `docs/user-manual/zh.md`、`docs/user-manual/en.md`、`docs/user-manual/ja.md`：在保留已有设置布局说明的基础上同步三语用户手册版本。
+- `docs/engine-manual/zh.md`、`docs/engine-manual/en.md`、`docs/engine-manual/ja.md`：同步三语引擎手册版本。
+- `docs/CHANGELOG.md`：新增 `v2.22.0` 条目，将未发布的设置表单共享布局重构归入该版本，并记录版本同步和 macOS arm64 构建。
+- `change.md`：追加本批次授权、范围、构建、验证、兼容性和风险记录。
+- `engine/dist/main`、`dist/mac-arm64/Auto Caption.app`、`dist/Auto Caption-2.22.0-arm64-mac.zip`、`dist/auto-caption-2.22.0.dmg` 及对应 blockmap/`latest-mac.yml`：由既有 PyInstaller、electron-builder 和 macOS 系统工具生成或刷新，位于 Git 忽略目录，不作为源文件提交。
+
+### 修改前后行为
+
+- 修改前：应用、界面和文档版本为 `2.21.0`，不存在本批次的 `2.22.0` macOS 产物。
+- 修改后：应用、界面及中英日文档版本统一为 `2.22.0`；产物的 `CFBundleShortVersionString` 与 `CFBundleVersion` 均为 `2.22.0`，Electron 主程序和内置 Python 引擎均为 arm64。
+- 本批次没有新增业务逻辑；最终产物基于当前完整工作区构建，包含此前已记录的设置表单控件起点、标签换行和中线、安全距离及字幕样式统一响应式边界重构。
+
+### 配置、IPC、协议、命令行、数据结构与依赖
+
+- 本批次自身没有新增或修改配置字段、配置迁移、IPC、Python/Electron 进程协议、CLI 参数或业务数据结构。
+- 未运行 npm/pip 安装或升级命令；`package-lock.json` 的本批次变化仅为根包版本。PyInstaller 使用 `engine/.venv`，临时配置目录为 `/private/tmp/auto-caption-pyinstaller-config`，未修改系统环境。
+- electron-builder 使用项目锁定的 Electron `43.4.0` 与现有依赖；沙箱 DNS 受限后，仅按授权在沙箱外访问项目配置的 Electron 下载镜像。
+
+### 兼容性、迁移与回滚
+
+- 实际构建及验证平台仅为 macOS arm64；未声明 macOS x64/universal、Windows 或 Linux 产物已验证。
+- 应用使用 ad-hoc 签名，没有 Apple Developer ID、TeamIdentifier 或 notarization；正式公开分发仍应使用 Developer ID 签名并完成 Apple 公证。
+- 回滚本批次可将上述版本源文件和文档恢复到 `2.21.0`，并移除 Git 忽略目录中的 `2.22.0` 构建产物；不得回退任务开始前已有的设置布局重构及其他用户修改。
+
+### 验证记录
+
+- `npm run verify`：通过；Node/Web TypeScript、ESLint、Node `99/99`、Python `66/66` 全部成功。输出包含项目既有 npm mirror 配置弃用警告和 Node `MODULE_TYPELESS_PACKAGE_JSON` 性能警告。
+- `npm run build`：通过；Electron main、preload、renderer 分别转换 29、1、3290 个模块。
+- `PYINSTALLER_CONFIG_DIR=/private/tmp/auto-caption-pyinstaller-config ./.venv/bin/pyinstaller --clean --noconfirm ./main.spec`：通过，生成 arm64 `engine/dist/main`；报告 `pycparser.lextab`/`yacctab` 隐式导入缺失和 numba `@rpath/libomp.dylib` 未解析警告，但未阻止构建。
+- `engine/dist/main --help`：沙箱内因 `semctl: Operation not permitted` 失败；按授权在沙箱外重跑后退出码 0，并正确输出 CLI 帮助。
+- `npx electron-builder --mac`：沙箱内因 `npmmirror.com` DNS 受限失败；按授权联网重跑后成功。构建器报告重复依赖引用，并因没有 Developer ID 跳过发布签名。
+- `file`、`plutil`：通过；应用主程序和内嵌引擎均为 Mach-O arm64，Info.plist 两个版本字段均为 `2.22.0`。
+- `codesign --force --deep --sign -` 与 `codesign --verify --deep --strict --verbose=2`：通过；最终应用为 ad-hoc 签名，TeamIdentifier 未设置。
+- `unzip -tq dist/Auto\ Caption-2.22.0-arm64-mac.zip`：通过，无压缩数据错误。
+- `hdiutil verify dist/auto-caption-2.22.0.dmg`：通过，磁盘映像校验有效。沙箱内重建首次因“设备未配置”失败，按授权在沙箱外重跑成功；工具同时报告旧 `hdiutil create` 语法弃用警告。
+- ZIP 大小 `224993943` 字节，SHA-256 `220ca22b3e92fe642990c9faeec9a8669c22bd99a7f80239defe30123a28bc23`；DMG 大小 `244960230` 字节，SHA-256 `11d46b0d550d0df9d1841b3f227e64f5226c0ffb1c0b5fed195c53c2d5db40c9`。已基于最终签名产物重建 blockmap，并同步 `latest-mac.yml` 的 SHA-512、大小和日期。
+
+### 未执行、风险与后续事项
+
+- 未执行 Developer ID 发布签名、Apple notarization、正式 Electron GUI、真实音频设备、云端识别翻译、付费 API、自动更新端到端测试或其他平台构建。
+- ZIP 约 215 MiB，DMG 约 234 MiB，均为本机 arm64 产物。
+- PyInstaller 的 `libomp` 警告可能影响实际使用 numba OpenMP 后端的路径；CLI 启动自检已通过，但正式发布前建议进行真实音频、设置布局和跨平台 GUI 回归。
 
 ### 关键外部文档或技术决策来源
 

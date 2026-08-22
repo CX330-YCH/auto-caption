@@ -1,7 +1,8 @@
 <template>
-  <div class="font-family-select">
+  <SettingsField :label="label">
     <a-input
       v-if="manualMode"
+      class="font-family-primary"
       :value="modelValue"
       :status="fontValueValid ? '' : 'error'"
       :placeholder="t('style.fontPicker.manualPlaceholder')"
@@ -9,6 +10,7 @@
     />
     <a-select
       v-else
+      class="font-family-primary"
       :value="selectedValue"
       :loading="accessState === 'loading'"
       :not-found-content="t('style.fontPicker.noResults')"
@@ -24,48 +26,50 @@
         :value="option.value"
         :label="option.family"
       >
-        <span
-          class="font-option"
-          :style="{ fontFamily: option.value }"
-        >{{ option.family }}</span>
+        <span class="font-option" :style="{ fontFamily: option.value }">
+          {{ option.family }}
+        </span>
         <span v-if="option.custom" class="font-option-kind">
           {{ t('style.fontPicker.customValue') }}
         </span>
       </a-select-option>
     </a-select>
 
-    <div class="font-picker-actions">
-      <button type="button" class="font-picker-link" @click="toggleManualMode">
-        {{ manualMode
-          ? t('style.fontPicker.useSystemFonts')
-          : t('style.fontPicker.useManualInput') }}
-      </button>
-      <button
-        v-if="!manualMode"
-        type="button"
-        class="font-picker-link"
-        :disabled="accessState === 'loading'"
-        @click="refreshFonts"
-      >
-        {{ t('style.fontPicker.refresh') }}
-      </button>
-    </div>
+    <template #description>
+      <div class="font-picker-actions">
+        <button type="button" class="font-picker-link" @click="toggleManualMode">
+          {{ manualMode
+            ? t('style.fontPicker.useSystemFonts')
+            : t('style.fontPicker.useManualInput') }}
+        </button>
+        <button
+          v-if="!manualMode"
+          type="button"
+          class="font-picker-link"
+          :disabled="accessState === 'loading'"
+          @click="refreshFonts"
+        >
+          {{ t('style.fontPicker.refresh') }}
+        </button>
+      </div>
 
-    <div v-if="statusMessage" class="font-picker-status" :class="statusClass">
-      {{ statusMessage }}
-    </div>
-    <div
-      class="font-picker-preview"
-      :style="fontValueValid ? { fontFamily: modelValue } : undefined"
-    >
-      {{ t('style.fontPicker.previewText') }}
-    </div>
-  </div>
+      <div v-if="statusMessage" class="font-picker-status" :class="statusClass">
+        {{ statusMessage }}
+      </div>
+      <div
+        class="font-picker-preview"
+        :style="fontValueValid ? { fontFamily: modelValue } : undefined"
+      >
+        {{ t('style.fontPicker.previewText') }}
+      </div>
+    </template>
+  </SettingsField>
 </template>
 
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import SettingsField from './SettingsField.vue'
 import {
   createFontFamilyOptions,
   findMatchingFontOption,
@@ -91,6 +95,7 @@ interface DisplayedFontOption extends FontFamilyOption {
 }
 
 const props = defineProps<{
+  label: string
   modelValue: string
 }>()
 
@@ -183,12 +188,7 @@ async function loadFonts(forceRefresh: boolean): Promise<void> {
 </script>
 
 <style scoped>
-.font-family-select {
-  min-width: 0;
-}
-
-.font-family-select > .ant-select,
-.font-family-select > .ant-input {
+.font-family-primary {
   width: 100%;
 }
 
@@ -204,7 +204,6 @@ async function loadFonts(forceRefresh: boolean): Promise<void> {
 .font-picker-actions {
   display: flex;
   gap: 8px;
-  margin-top: 2px;
 }
 
 .font-picker-link {
@@ -224,7 +223,6 @@ async function loadFonts(forceRefresh: boolean): Promise<void> {
 
 .font-picker-status,
 .font-picker-preview {
-  margin-top: 3px;
   color: var(--tag-color);
   font-size: 12px;
   overflow-wrap: anywhere;

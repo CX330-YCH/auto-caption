@@ -1,7 +1,7 @@
 <template>
   <div
     class="settings-field"
-    :class="[`settings-field--${kind}`, `settings-field--align-${align}`]"
+    :class="`settings-field--${kind}`"
   >
     <div class="settings-field__label">
       <slot name="label">{{ label }}</slot>
@@ -9,11 +9,13 @@
     <div class="settings-field__control" :class="`settings-field__control--${controlLayout}`">
       <slot />
     </div>
-    <div v-if="$slots.value" class="settings-field__value">
-      <slot name="value" />
-    </div>
-    <div v-if="$slots.description" class="settings-field__description">
-      <slot name="description" />
+    <div v-if="$slots.value || $slots.description" class="settings-field__supporting">
+      <div v-if="$slots.value" class="settings-field__value">
+        <slot name="value" />
+      </div>
+      <div v-if="$slots.description" class="settings-field__description">
+        <slot name="description" />
+      </div>
     </div>
   </div>
 </template>
@@ -23,13 +25,11 @@ withDefaults(
   defineProps<{
     label?: string
     kind?: 'standard' | 'switch'
-    align?: 'center' | 'start'
     controlLayout?: 'fill' | 'equal' | 'intrinsic'
   }>(),
   {
     label: '',
     kind: 'standard',
-    align: 'center',
     controlLayout: 'fill'
   }
 )
@@ -39,43 +39,51 @@ withDefaults(
 .settings-field {
   display: grid;
   grid-template-columns:
-    minmax(96px, var(--settings-field-label-width, 128px))
+    var(--settings-field-label-width, 96px)
     minmax(var(--settings-field-control-min-width, 220px), 1fr);
-  align-items: center;
-  column-gap: 12px;
+  align-items: start;
+  column-gap: var(--settings-field-column-gap, 12px);
   row-gap: 6px;
   margin: 12px 0;
 }
 
-.settings-field--align-start {
-  align-items: start;
-}
-
 .settings-field__label {
   grid-column: 1;
+  grid-row: 1;
+  align-self: center;
   min-width: 0;
   text-align: end;
   overflow-wrap: anywhere;
-}
-
-.settings-field--align-start > .settings-field__label {
-  padding-top: 5px;
+  white-space: normal;
+  line-height: 1.4;
 }
 
 .settings-field--switch > .settings-field__label {
   padding-top: 0;
 }
 
-.settings-field__control,
-.settings-field__value,
-.settings-field__description {
+.settings-field__control {
   grid-column: 2;
+  grid-row: 1;
+  align-self: center;
   min-width: 0;
+}
+
+.settings-field__supporting {
+  grid-column: 2;
+  grid-row: 2;
+  min-width: 0;
+  display: grid;
+  row-gap: 6px;
 }
 
 .settings-field__control--fill > * {
   width: 100%;
   min-width: 0;
+}
+
+.settings-field__control--fill > .ant-slider {
+  width: auto;
 }
 
 .settings-field__control--intrinsic {
@@ -110,30 +118,34 @@ withDefaults(
   font-size: 12px;
 }
 
-@container settings-form (max-width: 360px) {
+@container settings-form (max-width: 359px) {
   .settings-field--standard {
     grid-template-columns: minmax(0, 1fr);
   }
 
   .settings-field--standard > .settings-field__label,
   .settings-field--standard > .settings-field__control,
-  .settings-field--standard > .settings-field__value,
-  .settings-field--standard > .settings-field__description {
+  .settings-field--standard > .settings-field__supporting {
     grid-column: 1;
   }
 
   .settings-field--standard > .settings-field__label {
+    grid-row: 1;
     padding-top: 0;
     text-align: start;
   }
 
-  .settings-field--switch {
-    grid-template-columns: max-content auto;
-    justify-content: start;
+  .settings-field--standard > .settings-field__control {
+    grid-row: 2;
   }
 
-  .settings-field--switch > .settings-field__label {
-    text-align: start;
+  .settings-field--standard > .settings-field__supporting {
+    grid-row: 3;
+  }
+
+  .settings-field--switch {
+    grid-template-columns: var(--settings-field-label-width, 96px) auto;
+    justify-content: start;
   }
 }
 </style>
