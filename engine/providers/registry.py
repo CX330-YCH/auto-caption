@@ -18,6 +18,7 @@ from .gummy import GummyProvider
 from .fun_asr import FunAsrClientOptions, FunAsrProvider
 from .sosv import SosvProvider
 from .vosk import VoskProvider
+from .apple_speech import AppleSpeechProvider
 
 
 @dataclass(frozen=True)
@@ -45,6 +46,7 @@ class ProviderConfig:
     fun_asr_vocabulary_id: str
     fun_asr_vocabulary_model: str
     fun_asr_context_terms: tuple[str, ...]
+    apple_speech_helper: str = ''
 
 
 @dataclass(frozen=True)
@@ -106,6 +108,7 @@ def build_provider_registry() -> ProviderRegistry:
     registry.register('sosv', _build_sosv)
     registry.register('glm', _build_glm)
     registry.register('fun_asr', _build_fun_asr)
+    registry.register('apple_speech', _build_apple_speech)
     return registry
 
 
@@ -215,6 +218,39 @@ def _build_fun_asr(
         audio_source,
         warning_handler,
         diagnostic_handler,
+    )
+
+
+def _build_apple_speech(
+    config: ProviderConfig,
+    audio_source: AudioSource,
+    warning_handler: Callable[[str], None],
+    diagnostic_handler: Callable[[str, dict[str, object]], None],
+) -> ProviderRuntime:
+    from utils.audioprcs import merge_chunk_channels
+
+    return ProviderRuntime(
+        provider=AppleSpeechProvider(
+            helper_path=config.apple_speech_helper,
+            locale=config.source_language,
+            sample_rate=audio_source.RATE,
+        ),
+        audio_pipeline=AudioPipeline(
+            converter=lambda chunk: merge_chunk_channels(
+                chunk,
+                audio_source.CHANNELS,
+            ),
+            output_sample_rate=audio_source.RATE,
+        ),
+        translation_service=build_legacy_translation_service(
+            target=_target(config.target_language),
+            trans_model=config.translation_model,
+            model_name=config.translation_model_name,
+            url=config.translation_url,
+            api_key=config.translation_api_key,
+            warning_handler=warning_handler,
+            diagnostic_handler=diagnostic_handler,
+        ),
     )
 
 

@@ -72,6 +72,20 @@ class CliTests(unittest.TestCase):
         )
         self.assertNotIn('dummy-fun-asr-credential', repr(options))
 
+    def test_parses_apple_speech_helper_path(self):
+        options = parse_args([
+            '-e', 'apple_speech',
+            '-s', 'en-US',
+            '-ash', '/Applications/Auto Caption.app/helper',
+        ])
+
+        self.assertEqual(options.caption_engine, 'apple_speech')
+        self.assertEqual(options.source_language, 'en-US')
+        self.assertEqual(
+            options.apple_speech_helper,
+            '/Applications/Auto Caption.app/helper',
+        )
+
 
 if __name__ == '__main__':
     unittest.main()

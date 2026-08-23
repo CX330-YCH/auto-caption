@@ -1,6 +1,6 @@
 # Auto Caption 用户手册
 
-对应版本：v2.22.0
+对应版本：v2.23.0
 
 ## 软件简介
 
@@ -48,6 +48,14 @@ Auto Caption 是一个跨平台的字幕显示软件，能够实时获取系统�
 先在阿里云百炼同一个 Workspace 中准备 API Key、Workspace ID 和专属 WebSocket 地址。地址必须是官方北京或新加坡地域的 `wss://<WorkspaceId>.<region>.maas.aliyuncs.com/api-ws/v1/inference`，其中的 Workspace ID 必须与设置字段一致，三者也必须属于同一地域。该云端服务会产生费用，使用前请查看[官方 WebSocket API 文档](https://help.aliyun.com/zh/model-studio/fun-asr-realtime-websocket-api)和当前计费规则。
 
 设置页可选择模型、语义断句、最大句间静音（200–6000 ms）和心跳。Fun-ASR 的最终句使用现有外部翻译配置。
+
+## macOS 系统语音识别使用前准备
+
+该本地引擎使用 Apple `SpeechAnalyzer`、`SpeechTranscriber` 与 `AssetInventory`，要求 macOS 26 或更高版本。非 macOS 平台不会显示此选项；macOS 平台如果系统版本、原生辅助程序、硬件能力或可用语言不满足要求，选项仍显示但呈灰色，点击只显示禁用原因，不会改变当前选择。
+
+选择该引擎时，软件会立即按源语言查询系统模型状态。只有“已安装”才允许启动字幕引擎；“可下载”时请在独立模型弹窗点击“下载语言模型”，并等待 macOS 报告的进度完成。下载不计入默认 30 秒字幕引擎启动超时。模型名额已满时，弹窗会列出已保留语言，用户可明确释放不再使用的模型后再下载。模型资产由 macOS 存储、共享和自动更新，不写入 Auto Caption 配置文件。源语言列表以当前系统查询结果为准，不支持自动检测。
+
+识别完全在设备上执行；外部翻译仍只对 final 字幕调用一次。系统音频输出采集仍需按后文配置 BlackHole，本功能不新增 ScreenCaptureKit 采集。
 
 字幕引擎启动时会初始化操作系统原生 CA 信任库：macOS 使用钥匙串的 Security 信任，Windows 使用 CryptoAPI，Linux 使用系统 OpenSSL 证书路径。公司代理或私有 CA 必须先正确安装到系统信任库；应用不会关闭 TLS 证书校验，也不依赖打包 Python 中可能缺失的独立 CA 文件。
 
@@ -221,7 +229,7 @@ sudo yum install pulseaudio pavucontrol
 
 但是指定源语言能在一定程度上提高识别准确率，可用使用上面的语言代码指定源语言。
 
-该项适用于 Gummy、GLM、SOSV 和 Fun-ASR 模型。
+该项适用于 Gummy、GLM、SOSV、Fun-ASR 和 Apple Speech 模型。Apple Speech 必须使用系统能力查询返回的明确 locale（如 `zh-CN`），不支持 `auto`。
 
 其中 Gummy 模型可用使用上述全部的语言，在加上粤语（`yue`）。
 
@@ -272,6 +280,14 @@ python main.py -e fun_asr -fworkspace <workspace-id> \
   -fkey <dashscope-api-key> -fvocabulary <vocabulary-id> \
   -fcontext "Auto Caption" -fcontext "阿里云百炼" -s zh -t none -d 1
 ```
+
+#### Apple Speech 专属参数
+
+- `-e apple_speech`：选择 macOS 系统 Provider。
+- `-ash, --apple_speech_helper`：Swift 辅助程序的绝对路径。
+- `-s, --source_language`：必须是 `probe` 返回的受支持 locale，且对应模型已通过独立安装流程显示为 `installed`。
+
+直接运行 Python 引擎不会自动下载模型；应先由应用模型管理界面安装，或直接使用 Swift 辅助程序的 `model-status`/`model-install` 子命令。示例：`python main.py -e apple_speech -ash /path/to/apple-speech-helper -s zh-CN -t none -d 1`。
 
 #### `-tm, --translation_model`
 

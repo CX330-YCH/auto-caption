@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 
 import { CaptionLog } from '../../src/main/engine/captions/CaptionLog.ts'
-import { upsertCaptionItem } from '../../src/shared/captions.ts'
+import { removeCaptionItem, upsertCaptionItem } from '../../src/shared/captions.ts'
 
 function caption(
   index,
@@ -125,6 +125,21 @@ test('renderer upsert inserts a missed add and updates by caption ID', () => {
   upsertCaptionItem(items, final)
 
   assert.deepEqual(items, [final])
+})
+
+test('removes a revoked caption by its run-scoped stable ID', () => {
+  const log = new CaptionLog()
+  log.upsert(7, caption(3, '00:00:00.000', 'temporary', '00:00:00.200', 'partial'))
+  log.upsert(7, caption(4, '00:00:00.300', 'keep', '00:00:00.500', 'partial'))
+
+  assert.equal(log.remove(7, {
+    command: 'caption_remove', event_version: 1, index: 3
+  }), '7:3')
+  assert.deepEqual(log.items.map((item) => item.captionId), ['7:4'])
+
+  const rendererItems = [...log.items]
+  removeCaptionItem(rendererItems, '7:4')
+  assert.deepEqual(rendererItems, [])
 })
 
 test('tracks explicit partial and final lifecycle without reopening final text', () => {

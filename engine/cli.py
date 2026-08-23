@@ -33,6 +33,7 @@ class CliOptions:
     fun_asr_vocabulary_id: str = ''
     fun_asr_vocabulary_model: str = 'fun-asr-realtime'
     fun_asr_context_terms: tuple[str, ...] = ()
+    apple_speech_helper: str = ''
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -41,7 +42,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         '-e', '--caption_engine', default='gummy',
-        help='Caption engine: gummy, glm, vosk, sosv or fun_asr'
+        help='Caption engine: gummy, glm, vosk, sosv, fun_asr or apple_speech'
     )
     parser.add_argument(
         '-a', '--audio_type', type=int, default=0,
@@ -155,6 +156,10 @@ def build_parser() -> argparse.ArgumentParser:
         action='append', default=[],
         help='Fun-ASR context term; repeat for multiple terms'
     )
+    parser.add_argument(
+        '-ash', '--apple_speech_helper', default='',
+        help='Path to the macOS Apple Speech helper executable'
+    )
     return parser
 
 
@@ -192,4 +197,5 @@ def parse_args(arguments: list[str] | None = None) -> CliOptions:
         fun_asr_vocabulary_id=args.fun_asr_vocabulary_id,
         fun_asr_vocabulary_model=args.fun_asr_vocabulary_model,
         fun_asr_context_terms=tuple(args.fun_asr_context_term),
+        apple_speech_helper=args.apple_speech_helper,
     )

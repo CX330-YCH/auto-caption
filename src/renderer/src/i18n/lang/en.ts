@@ -117,7 +117,8 @@ export default {
         "vosk": "Local / Vosk",
         "sosv": "Local / SOSV",
         "glm": "Cloud / Zhipu AI / GLM-ASR",
-        "funAsr": "Cloud / Alibaba Cloud / Fun-ASR Realtime"
+        "funAsr": "Cloud / Alibaba Cloud / Fun-ASR Realtime",
+        "appleSpeech": "Local / macOS System Speech"
       },
       languages: {
         "auto": "Auto Detect",
@@ -131,7 +132,10 @@ export default {
         "ru": "Russian",
         "es": "Spanish",
         "it": "Italian",
-        "yue": "Cantonese"
+        "yue": "Cantonese",
+        "zhCN": "Simplified Chinese (Mainland China)",
+        "enUS": "English (United States)",
+        "jaJP": "Japanese (Japan)"
       },
       translation: {
         "ollama": "Ollama Model or OpenAI-compatible Model",
@@ -200,6 +204,40 @@ export default {
         "process_failed": "The local hotword service process failed to start or respond.",
         "sdk_error": "The Alibaba Cloud hotword SDK failed. Check the account, region, Workspace, quota, and network.",
         "model_mismatch": "The vocabulary target model does not match the active Fun-ASR model."
+      }
+    },
+    appleSpeech: {
+      "modelTitle": "macOS Language Model",
+      "check": "Check model status",
+      "manage": "Install language model",
+      "locale": "Recognition language",
+      "download": "Download language model",
+      "retry": "Check again",
+      "close": "Close",
+      "reservationFull": "Language model capacity reached",
+      "reservationFullDescription": "macOS limits how many language models each app can reserve. Release a model you no longer need first.",
+      "release": "Release {locale}",
+      "unavailableTitle": "macOS system engine unavailable",
+      disabled: {
+        "unsupported_os": "macOS 26 or later is required.",
+        "helper_missing": "The Apple Speech helper is missing. Rebuild the app or install a complete package.",
+        "helper_incompatible": "The Apple Speech helper protocol is incompatible.",
+        "speech_unavailable": "SpeechAnalyzer is not supported on this Mac or the system speech service is unavailable.",
+        "no_supported_locales": "The system did not report any supported on-device recognition languages.",
+        "probe_failed": "Apple Speech capability detection failed. Check the software log and retry."
+      },
+      states: {
+        "unknown": "Not checked", "checking": "Checking", "supported": "Download available",
+        "downloading": "Downloading", "installed": "Installed", "unsupported": "Unsupported", "failed": "Check failed"
+      },
+      descriptions: {
+        "unknown": "The app checks the current language model when this engine is selected.",
+        "checking": "Querying macOS for the language model status.",
+        "supported": "This language is supported, but its model is not installed. macOS manages the download and the caption engine cannot start until it finishes.",
+        "downloading": "macOS is downloading and installing the language model. Keep the app running.",
+        "installed": "The language model is installed and the caption engine can start.",
+        "unsupported": "This recognition language is not supported by the current system. Choose another source language.",
+        "failed": "The language model status check failed. Retry and check the software log."
       }
     },
     custom: {

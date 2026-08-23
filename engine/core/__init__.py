@@ -2,6 +2,7 @@ from .audio import AudioCaptureWorker, AudioFrame, AudioPipeline, AudioSource
 from .events import (
     CaptionFinal,
     CaptionPartial,
+    CaptionRevoked,
     ProviderError,
     ProviderDebug,
     ProviderInfo,
@@ -26,6 +27,7 @@ __all__ = [
     'AudioSource',
     'CaptionFinal',
     'CaptionPartial',
+    'CaptionRevoked',
     'EventSink',
     'exception_diagnostic',
     'ProviderError',

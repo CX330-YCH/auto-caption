@@ -1,6 +1,6 @@
 # 字幕引擎说明文档
 
-对应版本：v2.22.0
+对应版本：v2.23.0
 
 ![](../../assets/media/structure_zh.png)
 
@@ -226,7 +226,11 @@ python main.py -e fun_asr -s ja -t zh -a 0 -c 10 \
 
 Fun-ASR 为每个连接 generation 维护幂等状态：同一次任务的 `on_error → on_close → stop` 最多触发一次重连或一次 fatal。永久服务错误立即终止，暂时错误才进行三次有界退避重连；task-failed 后不会再次调用 SDK `stop()`。生命周期细节通过隐藏的 `debug` 协议事件写入完整 Debug 日志，原有日志记录页不显示 DEBUG。fatal 会请求 Session 正常关闭资源；只有超时等异常路径才由 Electron 强杀整个打包进程树。
 
-所有内置字幕引擎（Gummy、Fun-ASR、GLM、Vosk、SOSV）及音频、翻译、热词 SDK 的错误都会把脱敏后的 SDK 回调字段、异常类型、消息、自定义属性、完整 traceback 和 cause/context 写入本次 Debug JSONL。Python/SDK stderr 同样完整收集。API Key、Token、密码、Authorization、Cookie 和二进制音频正文始终不记录；过大的远端响应采用明确的有界截断标记。
+所有内置字幕引擎（Gummy、Fun-ASR、GLM、Vosk、SOSV、Apple Speech）及音频、翻译、热词 SDK 的错误都会把脱敏后的 SDK 回调字段、异常类型、消息、自定义属性、完整 traceback 和 cause/context 写入本次 Debug JSONL。Python/SDK stderr 同样完整收集。API Key、Token、密码、Authorization、Cookie 和二进制音频正文始终不记录；过大的远端响应采用明确的有界截断标记。
+
+### Apple Speech Provider
+
+`apple_speech` 只在 macOS 26+ 使用。Electron 先通过 Swift 辅助程序的 `probe`、`model-status`、`model-install`、`model-release` 子命令管理系统能力和 `AssetInventory` 模型；这些操作与 Python 字幕引擎启动超时分离。真正识别时，Python Provider 用 `-ash/--apple_speech_helper` 指定辅助程序路径，把现有音频管线产生的单声道 PCM16 写入其 stdin，并读取版本为 1 的 NDJSON。Swift 侧将 `SpeechTranscriber` 的 volatile/final 结果映射为稳定 ID；撤回映射为公开增量 `caption_remove` 事件。final 仍只由统一 Session 触发一次外部翻译。系统音频来源继续复用现有 BlackHole 路径。
 
 ## 其他
 

@@ -100,6 +100,18 @@ export class IncrementalCaptionCollection {
     return { item, position }
   }
 
+  public remove(captionId: string): CaptionItem | undefined {
+    const position = this.positions.get(captionId)
+    if (position === undefined) return undefined
+    const [removed] = this.entries.splice(position, 1)
+    this.positions.delete(captionId)
+    for (let index = position; index < this.entries.length; index++) {
+      this.positions.set(this.entries[index].captionId, index)
+    }
+    if (this.activeCaptionId === captionId) this.activeCaptionId = undefined
+    return removed
+  }
+
   public findPosition(captionId: string): number | undefined {
     return this.positions.get(captionId)
   }
@@ -158,4 +170,9 @@ export function upsertCaptionItem(
   else {
     items.splice(position, 1, item)
   }
+}
+
+export function removeCaptionItem(items: CaptionItem[], captionId: string): void {
+  const position = items.findIndex((item) => item.captionId === captionId)
+  if (position !== -1) items.splice(position, 1)
 }

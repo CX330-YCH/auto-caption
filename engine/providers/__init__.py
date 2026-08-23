@@ -3,6 +3,7 @@ from .gummy import GummyProvider
 from .fun_asr import FunAsrClientOptions, FunAsrProvider
 from .sosv import SosvProvider
 from .vosk import VoskProvider
+from .apple_speech import AppleSpeechProvider
 from .registry import (
     ProviderConfig,
     ProviderRegistry,
@@ -12,6 +13,7 @@ from .registry import (
 
 __all__ = [
     'GlmProvider',
+    'AppleSpeechProvider',
     'GummyProvider',
     'FunAsrClientOptions',
     'FunAsrProvider',

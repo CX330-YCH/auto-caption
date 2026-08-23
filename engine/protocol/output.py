@@ -4,6 +4,7 @@ from typing import Any
 from core import (
     CaptionFinal,
     CaptionPartial,
+    CaptionRevoked,
     ProviderError,
     ProviderDebug,
     ProviderInfo,
@@ -43,6 +44,12 @@ class ProtocolEventSink:
                 'time_t': event.ended_at,
                 'text': event.text,
                 'translation': event.translation,
+            })
+        elif isinstance(event, CaptionRevoked):
+            self._object_writer({
+                'command': 'caption_remove',
+                'event_version': 1,
+                'index': event.caption_id,
             })
         elif isinstance(event, (ProviderReady, ProviderInfo, ProviderStopped)):
             self._command_writer('info', event.message)

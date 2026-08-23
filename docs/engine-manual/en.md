@@ -1,6 +1,6 @@
 # Caption Engine Documentation
 
-Corresponding version: v2.22.0
+Corresponding version: v2.23.0
 
 ![](../../assets/media/structure_en.png)
 
@@ -226,7 +226,11 @@ The Provider uses the official DashScope SDK and accepts 16 kHz mono PCM16. `Hot
 
 Fun-ASR keeps an idempotent state for every connection generation: one task's `on_error → on_close → stop` sequence can cause at most one reconnect or one fatal result. Permanent service errors stop immediately, while transient errors use up to three bounded backoff retries; the SDK `stop()` method is not called after task-failed. Lifecycle diagnostics use the hidden `debug` protocol event and are written only to the complete Debug log, not the existing Software Log view. A fatal event asks the Session to close normally; Electron force-kills the complete packaged process tree only on exceptional timeout paths.
 
-Errors from every built-in caption engine (Gummy, Fun-ASR, GLM, Vosk, and SOSV), audio capture, translation, and the hotword SDK preserve sanitized SDK callback fields, exception type and message, custom attributes, full traceback, and cause/context in the current Debug JSONL. Python and SDK stderr is collected as well. API keys, tokens, passwords, Authorization/Cookie values, and binary audio bodies are never logged; oversized remote diagnostics use explicit bounded-truncation markers.
+Errors from every built-in caption engine (Gummy, Fun-ASR, GLM, Vosk, SOSV, and Apple Speech), audio capture, translation, and the hotword SDK preserve sanitized SDK callback fields, exception type and message, custom attributes, full traceback, and cause/context in the current Debug JSONL. Python and SDK stderr is collected as well. API keys, tokens, passwords, Authorization/Cookie values, and binary audio bodies are never logged; oversized remote diagnostics use explicit bounded-truncation markers.
+
+### Apple Speech Provider
+
+`apple_speech` is macOS 26+ only. Before Python starts, Electron uses the Swift helper's `probe`, `model-status`, `model-install`, and `model-release` subcommands to manage runtime capability and `AssetInventory`; these operations are separate from the caption-engine startup timeout. During recognition, `-ash/--apple_speech_helper` supplies the helper path, the Python Provider writes mono PCM16 from the existing audio pipeline to helper stdin, and reads version-1 NDJSON. Swift maps volatile/final `SpeechTranscriber` results onto stable IDs and maps a volatile removal to the additive public `caption_remove` event. Only final captions enter the shared translation service once. System-output audio continues to use the existing BlackHole path.
 
 This Provider uses the official DashScope SDK and accepts 16 kHz mono PCM16. It only maps partial/final results, server timestamps, usage, and lifecycle callbacks into unified events; the Session and protocol layer retain translation, stdout, and shutdown responsibilities. Hotwords are not supported in this stage.
 

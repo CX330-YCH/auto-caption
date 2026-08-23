@@ -117,7 +117,8 @@ export default {
         "vosk": "本地 / Vosk",
         "sosv": "本地 / SOSV",
         "glm": "云端 / 智谱 AI / GLM-ASR",
-        "funAsr": "云端 / 阿里云 / Fun-ASR 实时"
+        "funAsr": "云端 / 阿里云 / Fun-ASR 实时",
+        "appleSpeech": "本地 / macOS 系统语音识别"
       },
       languages: {
         "auto": "自动检测",
@@ -131,7 +132,10 @@ export default {
         "ru": "俄语",
         "es": "西班牙语",
         "it": "意大利语",
-        "yue": "粤语"
+        "yue": "粤语",
+        "zhCN": "简体中文（中国大陆）",
+        "enUS": "英语（美国）",
+        "jaJP": "日语（日本）"
       },
       translation: {
         "ollama": "Ollama 模型或 OpenAI 兼容模型",
@@ -200,6 +204,40 @@ export default {
         "process_failed": "本地热词服务进程启动或响应失败。",
         "sdk_error": "阿里云热词 SDK 返回失败；请检查账号、地域、业务空间、配额和网络。",
         "model_mismatch": "热词表的目标模型与当前 Fun-ASR 模型不一致。"
+      }
+    },
+    appleSpeech: {
+      "modelTitle": "macOS 语言模型",
+      "check": "检查模型状态",
+      "manage": "安装语言模型",
+      "locale": "识别语言",
+      "download": "下载语言模型",
+      "retry": "重新检查",
+      "close": "关闭",
+      "reservationFull": "语言模型名额已满",
+      "reservationFullDescription": "macOS 限制每个应用可保留的语言模型数量。请先释放一个不再使用的语言模型。",
+      "release": "释放 {locale}",
+      "unavailableTitle": "macOS 系统引擎不可用",
+      disabled: {
+        "unsupported_os": "需要 macOS 26 或更高版本。",
+        "helper_missing": "应用中缺少 Apple Speech 辅助程序，请重新构建或安装完整版本。",
+        "helper_incompatible": "Apple Speech 辅助程序协议不兼容。",
+        "speech_unavailable": "当前 Mac 不支持 SpeechAnalyzer 或系统语音服务不可用。",
+        "no_supported_locales": "系统没有返回可用的本地识别语言。",
+        "probe_failed": "无法完成 Apple Speech 能力检测，请查看软件日志后重试。"
+      },
+      states: {
+        "unknown": "尚未检查", "checking": "检查中", "supported": "可下载",
+        "downloading": "下载中", "installed": "已安装", "unsupported": "不支持", "failed": "检查失败"
+      },
+      descriptions: {
+        "unknown": "选择该引擎后会检查当前语言模型。",
+        "checking": "正在向 macOS 查询语言模型状态。",
+        "supported": "该语言受支持，但模型尚未安装。下载由 macOS 管理，完成前不能启动字幕引擎。",
+        "downloading": "macOS 正在下载并安装语言模型，请保持应用运行。",
+        "installed": "语言模型已经安装，可以启动字幕引擎。",
+        "unsupported": "当前系统不支持这个识别语言，请更换源语言。",
+        "failed": "语言模型状态查询失败，请重试并查看软件日志。"
       }
     },
     custom: {

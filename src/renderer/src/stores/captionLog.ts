@@ -1,7 +1,7 @@
 import { ref } from 'vue'
 import { defineStore } from 'pinia'
 import { CaptionItem } from '../types'
-import { upsertCaptionItem } from '../../../shared/captions.ts'
+import { removeCaptionItem, upsertCaptionItem } from '../../../shared/captions.ts'
 
 export const useCaptionLogStore = defineStore('captionLog', () => {
   const captionData = ref<CaptionItem[]>([])
@@ -17,6 +17,10 @@ export const useCaptionLogStore = defineStore('captionLog', () => {
 
   window.electron.ipcRenderer.on('both.captionLog.set', (_, logs) => {
     captionData.value = logs
+  })
+
+  window.electron.ipcRenderer.on('both.captionLog.remove', (_, captionId: string) => {
+    removeCaptionItem(captionData.value, captionId)
   })
 
   return {

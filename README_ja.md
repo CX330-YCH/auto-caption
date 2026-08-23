@@ -3,7 +3,7 @@
     <h1 align="center">auto-caption</h1>
     <p>Auto Caption はクロスプラットフォームのリアルタイム字幕表示ソフトウェアです。</p>
     <p>
-      <a href="https://github.com/HiMeditator/auto-caption/releases"><img src="https://img.shields.io/badge/release-2.22.0-blue"></a>
+      <a href="https://github.com/HiMeditator/auto-caption/releases"><img src="https://img.shields.io/badge/release-2.23.0-blue"></a>
       <a href="https://github.com/HiMeditator/auto-caption/issues"><img src="https://img.shields.io/github/issues/HiMeditator/auto-caption?color=orange"></a>
       <img src="https://img.shields.io/github/languages/top/HiMeditator/auto-caption?color=royalblue">
       <img src="https://img.shields.io/github/repo-size/HiMeditator/auto-caption?color=green">
@@ -14,7 +14,7 @@
         | <a href="./README_en.md">English</a>
         | <b>日本語</b> |
     </p>
-    <p><i>v2.22.0 がリリースされました。macOS arm64 ビルドを含みます...</i></p>
+    <p><i>v2.23.0 がリリースされました。macOS arm64 ビルドを含みます...</i></p>
 </div>
 
 ![](./assets/media/main_ja.png)
@@ -53,7 +53,7 @@ https://github.com/user-attachments/assets/9c188d78-9520-4397-bacf-4c8fdcc54874
 
 ## 📖 基本使い方
 
-> ⚠️ 注意：現在の v2.22.0 は Windows と macOS arm64 ビルドを提供しています。Linux はソースまたは既存のビルド手順での検証が必要です。
+> ⚠️ 注意：現在の v2.23.0 は Windows と macOS arm64 ビルドを提供しています。Linux はソースまたは既存のビルド手順での検証が必要です。
 
 このソフトウェアは Windows、macOS、Linux プラットフォームに対応しています。テスト済みのプラットフォーム情報は以下の通りです：
 
@@ -72,6 +72,7 @@ macOS および Linux プラットフォームでシステムオーディオ出�
 |                                                              | 正確性 | 実時間性 | デプロイタイプ | 対応言語 | 翻訳 | 備考 |
 | ------------------------------------------------------------ | -------- | --------- | -------------- | -------- | ---- | ---- |
 | [Gummy](https://help.aliyun.com/zh/model-studio/gummy-speech-recognition-translation) | とても良い😊 | とても良い😊 | クラウド / アリババクラウド | 10言語 | 内蔵翻訳 | 有料、音声認識 0.54 CNY/時間、音声認識＋翻訳 1.08 CNY/時間 |
+| [SpeechAnalyzer / SpeechTranscriber](https://developer.apple.com/documentation/speech/speechanalyzer) | とても良い😊 | とても良い😊 | ローカル / macOS システム | macOS が動的に返す言語 | 追加設定が必要 | macOS 26 以降のみ。開始前にシステムモデルのインストールが必要 |
 | [glm-asr-2512](https://docs.bigmodel.cn/cn/guide/models/sound-and-video/glm-asr-2512) | とても良い😊 | 悪い😞 | クラウド / Zhipu AI | 4言語 | 追加設定が必要 | 有料、約0.72元/時間 |
 | [Vosk](https://alphacephei.com/vosk) | 悪い😞 | とても良い😊 | ローカル / CPU | 30言語以上 | 追加設定が必要 | 多くの言語に対応 |
 | [SOSV](https://k2-fsa.github.io/sherpa/onnx/sense-voice/index.html) | 普通😐 | 普通😐 | ローカル / CPU | 5言語 | 追加設定が必要 | 1つのモデルのみ |
@@ -162,7 +163,7 @@ python main.py \
 
 ## ⚙️ 字幕エンジン説明
 
-現在、ソフトウェアには4つの字幕エンジンが搭載されており、新しいエンジンが計画されています。それらの詳細情報は以下の通りです。
+現在、ソフトウェアには6つの字幕エンジンが搭載されています。詳細は以下の通りです。
 
 ### Gummy 字幕エンジン（クラウド）
 
@@ -192,6 +193,10 @@ $$
 ### GLM-ASR 字幕エンジン（クラウド）
 
 https://docs.bigmodel.cn/ja/guide/models/sound-and-video/glm-asr-2512
+
+### macOS システム音声認識エンジン（ローカル）
+
+Apple の `SpeechAnalyzer`、`SpeechTranscriber`、`AssetInventory` を使ってオンデバイスでリアルタイム認識します。macOS のみ表示され、OS、ネイティブヘルパー、ハードウェア、対応言語が条件を満たさない場合は灰色の項目から理由だけを確認できます。選択時にソース言語モデルを直ちに確認し、未インストールなら専用の進捗ダイアログで完了するまで通常の字幕エンジンを開始できません。モデル取得は30秒の起動タイムアウトとは別です。システム出力の取得は引き続き BlackHole を使用します。
 
 ### Vosk字幕エンジン（ローカル）
 

@@ -1,6 +1,12 @@
 ## 未发布
 
+## v2.23.0 - 2026-08-24
+
+- 新增 macOS 26+ 独占的 Apple SpeechAnalyzer/SpeechTranscriber 本地引擎：按平台动态隐藏或灰显，显示结构化禁用原因和运行时语言列表，并在选择时独立检查 `AssetInventory` 模型状态。
+- 新增用户明确触发的模型下载、实时进度、保留名额释放和主进程 `installed` 启动门禁；接入 Swift 辅助程序、Python Provider、final 单次翻译复用及 volatile 字幕撤回协议。
 - 回滚 v2.22.0 的设置表单中线、标签换行、安全边界和字幕样式统一响应式布局改动，恢复 v2.21.0 的设置布局行为。
+- 将应用及中英日文档版本统一更新至 `2.23.0`。
+- 基于当前工作区生成并验证 macOS arm64 应用、ZIP、DMG、Swift 辅助程序与 Python 引擎。
 
 ## v2.22.0 - 2026-08-22
 
@@ -364,3 +370,9 @@
 
 - 更新应用版本号为 v2.11.0，并同步应用标题、关于窗口、README 与中英日用户/引擎文档版本标识。
 - 基于当前工作区依赖和打包配置生成 macOS arm64 构建产物，作为 V2 小版本的 Mac 版本验证包。
+## Unreleased
+
+### macOS system speech
+
+- Added a macOS-only on-device caption engine backed by Apple SpeechAnalyzer and SpeechTranscriber, with runtime soft-disable reasons, dynamic locales, explicit AssetInventory model checks/download progress, reservation release, and an authoritative installed-model start gate.
+- Added the Swift helper build/package path, Python Provider integration, external final-only translation reuse, and the additive `caption_remove` lifecycle event for volatile-result revocation.

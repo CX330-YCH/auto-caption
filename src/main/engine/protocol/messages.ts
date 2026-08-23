@@ -22,6 +22,12 @@ export interface TranslationEngineMessage extends EngineMessage {
   translation: string
 }
 
+export interface CaptionRemoveEngineMessage extends EngineMessage {
+  command: 'caption_remove'
+  event_version: 1
+  index: number
+}
+
 export interface ContentEngineMessage extends EngineMessage {
   content: string
 }
@@ -64,6 +70,15 @@ export function isTranslationEngineMessage(
     typeof value.time_s === 'string' &&
     typeof value.text === 'string' &&
     typeof value.translation === 'string'
+}
+
+export function isCaptionRemoveEngineMessage(
+  value: EngineMessage
+): value is CaptionRemoveEngineMessage {
+  return value.command === 'caption_remove' &&
+    value.event_version === 1 &&
+    typeof value.index === 'number' &&
+    Number.isFinite(value.index)
 }
 
 export function isContentEngineMessage(

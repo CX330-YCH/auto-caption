@@ -21,6 +21,11 @@ class CaptionFinal:
 
 
 @dataclass(frozen=True)
+class CaptionRevoked:
+    caption_id: int
+
+
+@dataclass(frozen=True)
 class ProviderReady:
     provider: str
     message: str
@@ -63,6 +68,7 @@ class UsageUpdated:
 RecognitionEvent: TypeAlias = (
     CaptionPartial
     | CaptionFinal
+    | CaptionRevoked
     | ProviderReady
     | ProviderInfo
     | ProviderDebug

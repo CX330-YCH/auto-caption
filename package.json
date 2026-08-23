@@ -1,7 +1,7 @@
 {
   "name": "auto-caption",
   "productName": "Auto Caption",
-  "version": "2.22.0",
+  "version": "2.23.0",
   "description": "A cross-platform subtitle display software.",
   "main": "./out/main/index.js",
   "author": "himeditator",
@@ -19,10 +19,11 @@
     "start": "electron-vite preview",
     "dev": "electron-vite dev",
     "build": "npm run typecheck && electron-vite build",
+    "build:apple-speech": "node scripts/build-apple-speech-helper.mjs",
     "postinstall": "electron-builder install-app-deps",
     "build:unpack": "npm run build && electron-builder --dir",
     "build:win": "npm run build && electron-builder --win",
-    "build:mac": "npm run build && electron-builder --mac",
+    "build:mac": "npm run build:apple-speech && npm run build && electron-builder --mac",
     "build:linux": "npm run build && electron-builder --linux"
   },
   "dependencies": {

@@ -17,6 +17,7 @@ import {
 import {
   type EngineMessage,
   isCaptionEngineMessage,
+  isCaptionRemoveEngineMessage,
   isContentEngineMessage,
   isTranslationEngineMessage
 } from '../engine/protocol/messages'
@@ -33,6 +34,7 @@ import {
   forceKillProcessTree,
   shouldCreateProcessGroup
 } from '../engine/EngineProcessControl.ts'
+import { resolveAppleSpeechHelperPath } from '../engine/AppleSpeechHelperPath.ts'
 
 export class CaptionEngine {
   appPath: string = ''
@@ -78,7 +80,8 @@ export class CaptionEngine {
       this.command.push(...buildBundledEngineArguments(
         engineConfig,
         provider,
-        this.port
+        this.port,
+        provider === 'apple_speech' ? resolveAppleSpeechHelperPath() : undefined
       ))
     }
     else {
@@ -287,6 +290,12 @@ function handleEngineData(data: EngineMessage, engineRunId: number): void {
         allConfig.updateCaptionTranslation(data, engineRunId)
       }
       else Log.error('Invalid translation event received from caption engine')
+      return
+    case 'caption_remove':
+      if (isCaptionRemoveEngineMessage(data)) {
+        allConfig.removeCaptionLog(data, engineRunId)
+      }
+      else Log.error('Invalid caption removal event received from caption engine')
       return
     case 'print':
       if (isContentEngineMessage(data)) console.log(data.content)

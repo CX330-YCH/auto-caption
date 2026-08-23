@@ -3,7 +3,7 @@
     <h1 align="center">auto-caption</h1>
     <p>Auto Caption 是一个跨平台的实时字幕显示软件。</p>
     <p>
-      <a href="https://github.com/HiMeditator/auto-caption/releases"><img src="https://img.shields.io/badge/release-2.22.0-blue"></a>
+      <a href="https://github.com/HiMeditator/auto-caption/releases"><img src="https://img.shields.io/badge/release-2.23.0-blue"></a>
       <a href="https://github.com/HiMeditator/auto-caption/issues"><img src="https://img.shields.io/github/issues/HiMeditator/auto-caption?color=orange"></a>
       <img src="https://img.shields.io/github/languages/top/HiMeditator/auto-caption?color=royalblue">
       <img src="https://img.shields.io/github/repo-size/HiMeditator/auto-caption?color=green">
@@ -14,7 +14,7 @@
         | <a href="./README_en.md">English</a>
         | <a href="./README_ja.md">日本語</a> |
     </p>
-    <p><i>v2.22.0 版本已经发布，包含 macOS arm64 构建...</i></p>
+    <p><i>v2.23.0 版本已经发布，包含 macOS arm64 构建...</i></p>
 </div>
 
 ![](./assets/media/main_zh.png)
@@ -53,7 +53,7 @@ https://github.com/user-attachments/assets/9c188d78-9520-4397-bacf-4c8fdcc54874
 
 ## 📖 基本使用
 
-> ⚠️ 注意：当前 v2.22.0 已提供 Windows 和 macOS arm64 构建；Linux 仍需从源码或现有构建链路验证。
+> ⚠️ 注意：当前 v2.23.0 已提供 Windows 和 macOS arm64 构建；Linux 仍需从源码或现有构建链路验证。
 
 软件已经适配了 Windows、macOS 和 Linux 平台。测试过的主流平台信息如下：
 
@@ -71,6 +71,7 @@ macOS 平台和 Linux 平台获取系统音频输出需要进行额外设置，�
 | ------------------------------------------------------------ | -------- | ------------- | ---------- | ---------- | ---------------------------------------------------------- | ---------------------------------------------------------- |
 | [Gummy](https://help.aliyun.com/zh/model-studio/gummy-speech-recognition-translation) | 很好😊    | 很好😊 | 云端 / 阿里云 | 10 种      | 自带翻译   | 收费，识别0.54CNY / 小时，识别+翻译1.08CNY/小时           |
 | [Fun-ASR Realtime](https://help.aliyun.com/zh/model-studio/fun-asr-realtime-websocket-api) | 很好😊 | 很好😊 | 云端 / 阿里云 | 多语言 | 需额外配置 | 按阿里云百炼当前计费规则收费；本项目使用 16 kHz 单声道 PCM16 实时流 |
+| [SpeechAnalyzer / SpeechTranscriber](https://developer.apple.com/documentation/speech/speechanalyzer) | 很好😊 | 很好😊 | 本地 / macOS 系统 | 系统动态返回 | 需额外配置 | 仅 macOS 26+；模型由 macOS 下载、保留和更新，启动前必须显示为已安装 |
 | [glm-asr-2512](https://docs.bigmodel.cn/cn/guide/models/sound-and-video/glm-asr-2512) | 很好😊 | 较差😞 | 云端 / 智谱 AI | 4 种 | 需额外配置 | 收费，约 0.72CNY / 小时 |
 | [Vosk](https://alphacephei.com/vosk)                         | 较差😞    | 很好😊 | 本地 / CPU    | 超过 30 种 | 需额外配置 | 支持的语言非常多                                           |
 | [SOSV](https://k2-fsa.github.io/sherpa/onnx/sense-voice/index.html) | 一般😐    | 一般😐 | 本地 / CPU    | 5 种       | 需额外配置 | 仅有一个模型                                               |
@@ -174,7 +175,7 @@ python main.py \
 
 ## ⚙️ 自带字幕引擎说明
 
-目前软件自带 5 个字幕引擎。它们的详细信息如下。
+目前软件自带 6 个字幕引擎。它们的详细信息如下。
 
 ### Gummy 字幕引擎（云端）
 
@@ -210,6 +211,10 @@ https://docs.bigmodel.cn/cn/guide/models/sound-and-video/glm-asr-2512
 使用阿里云官方 DashScope Python SDK 接入实时 WebSocket 任务协议。音频由统一 Pipeline 转换为 16 kHz、单声道、PCM16，并以约 100 ms 的帧发送；服务端 partial/final、时间戳、用量和任务生命周期映射到项目统一事件。连接异常采用有界指数退避，关闭时由 SDK 发送结束任务并等待剩余结果。该引擎需要联网并可能产生费用，使用前请核对阿里云当前模型开通范围与计费说明。
 
 预编译热词表 ID 和上下文仅在每个实时任务启动时交给官方 SDK，重连新任务会重新附带相同配置。远端热词 CRUD 由一次性管理子进程执行，不复用字幕进程协议，也不会把 API Key 发送到 Renderer IPC 或命令行。
+
+### macOS 系统语音识别（本地）
+
+该引擎通过 Apple `SpeechAnalyzer`、`SpeechTranscriber` 和 `AssetInventory` 在设备上实时识别，只在 macOS 显示。macOS 版本、原生辅助程序或硬件能力不满足时，菜单项保留为灰色并可点击查看原因。选择后应用立即检查当前源语言的系统模型；模型未安装时必须在独立弹窗中下载并等待进度完成，不能借用字幕引擎的 30 秒启动超时静默下载。系统音频输出仍沿用 BlackHole 音频采集方案。
 
 ### Vosk 字幕引擎（本地）
 

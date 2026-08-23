@@ -167,13 +167,39 @@
 
 ### `control.engine.start`
 
-**介绍：** 启动字幕引擎
+**介绍：** 请求启动字幕引擎。普通 Provider 返回 `{ accepted: true }` 后进入原有启动流程；`apple_speech` 会在创建 Python 进程前重新执行平台能力和当前源语言模型检查，只有模型状态为 `installed` 才接受。模型检查/下载不使用字幕引擎启动超时。
 
 **发起方：** 前端控制窗口
 
 **接收方：** 后端控制窗口实例
 
-**数据类型：** 无数据
+**数据类型：** 请求无数据；响应为 `AppleSpeechStartResult`，至少包含 `accepted: boolean`，拒绝时可带 `reason`、`availability` 和 `modelStatus`
+
+### `control.appleSpeech.availability`
+
+**介绍：** 查询 macOS 系统语音引擎能力。非 macOS 返回 `hidden`；macOS 版本、辅助程序、硬件或语言能力不满足时返回 `disabled` 及结构化原因；可用时返回运行时语言和模型保留信息。
+
+**数据类型：** 请求为可选 `force: boolean`；响应为 `AppleSpeechAvailability`
+
+### `control.appleSpeech.modelStatus`
+
+**介绍：** 查询一个已校验 locale 的 `AssetInventory` 状态。状态不是 `installed` 时，主进程拒绝启动 Apple Speech 字幕引擎。
+
+**数据类型：** 请求为 2–64 字符且仅含字母、数字、下划线或连字符的 locale；响应为 `AppleSpeechModelStatus`
+
+### `control.appleSpeech.installModel`
+
+**介绍：** 用户明确触发语言模型安装。主进程同时最多允许一个安装操作，立即返回操作 ID；Swift 辅助程序通过 `AssetInstallationRequest.progress` 下载并安装，不进入 30 秒引擎启动计时。
+
+**数据类型：** 请求为已校验 locale；响应为 `{ accepted, operationId?, reason? }`
+
+安装过程由主进程向所有应用窗口发送 `control.appleSpeech.modelProgress`，数据为带 `operationId`、`state` 和可选 `fractionCompleted` 的 `AppleSpeechModelProgress`。最终状态为 `installed` 或 `failed`。
+
+### `control.appleSpeech.releaseModel`
+
+**介绍：** 用户在模型名额达到上限时明确释放一个 macOS 保留语言，然后重新查询状态。模型文件由系统管理，本操作不直接删除应用文件。
+
+**数据类型：** 请求为已校验 locale；响应为 `AppleSpeechModelStatus`
 
 ### `control.engine.stop`
 

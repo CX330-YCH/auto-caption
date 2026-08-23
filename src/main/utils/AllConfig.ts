@@ -30,6 +30,7 @@ import { hasApplicationConfigChanged } from '../config/ApplicationConfigChange.t
 import { CaptionLog } from '../engine/captions/CaptionLog.ts'
 import type {
   CaptionEngineMessage,
+  CaptionRemoveEngineMessage,
   TranslationEngineMessage
 } from '../engine/protocol/messages.ts'
 
@@ -192,6 +193,17 @@ class AllConfig {
     }
     for (const window of BrowserWindow.getAllWindows()) {
       window.webContents.send('both.captionLog.upsert', change.item)
+    }
+  }
+
+  public removeCaptionLog(
+    message: CaptionRemoveEngineMessage,
+    engineRunId: number
+  ): void {
+    const captionId = this.captions.remove(engineRunId, message)
+    if (!captionId) return
+    for (const window of BrowserWindow.getAllWindows()) {
+      window.webContents.send('both.captionLog.remove', captionId)
     }
   }
 

@@ -1,6 +1,6 @@
 # Auto Caption User Manual
 
-Corresponding Version: v2.22.0
+Corresponding Version: v2.23.0
 
 **Note: Due to limited personal resources, the English and Japanese documentation files for this project (except for the README document) will no longer be maintained. The content of this document may not be consistent with the latest version of the project. If you are willing to help with translation, please submit relevant Pull Requests.**
 
@@ -51,6 +51,14 @@ You need to obtain an API KEY first, refer to: [Quick Start](https://docs.bigmod
 Create or select an Alibaba Cloud Model Studio Workspace, then use an API key, Workspace ID, and dedicated WebSocket endpoint from that same Workspace and region. The endpoint must be an official Beijing or Singapore URL in the form `wss://<WorkspaceId>.<region>.maas.aliyuncs.com/api-ws/v1/inference`, and the embedded Workspace ID must match the configured value. This online service may incur charges; review the [official WebSocket API documentation](https://help.aliyun.com/zh/model-studio/fun-asr-realtime-websocket-api) and current pricing before use.
 
 The UI exposes the model, semantic punctuation, maximum sentence silence (200–6000 ms), and heartbeat settings. Final Fun-ASR sentences use the existing external translation configuration.
+
+## Preparation for macOS System Speech
+
+This local engine uses Apple `SpeechAnalyzer`, `SpeechTranscriber`, and `AssetInventory` and requires macOS 26 or later. It is hidden on non-macOS platforms. On macOS, an unsupported OS version, missing native helper, unsupported hardware, or an empty runtime locale list leaves the option visible but gray; clicking it only explains the reason and does not change the selection.
+
+Selecting the engine immediately queries the system model for the source locale. The caption engine can start only when the status is `Installed`. When a download is available, use the separate model dialog and wait for macOS progress to finish; model acquisition is not part of the default 30-second engine startup timeout. If the reservation limit is full, the dialog lists reserved locales so the user can explicitly release one before downloading. macOS stores, shares, and updates these assets; model state is not persisted in Auto Caption configuration. Source locales come from the runtime query and automatic language detection is not offered.
+
+Recognition runs on device. External translation still runs exactly once for each final caption. System-output capture continues to require the BlackHole setup below; this feature does not add ScreenCaptureKit capture.
 
 The caption engine initializes the operating system's native CA trust store at startup: macOS Security and Keychain trust, Windows CryptoAPI, and the system OpenSSL certificate paths on Linux. Install an enterprise proxy or private CA into the system trust store first. The application does not disable TLS certificate verification and does not depend on a separate CA file that may be absent from the packaged Python runtime.
 
@@ -224,7 +232,7 @@ Source language for recognition. Default value is `auto`, meaning no specific so
 
 Specifying the source language can improve recognition accuracy to some extent. You can specify the source language using the language codes above.
 
-This applies to Gummy, GLM, SOSV, and Fun-ASR models.
+This applies to Gummy, GLM, SOSV, Fun-ASR, and Apple Speech. Apple Speech requires an explicit locale reported by the runtime query (for example, `en-US`) and does not accept `auto`.
 
 The Gummy model can use all the languages mentioned above, plus Cantonese (`yue`).
 
@@ -275,6 +283,14 @@ python main.py -e fun_asr -fworkspace <workspace-id> \
   -fkey <dashscope-api-key> -fvocabulary <vocabulary-id> \
   -fcontext "Auto Caption" -fcontext "Alibaba Cloud" -s en -t none -d 1
 ```
+
+#### Apple Speech-specific parameters
+
+- `-e apple_speech`: selects the macOS system Provider.
+- `-ash, --apple_speech_helper`: absolute path to the Swift helper.
+- `-s, --source_language`: a supported locale returned by `probe`, whose model has already reached `installed` through the separate installation workflow.
+
+Running Python directly never downloads the model silently. Install it through the app's model manager or the helper's `model-status`/`model-install` subcommands first. Example: `python main.py -e apple_speech -ash /path/to/apple-speech-helper -s en-US -t none -d 1`.
 
 #### `-tm, --translation_model`
 

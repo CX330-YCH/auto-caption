@@ -16,6 +16,7 @@ import { funAsrEngine } from './providers/fun_asr.ts'
 import { gummyEngine } from './providers/gummy.ts'
 import { sosvEngine } from './providers/sosv.ts'
 import { voskEngine } from './providers/vosk.ts'
+import { appleSpeechEngine } from './providers/apple_speech.ts'
 import type {
   EngineDefinition,
   EngineFieldDescriptor,
@@ -29,7 +30,8 @@ export const engineDefinitions = [
   voskEngine,
   sosvEngine,
   glmEngine,
-  funAsrEngine
+  funAsrEngine,
+  appleSpeechEngine
 ] as const satisfies readonly EngineDefinition[]
 
 const engineDefinitionsById = new Map<KnownProviderName, EngineDefinition>(

@@ -4910,3 +4910,180 @@
 - 用户明确授权：编译 Mac 版本并更新小版本号。
 - 根目录 `AGENTS.md`：要求保留用户修改、三语同步、使用项目环境、如实记录失败、不改系统环境或依赖，并明确实际验证平台。
 - 项目现有 `main.spec` 与 `electron-builder.yml`：作为 Python 引擎及 macOS arm64 打包配置来源。
+
+## 2026-08-24 - 新增 macOS Apple SpeechAnalyzer 实时字幕引擎与语言模型管理
+
+### 用户授权与变更目标
+
+- 用户先要求评估 macOS 独占的 `SpeechAnalyzer` + `SpeechTranscriber` 实时语音识别方案，随后明确要求执行修改：仅在 macOS 显示系统引擎；macOS 版本、辅助程序或运行能力不满足时仍显示灰色选项，点击说明原因且不改变当前选择；选择系统引擎时立即查询语言模型，模型非 `installed` 时禁止启动；提供独立模型安装、状态、进度和容量处理界面，禁止把首次下载混入既有 30 秒启动超时；其余实时识别接入按已讨论方案完成。
+- 用户明确允许在项目目录新建测试环境文件夹，要求所有测试依赖留在该文件夹且不污染系统环境。本次创建并使用 Git 忽略的 `.test-env/python`、`.test-env/swift-build`、`.test-env/swift-module-cache` 和 `.test-env/swift-tests`；没有修改系统 Python、全局 pip、全局 Swift 工具链或 PATH。
+- 修改前已完整阅读根目录 `AGENTS.md`，确认没有目标子目录的附加规则，执行 `git status --short --branch`；任务开始时工作区为 `## main...origin/main` 且无已有修改。本次不升级生产依赖、不改版本号、不发布、不提交、不推送、不创建分支，也不访问付费 API。
+
+### 变更类型
+
+- 功能、重构、配置、协议、测试、构建、文档。
+
+### 修改文件与原因
+
+- `native/apple-speech-helper/Package.swift`：新增 macOS 26、Swift tools 6.2 的原生辅助程序包及 XCTest 目标，不让 Python 直接绑定仅 Swift 可用的新 Speech API。
+- `native/apple-speech-helper/Sources/AppleSpeechHelper/HelperProtocol.swift`：定义 `protocolVersion: 1` 的 NDJSON 输出、线程安全写入和稳定错误代码。
+- `native/apple-speech-helper/Sources/AppleSpeechHelper/CapabilityProbe.swift`：集中查询 `SpeechTranscriber.isAvailable`、支持/已安装/已预留语言及预留上限。
+- `native/apple-speech-helper/Sources/AppleSpeechHelper/ModelAssetService.swift`：实现模型状态、用户触发的安装及进度、安装后复核和语言预留释放。
+- `native/apple-speech-helper/Sources/AppleSpeechHelper/TranscriptReconciler.swift`：把 Apple volatile/final 结果归一成稳定 ID 的 `partial`、`final`、`revoke` 事件，并按最终化水位固化片段。
+- `native/apple-speech-helper/Sources/AppleSpeechHelper/TranscriptionSession.swift`：建立 `SpeechAnalyzer`/`SpeechTranscriber` 会话、选择兼容音频格式、转换单声道 PCM16、处理任意管道字节边界、流式输出结果并在 EOF 冲刷。
+- `native/apple-speech-helper/Sources/AppleSpeechHelper/main.swift`：提供 `probe`、`model-status`、`model-install`、`model-release`、`transcribe` 五个独立子命令；模型安装不属于转写启动命令。
+- `native/apple-speech-helper/Tests/AppleSpeechHelperTests/TranscriptReconcilerTests.swift`：覆盖 partial→final、空 volatile 结果撤销和结束时固化。
+- `scripts/build-apple-speech-helper.mjs`、`package.json`：新增项目内 Swift 构建脚本和 `build:apple-speech`；仅 `build:mac` 在打包前构建辅助程序，Windows/Linux 构建链不调用 Swift。
+- `electron-builder.yml`：只在 macOS 包内加入 `Resources/apple-speech/apple-speech-helper`，并补充语音识别用途说明；其他平台资源配置不变。
+- `.gitignore`：忽略 `.test-env`、Swift `.build` 和辅助程序 `dist`，防止测试依赖、模型、缓存和二进制进入版本控制。
+- `src/shared/appleSpeech.ts`：新增主进程/渲染进程共享的可用性、模型状态、下载进度和启动拒绝结果类型。
+- `src/main/engine/AppleSpeechHelperPath.ts`：按开发和打包环境解析辅助程序，使用可执行路径及参数数组，不经 shell 拼接。
+- `src/main/engine/AppleSpeechAvailability.ts`：用纯函数实现非 macOS 隐藏、macOS 26 以下及辅助程序缺失时软禁用，便于离线测试。
+- `src/main/services/AppleSpeechService.ts`：集中执行能力探测、语言校验、模型状态/安装/释放、版本化 NDJSON 分块解析、超时和进度广播；下载使用独立子进程且一次只允许一个安装任务。
+- `src/main/ControlWindow.ts`：注册 Apple Speech 能力与模型 IPC，并把启动入口改为可返回结果的 handler；Apple 引擎启动前在主进程强制重新检查平台能力和模型 `installed` 状态。
+- `src/main/engine/config/EngineCommandBuilder.ts`、`src/main/utils/CaptionEngine.ts`：仅为 Apple Provider 注入已解析的 `-ash` 辅助程序路径，并沿用既有受控子进程生命周期和共享翻译参数。
+- `src/main/engine/protocol/messages.ts`、`src/main/engine/captions/CaptionLog.ts`、`src/main/utils/AllConfig.ts`：验证新增的版本化 `caption_remove` 事件，以运行期稳定 ID 删除被 Apple volatile 结果撤销的字幕，并向所有字幕窗口同步；没有改变旧事件。
+- `src/shared/captions.ts`、`src/renderer/src/stores/captionLog.ts`：新增共享撤销类型和 Renderer 端按稳定 ID 删除逻辑。
+- `src/shared/config/schema.ts`：把 `apple_speech` 加入内置 Provider 联合类型；Apple 运行状态不持久化，V5 schema、默认配置和迁移保持不变。
+- `src/renderer/src/engines/providers/apple_speech.ts`、`src/renderer/src/engines/catalog.ts`、`src/renderer/src/engines/types.ts`：用 Provider 元数据接入系统引擎、动态语言选项和软禁用原因，不在通用表单组件堆叠 Provider 分支。
+- `src/renderer/src/components/engine/EngineSelector.vue`：灰显不可用系统引擎，但保留点击命中；拦截选择、保持原值并向上报告禁用原因。
+- `src/renderer/src/components/EngineControl.vue`、`src/renderer/src/components/engine/EngineFieldRenderer.vue`：只在 macOS 注入 Apple Provider 运行期元数据；选择及语言变化时触发能力/模型检查，并挂载专用模型管理器。
+- `src/renderer/src/components/engine/AppleSpeechModelManager.vue`：新增独立模型状态卡片和弹窗，显示检查、未安装、下载进度、已安装、失败、不支持及预留容量满状态；下载和释放均由用户明确触发。
+- `src/renderer/src/stores/engineControl.ts`：保存非持久化 Apple 能力/模型状态、监听进度 IPC、刷新语言列表，并在主进程拒绝启动时打开对应模型/原因弹窗。
+- `src/renderer/src/components/EngineStatus.vue`：模型状态不是 `installed` 时禁用开始按钮；启动仍由主进程二次校验，避免只依赖 Renderer 状态。
+- `src/renderer/src/i18n/lang/zh.ts`、`src/renderer/src/i18n/lang/en.ts`、`src/renderer/src/i18n/lang/ja.ts`：同步补齐系统引擎、禁用原因、模型状态、下载、容量和释放操作的中英日文本。
+- `engine/cli.py`、`engine/main.py`：为内置 Apple Provider 增加 `-ash/--apple-speech-helper` 受控路径参数并传入统一 Provider 配置。
+- `engine/providers/apple_speech.py`：新增 `RecognitionProvider`，启动 Swift 辅助进程、等待 ready、写入单声道 PCM、解析版本化事件、映射精确时间范围并正常/强制停止；错误不包含用户音频或凭据。
+- `engine/providers/registry.py`、`engine/providers/__init__.py`：通过现有 Provider 注册表接入 Apple 引擎，复用公共音频循环和 `TranslationService`，未在 `engine/main.py` 增加新流程分支。
+- `engine/core/events.py`、`engine/core/__init__.py`、`engine/protocol/output.py`：增加内部 `CaptionRevoked` 事件及向后兼容的公开 `caption_remove` 输出；partial 不翻译，final 仍只进入一次共享翻译流程。
+- `engine/tests/test_apple_speech_provider.py`、`engine/tests/test_cli.py`、`engine/tests/test_protocol_output.py`、`engine/tests/test_provider_registry.py`：使用伪辅助进程覆盖启动、partial/final/revoke、协议版本错误、CLI 路径、公开撤销输出和注册表，不依赖真实音频设备或下载模型。
+- `tests/node/appleSpeechAvailability.test.mjs`、`tests/node/engineCatalog.test.mjs`、`tests/node/engineCommandBuilder.test.mjs`、`tests/node/engineProtocol.test.mjs`、`tests/node/captionLog.test.mjs`：覆盖平台显示规则、Provider 元数据、辅助程序参数、撤销协议及主/渲染字幕删除。
+- `README.md`、`README_en.md`、`README_ja.md`：三语同步列出 Apple 本地系统引擎、macOS 26 限制、独立模型安装和不上传语音的边界。
+- `docs/user-manual/zh.md`、`docs/user-manual/en.md`、`docs/user-manual/ja.md`：三语说明灰色选项、选择即检查、非 installed 禁止启动、下载进度、预留容量和本机模型操作。
+- `docs/engine-manual/zh.md`、`docs/engine-manual/en.md`、`docs/engine-manual/ja.md`：三语记录 Apple Provider 生命周期、辅助程序参数及打包限制。
+- `docs/api-docs/electron-ipc.md`、`docs/api-docs/caption-engine.md`：记录新增 Apple IPC 和向后兼容的 `caption_remove` 事件 envelope。
+- `docs/CHANGELOG.md`：在未发布部分记录用户可见的系统引擎和模型管理行为。
+- `change.md`：追加本批次授权、文件、行为、协议、兼容性、验证和风险流水。
+
+### 修改前后行为
+
+- 修改前：字幕引擎中没有 Apple 系统识别；应用无法查询 SpeechAnalyzer 能力或语言模型，首次启动若隐式下载模型会与既有 30 秒引擎启动超时冲突；Apple volatile 结果删除后也没有公开撤销事件。
+- 修改后：非 macOS 完全隐藏 Apple 系统引擎；macOS 上始终先做静态和原生能力探测。版本过低、辅助程序缺失/不兼容、SpeechTranscriber 不可用或没有支持语言时，选项保留但灰显，点击提示具体原因且当前引擎选择不变。
+- 选择可用 Apple 系统引擎及切换语言后立即查询模型。只有状态严格等于 `installed` 才能启动；Renderer 按钮和 Electron 主进程各自校验，过期 UI 状态不能绕过。`supported` 表示可下载而非已安装，`downloading`、`unsupported`、`failed` 均拒绝启动。
+- 模型下载是独立、明确的用户操作：独立 Swift 子命令通过 Apple `AssetInventory` 提交安装请求，每 250ms 检查变化并以 IPC 更新弹窗进度；下载不占用 Python 引擎 30 秒启动超时。达到系统预留语言上限时列出已预留语言，用户可明确释放后再下载。
+- 实时识别路径为现有音频采集/单声道 PCM 管线 → Python `RecognitionProvider` → Swift 辅助程序 → `SpeechAnalyzer`/`SpeechTranscriber`。Apple 的 volatile 结果映射为 partial，最终结果映射为 final；结果消失时用稳定 ID 撤销。翻译仍只由公共服务在 final 后触发一次。
+
+### 配置、IPC、协议、命令行、数据结构与依赖
+
+- 持久化 `schemaVersion: 5`、配置结构、默认值和旧配置迁移没有变化；`apple_speech` 只有公共的源语言、音频和翻译配置，模型状态、进度、辅助程序路径均为运行期数据，不写入用户配置。旧配置无需迁移，未知扩展字段保留行为不变。
+- 新增 Electron invoke IPC：`control.appleSpeech.availability`、`control.appleSpeech.modelStatus`、`control.appleSpeech.installModel`、`control.appleSpeech.releaseModel`；新增进度事件 `control.appleSpeech.modelProgress`。`control.engine.start` 从单向 send 改为 invoke/结果响应，当前 Renderer 调用点已同步，启动失败仍不会生成引擎进程。
+- Swift 辅助协议为每行一条、立即刷新的 NDJSON，带 `protocolVersion: 1`；命令和事件边界不依赖一次 pipe read。Python/Electron 公开字幕协议新增可识别的 `{command: "caption_remove", event_version: 1, index}`，旧 `caption`、`translation`、`content` 和本地 TCP `command` 格式均未删除或修改，自定义引擎可继续只发送旧消息。
+- Python CLI 新增 `-ash/--apple-speech-helper`；该参数只由 Electron 为内置 Apple Provider 构建，不进入 shell 字符串。没有新增或变更生产 npm/pip 依赖，`package-lock.json` 未修改。
+- 测试依赖仅安装到 Git 忽略的 `.test-env/python`。执行 `.test-env/python/bin/python -m pip install resampy truststore audioop-lts sherpa-onnx ollama googletrans pyaudio aiohttp`，并由 pip 在该虚拟环境内安装传递依赖；沙箱内首次因 DNS 失败，取得授权后仅为该项目虚拟环境联网重试成功，系统环境未改变。
+
+### 兼容性、迁移、回滚与安全
+
+- Apple Provider 的最低运行版本为 macOS 26，实际还要求辅助程序、SpeechTranscriber 和至少一种支持语言可用；Windows/Linux 不展示且其构建脚本不调用 Swift。现有 sherpa_onnx、Fun-ASR、自定义引擎及翻译配置不变。
+- Apple Speech 路径在本机执行；应用不把语音交给本次新增的网络服务。模型资产由系统 `AssetInventory` 管理，下载内容、大小、缓存和预留策略由 macOS 决定。辅助程序 stderr 只进入受控诊断日志，不记录 PCM、字幕全文或凭据。
+- 语言值由原生支持列表产生并在主进程限制为 2–64 位 locale 字符；外部 IPC 不能提交任意命令参数。模型安装一次只接受一个任务，失败有最终状态，不无限重试。
+- 回滚应作为同一批次移除 Apple Swift 包、构建脚本、Apple Provider/服务/UI/测试/文档，并恢复 `control.engine.start` 的 send 调用和 `caption_remove` 扩展；不得回退任务前已有 Provider 注册表、共享翻译、NDJSON 解码器或 V5 配置。模型属于 macOS 系统资产，代码回滚不会自动删除用户已下载模型；用户可先在本功能中释放预留，模型文件的最终清理由系统负责。
+
+### 验证记录
+
+- `npm run typecheck`：通过；Node TypeScript 和 Vue `vue-tsc` 均无类型错误。
+- `npm run lint`：通过；全仓 ESLint 无新增问题。
+- `npm run test:node`：通过 `104/104`；覆盖平台显示、Provider 元数据、命令构建、撤销协议和字幕删除。输出仅有项目既有 `MODULE_TYPELESS_PACKAGE_JSON` 性能警告。
+- `.test-env/python/bin/python -m unittest discover -s engine/tests -p 'test_*.py'`：通过 `70/70`；全部使用项目内虚拟环境，无真实麦克风、模型下载或付费 API。
+- `npm run build`：通过；Electron main、preload、renderer 分别转换 32、1、3291 个模块，生产前端构建成功。
+- `SDKROOT=/Library/Developer/CommandLineTools/SDKs/MacOSX26.5.sdk npm run build:apple-speech`：最终通过；release 辅助程序写入 Git 忽略的 `native/apple-speech-helper/dist`，中间产物和模块缓存均位于 `.test-env`。SwiftPM 报告用户级缓存不可写和 CommandLineTools 两个搜索路径不存在警告，但未阻止链接。
+- `native/apple-speech-helper/dist/apple-speech-helper probe`：退出码 0，返回 `protocolVersion: 1`、`isAvailable: true`、预留上限 5、空的支持/已安装/已预留语言列表；`sw_vers` 为 macOS 27.0（26A5416b）。因此本机实际落入 `no_supported_locales` 软禁用分支，符合失败安全要求。
+- Swift 测试目标曾先后尝试 Swift Testing 和 XCTest；当前仅安装 Command Line Tools、没有完整 Xcode，前者无法解析 `Testing`，后者无法解析 `XCTest`。最终复现命令 `SDKROOT=/Library/Developer/CommandLineTools/SDKs/MacOSX26.5.sdk swift test --package-path native/apple-speech-helper --scratch-path .test-env/swift-tests --disable-sandbox` 还报告 Swift 6.4 编译器与 26.5 SDK 的 Swift 6.3.2 不匹配及模块缓存限制，退出码 1。该项如实记为未通过，不能用 release 辅助程序成功构建替代单元测试通过。
+- `git diff --check`：写入本记录前通过；完成记录后再次执行最终检查和工作区审计。
+
+### 未执行、已知风险与后续事项
+
+- 本机原生探测没有返回支持语言，因此未能执行真实模型状态、真实下载进度、预留释放或真实 SpeechAnalyzer 音频转写。Swift 转写核心已通过 release 编译，Python/Node 边界由伪进程测试覆盖，但正式发布前必须在返回非空 `supportedLocales` 的 macOS 26+ 机器、签名应用和真实音频设备上回归 partial/final/revoke、停止冲刷、长时间运行和下载失败恢复。
+- 未安装完整 Xcode，Swift XCTest 未通过；正式 CI 应固定与 SDK 匹配的 Xcode/Swift 工具链并执行 `swift test`。当前 Command Line Tools 的版本组合可能不是 Apple 支持的发布构建环境。
+- 未执行完整 `electron-builder --mac`、Developer ID 签名、公证、PyInstaller 重打包、Windows/Linux 构建或跨平台实机测试；`build:mac` 已接入辅助程序，但发布前仍需验证最终 `.app` 中资源路径、执行权限、Speech 权限提示和 Hardened Runtime。
+- 语言模型由 macOS 管理，系统可能改变可下载语言、预留上限、下载速度或回收策略；界面以每次原生查询为准，不承诺固定模型大小或下载时间。
+
+### 关键外部文档与技术决策来源
+
+- Apple WWDC25《Bring advanced speech-to-text to your app with SpeechAnalyzer》：确定 SpeechAnalyzer、SpeechTranscriber、渐进结果和音频输入的总体使用方式：https://developer.apple.com/videos/play/wwdc2025/277/
+- Apple `AssetInventory` 文档：确定模型需在分析前安装、通过 installation request 显式下载、使用 Progress 查询进度、预留语言存在上限且可释放：https://developer.apple.com/documentation/speech/assetinventory
+- Apple `SpeechAnalyzer` 文档及异步输入初始化文档：确定模块、AsyncSequence、volatile range 和结束冲刷的职责：https://developer.apple.com/documentation/speech/speechanalyzer 与 https://developer.apple.com/documentation/speech/speechanalyzer/init(inputsequence:modules:options:analysiscontext:volatilerangechangedhandler:)
+- Apple Speech 权限文档：用于核对应用用途说明和系统授权边界：https://developer.apple.com/documentation/speech/asking-permission-to-use-speech-recognition
+- 根目录 `AGENTS.md`：要求通过 Provider 注册表和共享翻译接入、partial/final 分离、协议版本化、三语同步、测试离线、依赖不污染系统、记录真实失败并在 `change.md` 追加完整流水。
+
+## 2026-08-24 - V2.23.0 macOS arm64 构建
+
+### 用户授权与变更目标
+
+- 用户明确要求编译 Mac 版本并更新小版本号；本批次将当前版本从 `2.22.0` 更新为 `2.23.0`，构建新加入的 Apple Speech Swift 辅助程序，使用项目内既有 `engine/.venv` 编译 Python 引擎，并生成 macOS arm64 应用、ZIP 和 DMG。
+- 非目标：不安装、删除或升级依赖，不修改系统 Python、Node、Swift、PATH 或其他系统环境，不发布 Release，不提交或推送 Git，不扩大 Apple Speech 功能行为。
+- 修改前完整阅读根目录 `AGENTS.md`，确认没有子目录补充规则，执行 `git status --short --branch` 并阅读版本、打包配置及已有 diff。工作区已有未提交的 Apple SpeechAnalyzer/SpeechTranscriber 引擎、模型管理、协议、测试和文档均被完整保留，因此最终产物包含该功能。
+
+### 变更类型
+
+- 构建、配置、修复、文档。
+
+### 修改文件与原因
+
+- `package.json`、`package-lock.json`：将应用和锁文件根包版本从 `2.22.0` 更新为 `2.23.0`；保留工作区已有的 `build:apple-speech` 和 macOS 构建脚本接入，依赖列表及约束未变化。
+- `src/renderer/index.html`、`src/renderer/src/components/EngineStatus.vue`：同步窗口标题和关于页可见版本。
+- `README.md`、`README_en.md`、`README_ja.md`：在保留 Apple Speech 说明的基础上同步三语 README 版本和发布提示。
+- `docs/user-manual/zh.md`、`docs/user-manual/en.md`、`docs/user-manual/ja.md`：在保留 Apple 模型管理说明的基础上同步三语用户手册版本。
+- `docs/engine-manual/zh.md`、`docs/engine-manual/en.md`、`docs/engine-manual/ja.md`：在保留 Apple Provider 说明的基础上同步三语引擎手册版本。
+- `docs/CHANGELOG.md`：新增 `v2.23.0` 条目，将未发布的 Apple Speech 引擎、模型管理和设置布局回滚归入该版本，并记录版本同步及完整 macOS 构建。
+- `electron-builder.yml`：排除项目内 `.test-env/**` 和 `native/**` 源码/中间产物，避免测试 Python 符号链接被误收进 asar；编译后的 Swift helper 仍通过 `extraResources` 单独打包。把 `mac.extendInfo` 从错误的 YAML 数组改为键值映射，确保 `NSSpeechRecognitionUsageDescription` 及其他权限说明实际进入 Info.plist。
+- `change.md`：追加本批次授权、范围、构建修复、验证、兼容性和风险记录。
+- `native/apple-speech-helper/dist/apple-speech-helper`、`engine/dist/main`、`dist/mac-arm64/Auto Caption.app`、`dist/Auto Caption-2.23.0-arm64-mac.zip`、`dist/auto-caption-2.23.0.dmg` 及对应 blockmap/`latest-mac.yml`：由既有 SwiftPM、PyInstaller、electron-builder 和 macOS 系统工具生成或刷新，位于 Git 忽略目录，不作为源文件提交。
+
+### 修改前后行为
+
+- 修改前：应用、界面和文档版本为 `2.22.0`，没有 `2.23.0` macOS 产物；首次打包会误收 `.test-env`，并且数组形式的 `extendInfo` 没有生成真正的 Speech 权限键。
+- 修改后：应用、界面及中英日文档版本统一为 `2.23.0`；产物的 `CFBundleShortVersionString` 与 `CFBundleVersion` 均为 `2.23.0`。Electron 主程序、Python 引擎及 Swift helper 均为 arm64，helper 位于 `Contents/Resources/apple-speech/apple-speech-helper` 且保留可执行权限。
+- 最终 Info.plist 明确包含 `NSSpeechRecognitionUsageDescription` 和麦克风说明；项目测试环境与原生源码不会进入 asar。Apple Speech 业务功能本身没有在本批次继续扩展。
+
+### 配置、IPC、协议、命令行、数据结构与依赖
+
+- 本批次自身没有新增配置字段、迁移、IPC、Python/Electron/Swift 协议、CLI 参数或业务数据结构；最终产物包含工作区既有 Apple IPC、`caption_remove` 和 `-ash/--apple_speech_helper`。
+- `electron-builder.yml` 的变化只影响 macOS 打包文件选择和 Info.plist 权限元数据，不改变用户持久化配置或运行时默认值。
+- 未运行 npm/pip/Swift 包安装或升级命令；`package-lock.json` 的本批次变化仅为根包版本。PyInstaller 使用 `engine/.venv`，Swift 中间文件使用项目 `.test-env`，临时 PyInstaller 配置目录为 `/private/tmp/auto-caption-pyinstaller-config`，系统环境未改变。
+- electron-builder 使用项目锁定的 Electron `43.4.0` 与现有依赖；沙箱 DNS 受限后，仅按授权在沙箱外访问项目配置的 Electron 下载镜像。
+
+### 兼容性、迁移与回滚
+
+- 实际构建及验证平台仅为 macOS arm64；Apple Speech helper 要求 macOS 26+。未声明 macOS x64/universal、Windows 或 Linux 产物已验证。
+- 应用使用 ad-hoc 签名，没有 Apple Developer ID、TeamIdentifier、Hardened Runtime 发布验证或 notarization；正式公开分发仍应使用 Developer ID 签名并完成 Apple 公证。
+- 回滚本批次可将版本源文件和文档恢复到 `2.22.0`，恢复本批次两项打包过滤/Info.plist 修复，并移除 Git 忽略目录中的 `2.23.0` 产物；不得回退任务开始前已有的 Apple Speech 功能及其他用户修改。
+
+### 验证记录
+
+- `SDKROOT=/Library/Developer/CommandLineTools/SDKs/MacOSX26.5.sdk npm run build:apple-speech`：通过，生成 release arm64 helper；SwiftPM 报告用户级缓存不可写和 CommandLineTools 两个搜索路径不存在警告，但链接成功。
+- `npm run verify`：通过；Node/Web TypeScript、ESLint、Node `104/104`、Python `70/70` 全部成功。输出包含项目既有 npm mirror 配置弃用警告和 Node `MODULE_TYPELESS_PACKAGE_JSON` 性能警告。
+- `npm run build`：通过；Electron main、preload、renderer 分别转换 32、1、3291 个模块。
+- `PYINSTALLER_CONFIG_DIR=/private/tmp/auto-caption-pyinstaller-config ./.venv/bin/pyinstaller --clean --noconfirm ./main.spec`：通过，生成 arm64 `engine/dist/main`；报告 `pycparser.lextab`/`yacctab` 隐式导入缺失和 numba `@rpath/libomp.dylib` 未解析警告，但未阻止构建。
+- `native/apple-speech-helper/dist/apple-speech-helper probe`：通过，返回 `protocolVersion: 1`、`isAvailable: true`、预留上限 5 和空的支持/安装/预留语言列表。
+- `engine/dist/main --help`：沙箱内因 `semctl: Operation not permitted` 失败；按授权在沙箱外重跑后退出码 0，确认帮助包含 `apple_speech` 和 `-ash/--apple_speech_helper`。
+- `npx electron-builder --mac`：沙箱内首先因 `npmmirror.com` DNS 受限失败；按授权在沙箱外重跑后又因 `.test-env/python/bin/python` 指向系统 Python 的符号链接被安全策略拒绝。增加 `.test-env/**`/`native/**` 过滤后重跑成功。
+- 首次成功打包后的 `plutil -extract NSSpeechRecognitionUsageDescription` 失败，证明数组形式 `extendInfo` 未生成权限键；改为映射并再次打包后，`plutil` 返回 `Application uses on-device speech recognition to create live captions.`，麦克风权限说明也存在。
+- `file`、`stat` 与打包内 helper `probe`：通过；应用、Python 引擎、Swift helper 均为 Mach-O arm64，helper 权限为 `-rwxr-xr-x`，打包内协议探测退出码 0。
+- `codesign --force --deep --sign -` 与 `codesign --verify --deep --strict --verbose=2`：通过；最终应用为 ad-hoc 签名，TeamIdentifier 未设置。
+- `unzip -tq dist/Auto\ Caption-2.23.0-arm64-mac.zip`：通过，无压缩数据错误。
+- `hdiutil verify dist/auto-caption-2.23.0.dmg`：通过，磁盘映像校验有效。沙箱内重建首次因“设备未配置”失败，按授权在沙箱外重跑成功；工具同时报告旧 `hdiutil create` 语法弃用警告。
+- ZIP 大小 `225087823` 字节，SHA-256 `98ecbeb8aafa9725f4d9912d53eddf4e5bfc4557536237d7c654764e48245651`；DMG 大小 `245068137` 字节，SHA-256 `ce177e6701812a206a34e80ed860785894cbf3ad8d358126ebac4e35163f3b72`。已基于最终签名产物重建 blockmap，并同步 `latest-mac.yml` 的 SHA-512、大小和日期。
+
+### 未执行、风险与后续事项
+
+- 未重新执行已知受当前 Command Line Tools/SDK 版本不匹配影响的 Swift XCTest；该测试在前序 Apple Speech 功能记录中已如实标为失败。正式 CI 应使用匹配的完整 Xcode/Swift 工具链。
+- 本机 helper 探测返回空 `supportedLocales`，因此未执行真实模型状态/下载/释放或 SpeechAnalyzer 音频转写；Node/Python 边界测试和打包内 helper 探测不能替代支持语言非空设备上的真实回归。
+- 未执行 Developer ID 发布签名、Apple notarization、正式 GUI 权限弹窗、真实音频、云端翻译、付费 API、自动更新端到端测试或其他平台构建。
+- ZIP 约 215 MiB，DMG 约 234 MiB，均为本机 arm64 产物。PyInstaller 的 `libomp` 警告可能影响实际使用 numba OpenMP 后端的路径。
+
+### 关键外部文档或技术决策来源
+
+- 用户明确授权：编译 Mac 版本并更新小版本号。
+- 根目录 `AGENTS.md`：要求保留用户修改、使用项目环境、如实记录失败、不改系统环境或依赖，并明确实际验证平台。
+- 项目现有 `main.spec`、`electron-builder.yml`、`scripts/build-apple-speech-helper.mjs`：作为 Python、Electron 和 Swift macOS arm64 打包配置来源。
+- Apple Speech 权限文档与项目前序 Apple Speech 技术决策：确定最终 Info.plist 必须包含 `NSSpeechRecognitionUsageDescription`。

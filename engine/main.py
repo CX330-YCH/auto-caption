@@ -116,6 +116,7 @@ def _provider_config(options: CliOptions) -> ProviderConfig:
         fun_asr_vocabulary_id=options.fun_asr_vocabulary_id,
         fun_asr_vocabulary_model=options.fun_asr_vocabulary_model,
         fun_asr_context_terms=options.fun_asr_context_terms,
+        apple_speech_helper=options.apple_speech_helper,
     )
 
 

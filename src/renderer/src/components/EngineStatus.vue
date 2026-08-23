@@ -70,7 +70,7 @@
       v-if="!isStarting"
       class="control-button"
       :loading="pending && !engineEnabled"
-      :disabled="pending || engineEnabled"
+      :disabled="pending || engineEnabled || appleSpeechStartBlocked"
       @click="startEngine"
     >{{ $t('status.startEngine') }}</a-button>
     <a-popconfirm
@@ -101,7 +101,7 @@
       <p class="about-desc">{{ $t('status.about.desc') }}</p>
       <a-divider />
       <div class="about-info">
-        <p><b>{{ $t('status.about.version') }}</b><a-tag color="green">v2.22.0</a-tag></p>
+        <p><b>{{ $t('status.about.version') }}</b><a-tag color="green">v2.23.0</a-tag></p>
         <p>
           <b>{{ $t('status.about.author') }}</b>
           <a
@@ -143,6 +143,7 @@
 
 <script setup lang="ts">
 import type { EngineInfo } from '@renderer/types'
+import type { AppleSpeechStartResult } from '../../../shared/appleSpeech.ts'
 import { computed, ref, watch, h } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useCaptionLogStore } from '@renderer/stores/captionLog'
@@ -164,10 +165,20 @@ const { captionData } = storeToRefs(captionLog)
 const softwareLog = useSoftwareLogStore()
 const { softwareLogs } = storeToRefs(softwareLog)
 const engineControl = useEngineControlStore()
-const { engineEnabled, engineConfig, errorSignal } = storeToRefs(engineControl)
+const {
+  engineEnabled,
+  engineConfig,
+  errorSignal,
+  appleSpeechModelStatus
+} = storeToRefs(engineControl)
 const engine = computed(() => {
   return getActiveCustomEngine(engineConfig.value)?.name ??
     getActiveBuiltinProvider(engineConfig.value) ?? ''
+})
+const appleSpeechStartBlocked = computed(() => {
+  if (getActiveBuiltinProvider(engineConfig.value) !== 'apple_speech') return false
+  return appleSpeechModelStatus.value.state !== 'installed' ||
+    appleSpeechModelStatus.value.locale !== engineConfig.value.common.sourceLanguage
 })
 
 const pid = ref(0)
@@ -181,7 +192,7 @@ function openCaptionWindow() {
   window.electron.ipcRenderer.send('control.captionWindow.activate')
 }
 
-function startEngine() {
+async function startEngine() {
   pending.value = true
   isStarting.value = true
   const validationIssue = validateEngineConfig(engineControl.engineConfig, 'start')
@@ -191,7 +202,14 @@ function startEngine() {
     isStarting.value = false
     return
   }
-  window.electron.ipcRenderer.send('control.engine.start')
+  const result = await window.electron.ipcRenderer.invoke(
+    'control.engine.start'
+  ) as AppleSpeechStartResult
+  if (!result.accepted) {
+    pending.value = false
+    isStarting.value = false
+    engineControl.applyAppleSpeechStartResult(result)
+  }
 }
 
 function stopEngine() {

@@ -9,6 +9,7 @@ sys.path.insert(0, str(ENGINE_ROOT))
 from core import (  # noqa: E402
     CaptionFinal,
     CaptionPartial,
+    CaptionRevoked,
     ProviderError,
     ProviderDebug,
     ProviderInfo,
@@ -55,6 +56,21 @@ class ProtocolEventSinkTests(unittest.TestCase):
                 'translation': '',
             },
         ])
+
+    def test_maps_caption_revocation_to_additive_versioned_command(self):
+        objects = []
+        sink = ProtocolEventSink(
+            command_writer=lambda command, content: None,
+            object_writer=objects.append,
+        )
+
+        sink.publish(CaptionRevoked(9))
+
+        self.assertEqual(objects, [{
+            'command': 'caption_remove',
+            'event_version': 1,
+            'index': 9,
+        }])
 
     def test_maps_lifecycle_error_usage_and_warning_commands(self):
         commands = []

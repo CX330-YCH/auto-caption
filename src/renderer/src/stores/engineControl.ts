@@ -7,6 +7,12 @@ import { h } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import type { EngineConfig } from '../../../shared/config/schema'
+import type {
+  AppleSpeechAvailability,
+  AppleSpeechModelProgress,
+  AppleSpeechModelStatus,
+  AppleSpeechStartResult
+} from '../../../shared/appleSpeech.ts'
 import { createDefaultConfig } from '../../../shared/config/schema'
 import type { EngineValidationIssue } from '@renderer/engines/types.ts'
 import {
@@ -22,6 +28,20 @@ export const useEngineControlStore = defineStore('engineControl', () => {
   const engineEnabled = ref(false)
   const changeSignal = ref(false)
   const errorSignal = ref(false)
+  const appleSpeechAvailability = ref<AppleSpeechAvailability>({
+    state: 'hidden',
+    supportedLocales: [],
+    installedLocales: [],
+    reservedLocales: [],
+    maximumReservedLocales: 0
+  })
+  const appleSpeechModelStatus = ref<AppleSpeechModelStatus>({
+    locale: '',
+    state: 'unknown',
+    reservedLocales: [],
+    maximumReservedLocales: 0
+  })
+  const appleSpeechModelDialogSignal = ref(0)
 
   function sendEngineConfigChange(): void {
     window.electron.ipcRenderer.send(
@@ -43,6 +63,85 @@ export const useEngineControlStore = defineStore('engineControl', () => {
       icon: () => h(ExclamationCircleOutlined, { style: 'color: #ff4d4f' })
     })
   }
+
+  async function refreshAppleSpeechAvailability(
+    force = false
+  ): Promise<AppleSpeechAvailability> {
+    const result = await window.electron.ipcRenderer.invoke(
+      'control.appleSpeech.availability',
+      force
+    ) as AppleSpeechAvailability
+    appleSpeechAvailability.value = result
+    return result
+  }
+
+  async function checkAppleSpeechModel(
+    locale: string
+  ): Promise<AppleSpeechModelStatus> {
+    appleSpeechModelStatus.value = {
+      locale,
+      state: 'checking',
+      reservedLocales: appleSpeechModelStatus.value.reservedLocales,
+      maximumReservedLocales: appleSpeechModelStatus.value.maximumReservedLocales
+    }
+    const result = await window.electron.ipcRenderer.invoke(
+      'control.appleSpeech.modelStatus',
+      locale
+    ) as AppleSpeechModelStatus
+    appleSpeechModelStatus.value = result
+    return result
+  }
+
+  async function installAppleSpeechModel(locale: string): Promise<boolean> {
+    const result = await window.electron.ipcRenderer.invoke(
+      'control.appleSpeech.installModel',
+      locale
+    ) as { accepted: boolean; operationId?: string }
+    if (result.accepted) {
+      appleSpeechModelStatus.value = {
+        locale,
+        state: 'downloading',
+        reservedLocales: appleSpeechModelStatus.value.reservedLocales,
+        maximumReservedLocales: appleSpeechModelStatus.value.maximumReservedLocales,
+        fractionCompleted: 0
+      }
+    }
+    return result.accepted
+  }
+
+  async function releaseAppleSpeechModel(locale: string): Promise<void> {
+    const result = await window.electron.ipcRenderer.invoke(
+      'control.appleSpeech.releaseModel',
+      locale
+    ) as AppleSpeechModelStatus
+    if (appleSpeechModelStatus.value.locale === locale) {
+      appleSpeechModelStatus.value = result
+    }
+    await refreshAppleSpeechAvailability(true)
+    if (appleSpeechModelStatus.value.locale !== locale) {
+      await checkAppleSpeechModel(appleSpeechModelStatus.value.locale)
+    }
+  }
+
+  function applyAppleSpeechStartResult(result: AppleSpeechStartResult): void {
+    if (result.availability) appleSpeechAvailability.value = result.availability
+    if (result.modelStatus) appleSpeechModelStatus.value = result.modelStatus
+    appleSpeechModelDialogSignal.value += 1
+  }
+
+  function openAppleSpeechModelDialog(): void {
+    appleSpeechModelDialogSignal.value += 1
+  }
+
+  window.electron.ipcRenderer.on(
+    'control.appleSpeech.modelProgress',
+    (_, progress: AppleSpeechModelProgress) => {
+      appleSpeechModelStatus.value = progress
+      if (progress.state === 'installed') {
+        void refreshAppleSpeechAvailability(true)
+      }
+    }
+  )
 
   window.electron.ipcRenderer.on('control.engineState.set', (_, enabled: boolean) => {
     engineEnabled.value = enabled
@@ -95,6 +194,15 @@ export const useEngineControlStore = defineStore('engineControl', () => {
     sendEngineConfigChange,
     showConfigValidationError,
     changeSignal,
-    errorSignal
+    errorSignal,
+    appleSpeechAvailability,
+    appleSpeechModelStatus,
+    appleSpeechModelDialogSignal,
+    refreshAppleSpeechAvailability,
+    checkAppleSpeechModel,
+    installAppleSpeechModel,
+    releaseAppleSpeechModel,
+    applyAppleSpeechStartResult,
+    openAppleSpeechModelDialog
   }
 })

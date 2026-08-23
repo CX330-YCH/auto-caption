@@ -69,6 +69,27 @@ test('builds common and Provider-specific arguments from V5 config', () => {
     funAsrArgs.filter((value, index) => funAsrArgs[index - 1] === '-fcontext'),
     ['Auto Caption', '阿里云百炼']
   )
+
+  const appleSpeechArgs = buildBundledEngineArguments(
+    engine,
+    'apple_speech',
+    2345,
+    '/Applications/Auto Caption.app/Contents/Resources/apple-speech/apple-speech-helper'
+  )
+  assert.equal(valueAfter(appleSpeechArgs, '-e'), 'apple_speech')
+  assert.equal(
+    valueAfter(appleSpeechArgs, '-ash'),
+    '/Applications/Auto Caption.app/Contents/Resources/apple-speech/apple-speech-helper'
+  )
+  assert.equal(valueAfter(appleSpeechArgs, '-tm'), 'ollama')
+})
+
+test('requires the native helper path for Apple Speech', () => {
+  const engine = createDefaultConfig('').engine
+  assert.throws(
+    () => buildBundledEngineArguments(engine, 'apple_speech', 2345),
+    /helper path/
+  )
 })
 
 test('uses none target when translation is disabled', () => {

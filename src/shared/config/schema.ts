@@ -2,12 +2,12 @@ import type { Styles, UILanguage, UITheme } from '../types'
 
 export const CONFIG_SCHEMA_VERSION = 5 as const
 
-export type KnownProviderName = 'gummy' | 'vosk' | 'sosv' | 'glm' | 'fun_asr'
+export type KnownProviderName = 'gummy' | 'vosk' | 'sosv' | 'glm' | 'fun_asr' | 'apple_speech'
 export type AudioSourceType = 0 | 1
 
 export function isKnownProviderName(value: unknown): value is KnownProviderName {
   return value === 'gummy' || value === 'vosk' || value === 'sosv' ||
-    value === 'glm' || value === 'fun_asr'
+    value === 'glm' || value === 'fun_asr' || value === 'apple_speech'
 }
 
 export interface TranslationConfig {

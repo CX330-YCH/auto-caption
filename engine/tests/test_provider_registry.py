@@ -50,7 +50,7 @@ class ProviderRegistryTests(unittest.TestCase):
 
         self.assertEqual(
             registry.names,
-            ('gummy', 'vosk', 'sosv', 'glm', 'fun_asr'),
+            ('gummy', 'vosk', 'sosv', 'glm', 'fun_asr', 'apple_speech'),
         )
 
     def test_rejects_unknown_and_duplicate_provider_names(self):

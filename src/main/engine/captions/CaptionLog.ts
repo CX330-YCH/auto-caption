@@ -4,6 +4,7 @@ import {
   type CaptionCollectionChange
 } from '../../../shared/captions.ts'
 import type {
+  CaptionRemoveEngineMessage,
   CaptionEngineMessage,
   TranslationEngineMessage
 } from '../protocol/messages.ts'
@@ -48,6 +49,14 @@ export class CaptionLog {
       this.items[position].captionId,
       message.translation
     )
+  }
+
+  public remove(
+    engineRunId: number,
+    message: CaptionRemoveEngineMessage
+  ): string | undefined {
+    const captionId = this.captionId(engineRunId, message.index)
+    return this.captions.remove(captionId)?.captionId
   }
 
   public clear(): void {

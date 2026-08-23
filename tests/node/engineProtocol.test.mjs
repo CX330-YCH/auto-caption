@@ -4,6 +4,7 @@ import test from 'node:test'
 import { EngineProtocol } from '../../src/main/engine/protocol/EngineProtocol.ts'
 import {
   isCaptionEngineMessage,
+  isCaptionRemoveEngineMessage,
   isContentEngineMessage,
   isTranslationEngineMessage
 } from '../../src/main/engine/protocol/messages.ts'
@@ -15,6 +16,18 @@ test('encodes Electron commands as newline-delimited JSON', () => {
     protocol.encodeCommand('stop'),
     '{"command":"stop","content":""}\n'
   )
+})
+
+test('validates additive caption removal events', () => {
+  assert.equal(isCaptionRemoveEngineMessage({
+    command: 'caption_remove', event_version: 1, index: 3
+  }), true)
+  assert.equal(isCaptionRemoveEngineMessage({
+    command: 'caption_remove', event_version: 2, index: 3
+  }), false)
+  assert.equal(isCaptionRemoveEngineMessage({
+    command: 'caption_remove', event_version: 1, index: '3'
+  }), false)
 })
 
 test('rejects parsed values without a command envelope', () => {

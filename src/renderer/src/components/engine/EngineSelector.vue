@@ -5,8 +5,12 @@
         v-for="option in builtinOptions"
         :key="String(option.value)"
         :value="option.value"
+        :class="{ 'soft-disabled-option': option.disabled }"
+        :aria-disabled="option.disabled"
       >
-        {{ $t(option.labelKey) }}
+        <a-tooltip :title="option.disabledReasonKey ? $t(option.disabledReasonKey) : undefined">
+          <span :style="softDisabledStyle(option.disabled)">{{ $t(option.labelKey) }}</span>
+        </a-tooltip>
       </a-select-option>
       <a-select-option
         v-for="engine in customEngines"
@@ -41,7 +45,7 @@ import SettingsField from '@renderer/components/settings/SettingsField.vue'
 
 const ADD_CUSTOM_ENGINE = '__add_custom_engine__'
 
-defineProps<{
+const props = defineProps<{
   modelValue: string
   builtinOptions: readonly EngineFieldOption[]
   customEngines: readonly CustomEngineConfig[]
@@ -51,15 +55,27 @@ const emit = defineEmits<{
   'update:modelValue': [value: string]
   add: []
   delete: [id: string]
+  unavailable: [reasonKey: string]
 }>()
 
 function selectEngine(value: string): void {
   if (value === ADD_CUSTOM_ENGINE) emit('add')
-  else emit('update:modelValue', value)
+  else {
+    const option = props.builtinOptions.find((item) => item.value === value)
+    if (option?.disabled) {
+      emit('unavailable', option.disabledReasonKey ?? 'engine.appleSpeech.disabled.probe_failed')
+      return
+    }
+    emit('update:modelValue', value)
+  }
 }
 
 function deleteEngine(id: string): void {
   emit('delete', id)
+}
+
+function softDisabledStyle(disabled?: boolean): Record<string, string> | undefined {
+  return disabled ? { color: 'rgba(127, 127, 127, 0.55)', cursor: 'not-allowed' } : undefined
 }
 </script>
 
@@ -73,5 +89,10 @@ function deleteEngine(id: string): void {
 
 .delete-engine {
   color: #ff4d4f;
+}
+
+.soft-disabled-option {
+  color: rgba(127, 127, 127, 0.55);
+  cursor: not-allowed;
 }
 </style>

@@ -4,7 +4,7 @@ import type {
   KnownProviderName
 } from '../../../shared/config/schema.ts'
 
-type ProviderArgumentBuilder = (config: EngineConfig) => string[]
+type ProviderArgumentBuilder = (config: EngineConfig, appleSpeechHelperPath?: string) => string[]
 
 const providerArgumentBuilders: Record<
   KnownProviderName,
@@ -66,13 +66,23 @@ const providerArgumentBuilders: Record<
     if (funAsr.apiKey) args.push('-fkey', funAsr.apiKey)
     args.push(...translationArguments(config))
     return args
+  },
+  apple_speech: (config, helperPath) => {
+    if (!helperPath) throw new Error('Apple Speech helper path is required')
+    return [
+      '-e', 'apple_speech',
+      '-s', config.common.sourceLanguage,
+      '-ash', helperPath,
+      ...translationArguments(config)
+    ]
   }
 }
 
 export function buildBundledEngineArguments(
   config: EngineConfig,
   provider: KnownProviderName,
-  port: number
+  port: number,
+  appleSpeechHelperPath?: string
 ): string[] {
   const args = [
     '-a', config.common.audioSource === 1 ? '1' : '0'
@@ -88,7 +98,7 @@ export function buildBundledEngineArguments(
       ? config.common.targetLanguage
       : 'none'
   )
-  args.push(...providerArgumentBuilders[provider](config))
+  args.push(...providerArgumentBuilders[provider](config, appleSpeechHelperPath))
   return args
 }
 

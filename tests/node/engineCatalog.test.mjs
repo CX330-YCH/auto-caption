@@ -28,7 +28,9 @@ function hasMessageKey(messages, key) {
 test('registers each V5 provider once with capability and field metadata', () => {
   const providerIds = engineDefinitions.map((definition) => definition.id)
 
-  assert.deepEqual(providerIds, ['gummy', 'vosk', 'sosv', 'glm', 'fun_asr'])
+  assert.deepEqual(providerIds, [
+    'gummy', 'vosk', 'sosv', 'glm', 'fun_asr', 'apple_speech'
+  ])
   assert.equal(new Set(providerIds).size, providerIds.length)
 
   for (const provider of providerIds) {

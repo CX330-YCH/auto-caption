@@ -91,6 +91,18 @@ JSON object + "\n" + JSON object + "\n" + ...
 
 Electron 为每次引擎启动分配单调递增的运行 ID，并将 `运行 ID:index` 组合为应用内部 `captionId`。因此引擎重启后可以从原有 `index` 起点重新计数，而不会覆盖上一次运行保留的字幕。
 
+### `caption_remove`
+
+```js
+{
+  command: "caption_remove",
+  event_version: 1,
+  index: number
+}
+```
+
+撤回当前引擎运行中尚未固化的字幕。`index` 必须是有限数值，并与先前 `caption.index` 相同。Electron 使用运行 ID 组合出内部 `captionId`，从控制窗口、字幕窗口和内存日志同步移除；找不到目标时安全忽略。此命令是为 Apple Speech volatile 结果修订新增的向后兼容事件；旧自定义引擎无需实现，已经 final 的字幕不得撤回。
+
 Fun-ASR 的 `sentence_end: false/true` 分别映射为内部 partial/final。服务端 `begin_time`/`end_time` 毫秒偏移会基于本次任务起始时间转换为协议中的 `time_s`/`time_t`，不会用回调到达时间冒充音频时间；缺少 partial 结束时间时才以已发送音频时长作为保守上界。服务端心跳不形成 stdout 消息；任务用量映射为 `usage`，失败映射为已脱敏的 `error`，外部 command envelope 没有变化。
 
 每个 Fun-ASR 连接 generation 都维护独立生命周期状态。同一 generation 的 `on_error`、随后到达的 `on_close` 以及 Session 最后的 `stop()` 只允许触发一次重连或一次最终失败。收到服务端 task-failed 后不会再向已失效 SDK task 发送 `stop()`；SDK 因该竞态产生的预期 `InvalidParameter` 只进入隐藏的 `debug` 诊断，不形成用户错误。鉴权、权限、参数和模型不可用等永久失败立即终止；限流、超时、网络和 5xx 等暂时失败才进入最多三次的指数退避重连。未知 SDK/传输错误仍受相同重试上限约束。
@@ -162,6 +174,21 @@ Fun-ASR 的预编译热词表 ID 和上下文术语是任务启动参数，不�
 除 `version` 外的诊断字段均可缺省。内置 Gummy、Fun-ASR、GLM、Vosk 和 SOSV，以及音频采集、翻译服务、热词 SDK、Provider 启停和 Session 清理路径，都使用同一诊断序列化规则：普通异常保留类型、模块、消息、参数、自定义属性、完整 traceback、cause/context；SDK 回调对象保留可序列化公开字段和实例属性；二进制音频仅记录类型和长度。为防止失控响应撑爆日志，单个字符串最多保留 64 KiB、单个集合最多 256 项、嵌套最多 8 层，并明确写入截断标记。
 
 `serviceMessage`、`sdkResult`、异常属性、stderr 和所有 `details` 在 Python 与 Electron 两层再次脱敏。实际命令行中的 API Key、环境变量 Key、Token、密码、Authorization、Cookie 和其他凭据不得写入协议或日志；因此这里的“完整”指凭据脱敏及有界保护后的完整诊断，而不是原样保存秘密或音频正文。
+
+## Apple Speech 私有辅助协议
+
+该协议只用于内置 `apple_speech` Provider，不是自定义字幕引擎扩展点。Swift 可执行文件支持 `probe`、`model-status --locale`、`model-install --locale`、`model-release --locale` 和 `transcribe --locale --sample-rate --channels`。除 `transcribe` 从 stdin 持续读取原始 PCM16 外，命令不接收 stdin。stdout 始终为 UTF-8 NDJSON：
+
+```js
+{
+  protocolVersion: 1,
+  type: "capability" | "model-status" | "model-progress" |
+        "ready" | "transcript" | "error",
+  payload: object
+}
+```
+
+`transcript.payload.phase` 为 `partial`、`final` 或 `revoke`，并携带稳定整数 `id`；partial/final 同时带 `text`、`startSeconds` 和 `endSeconds`。模型进度带 `phase` 与 0–1 的 `fractionCompleted`。任何普通调试输出必须写 stderr。主进程和 Python Provider 都校验 `protocolVersion === 1`，不兼容时拒绝使用。
 
 ## TCP 命令
 

@@ -13,6 +13,7 @@
         :custom-engines="draft.customEngines"
         @add="openCustomEngineDialog"
         @delete="deleteCustomEngine"
+        @unavailable="showUnavailableEngineReason"
       />
     </SettingsForm>
 
@@ -56,7 +57,12 @@
       </a-card>
     </template>
 
-    <a-card v-else-if="activeCustomEngine" size="small" :title="activeCustomEngine.name">
+    <AppleSpeechModelManager
+      v-if="activeBuiltinProvider === 'apple_speech'"
+      :locale="draft.common.sourceLanguage"
+    />
+
+    <a-card v-if="activeCustomEngine" size="small" :title="activeCustomEngine.name">
       <template #extra>
         <a-popover>
           <template #content>
@@ -140,6 +146,7 @@ import { useI18n } from 'vue-i18n'
 import EngineFieldRenderer from '@renderer/components/engine/EngineFieldRenderer.vue'
 import EngineSelector from '@renderer/components/engine/EngineSelector.vue'
 import HotwordManager from '@renderer/components/engine/HotwordManager.vue'
+import AppleSpeechModelManager from '@renderer/components/engine/AppleSpeechModelManager.vue'
 import SettingsField from '@renderer/components/settings/SettingsField.vue'
 import SettingsForm from '@renderer/components/settings/SettingsForm.vue'
 import {
@@ -168,20 +175,46 @@ const customEngineDialogOpen = ref(false)
 const customEngineName = ref('')
 const customEngineNameError = ref('')
 const engineControl = useEngineControlStore()
-const { changeSignal } = storeToRefs(engineControl)
+const { changeSignal, appleSpeechAvailability } = storeToRefs(engineControl)
 const generalSetting = useGeneralSettingStore()
 const { uiColor, uiLanguage } = storeToRefs(generalSetting)
 const draft = ref(cloneEngineConfig(engineControl.engineConfig))
 let resettingDraft = false
 
-const builtinEngineOptions = getEngineOptions()
+const builtinEngineOptions = computed(() => {
+  return getEngineOptions().flatMap((option) => {
+    if (option.value !== 'apple_speech') return [option]
+    if (engineControl.platform !== 'darwin') return []
+    const availability = appleSpeechAvailability.value
+    const reason = availability.reason ?? 'probe_failed'
+    return [{
+      ...option,
+      disabled: availability.state !== 'available',
+      disabledReasonKey: availability.state === 'available'
+        ? undefined
+        : `engine.appleSpeech.disabled.${reason}`
+    }]
+  })
+})
 const activeBuiltinProvider = computed(() => getActiveBuiltinProvider(draft.value))
 const activeCustomEngine = computed(() => getActiveCustomEngine(draft.value))
 const visibleFields = computed(() => {
   if (!activeBuiltinProvider.value) return []
-  return getEngineFields(activeBuiltinProvider.value).filter((field) => {
-    return isEngineFieldVisible(draft.value, field)
-  })
+  return getEngineFields(activeBuiltinProvider.value)
+    .filter((field) => isEngineFieldVisible(draft.value, field))
+    .map((field) => {
+      if (activeBuiltinProvider.value !== 'apple_speech' || field.id !== 'source-language') {
+        return field
+      }
+      return {
+        ...field,
+        options: appleSpeechAvailability.value.supportedLocales.map((locale) => ({
+          value: locale,
+          label: locale,
+          labelKey: 'engine.appleSpeech.locale'
+        }))
+      }
+    })
 })
 const primaryFields = computed(() =>
   visibleFields.value.filter((field) => field.section === 'primary')
@@ -229,10 +262,22 @@ function applyChange(): void {
 
   engineControl.engineConfig = cloneEngineConfig(draft.value)
   engineControl.sendEngineConfigChange()
+  if (draft.value.activeEngineId === 'apple_speech') {
+    void engineControl.checkAppleSpeechModel(draft.value.common.sourceLanguage)
+  }
   notification.open({
     placement: 'topLeft',
     message: t('noti.engineChange'),
     description: t('noti.changeInfo')
+  })
+}
+
+function showUnavailableEngineReason(reasonKey: string): void {
+  notification.open({
+    message: t('engine.appleSpeech.unavailableTitle'),
+    description: t(reasonKey),
+    duration: null,
+    icon: () => h(ExclamationCircleOutlined, { style: 'color: #faad14' })
   })
 }
 
@@ -293,8 +338,28 @@ watch(
     showTranslationSettings.value = false
     const provider = getActiveBuiltinProvider(draft.value)
     if (provider) applyEngineLanguageDefaults(draft.value, provider, uiLanguage.value)
+    if (provider === 'apple_speech') {
+      void engineControl.refreshAppleSpeechAvailability().then((availability) => {
+        if (
+          availability.state === 'available' &&
+          !availability.supportedLocales.includes(draft.value.common.sourceLanguage) &&
+          availability.supportedLocales[0]
+        ) {
+          draft.value.common.sourceLanguage = availability.supportedLocales[0]
+        }
+        return engineControl.checkAppleSpeechModel(draft.value.common.sourceLanguage)
+      })
+    }
   },
   { flush: 'sync' }
+)
+
+watch(
+  () => engineControl.platform,
+  (platform) => {
+    if (platform === 'darwin') void engineControl.refreshAppleSpeechAvailability()
+  },
+  { immediate: true }
 )
 </script>
 

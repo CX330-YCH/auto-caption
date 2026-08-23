@@ -41,6 +41,9 @@ export type EngineValidationPhase = 'apply' | 'start'
 export interface EngineFieldOption {
   value: string | number
   labelKey: string
+  label?: string
+  disabled?: boolean
+  disabledReasonKey?: string
 }
 
 export interface EngineFieldCondition {

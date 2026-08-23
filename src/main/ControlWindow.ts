@@ -9,6 +9,9 @@ import { allConfig } from './utils/AllConfig'
 import { captionEngine } from './utils/CaptionEngine'
 import { Log } from './utils/Log'
 import { hotwordService } from './services/HotwordService'
+import { appleSpeechService } from './services/AppleSpeechService.ts'
+import type { AppleSpeechStartResult } from '../shared/appleSpeech.ts'
+import { getActiveBuiltinProvider } from '../shared/config/schema.ts'
 
 class ControlWindow {
   mounted: boolean = false;
@@ -126,6 +129,22 @@ class ControlWindow {
       return hotwordService.execute(request)
     })
 
+    ipcMain.handle('control.appleSpeech.availability', (_, force = false) => {
+      return appleSpeechService.availability(force === true)
+    })
+
+    ipcMain.handle('control.appleSpeech.modelStatus', (_, locale) => {
+      return appleSpeechService.modelStatus(locale)
+    })
+
+    ipcMain.handle('control.appleSpeech.installModel', (_, locale) => {
+      return appleSpeechService.installModel(locale)
+    })
+
+    ipcMain.handle('control.appleSpeech.releaseModel', (_, locale) => {
+      return appleSpeechService.releaseModel(locale)
+    })
+
     ipcMain.on('control.application.change', (_, args) => {
       let changed = false
       if (!this.applyConfig('application', () => {
@@ -174,8 +193,26 @@ class ControlWindow {
       })
     })
 
-    ipcMain.on('control.engine.start', () => {
+    ipcMain.handle('control.engine.start', async (): Promise<AppleSpeechStartResult> => {
+      if (getActiveBuiltinProvider(allConfig.engine) === 'apple_speech') {
+        const availability = await appleSpeechService.availability(true)
+        if (availability.state !== 'available') {
+          return { accepted: false, reason: availability.reason, availability }
+        }
+        const modelStatus = await appleSpeechService.modelStatus(
+          allConfig.engine.common.sourceLanguage
+        )
+        if (modelStatus.state !== 'installed') {
+          return {
+            accepted: false,
+            reason: modelStatus.state === 'failed' ? 'status_failed' : 'model_not_installed',
+            availability,
+            modelStatus
+          }
+        }
+      }
       captionEngine.start()
+      return { accepted: true }
     })
 
     ipcMain.on('control.engine.stop', () => {

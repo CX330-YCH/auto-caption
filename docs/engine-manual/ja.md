@@ -2,7 +2,7 @@
 
 ## 注意：このドキュメントはメンテナンスが行われていないため、記載されている情報は古くなっています。最新の情報については、[中国語版](./zh.md)または[英語版](./en.md)のドキュメントをご参照ください。
 
-対応バージョン：v2.22.0
+対応バージョン：v2.23.0
 
 この文書は大規模モデルを使用して翻訳されていますので、内容に正確でない部分があるかもしれません。
 
@@ -201,6 +201,10 @@ python main.py -e fun_asr -s ja -t zh -a 0 -c 10 \
 Fun-ASR は接続 generation ごとに冪等な状態を保持し、同一タスクの `on_error → on_close → stop` は最大1回の再接続または1回の fatal だけを発生させます。恒久的なサービスエラーは即時停止し、一時的なエラーだけを最大3回のバックオフ付きで再試行します。task-failed 後に SDK `stop()` は呼びません。ライフサイクル診断は非表示の `debug` プロトコルイベントとして完全 Debug ログだけに保存され、既存のログ記録画面には表示されません。fatal 時は Session が通常終了を試み、タイムアウトなどの異常経路だけで Electron がパッケージ済みプロセスツリー全体を強制終了します。
 
 すべての内蔵字幕エンジン（Gummy、Fun-ASR、GLM、Vosk、SOSV）と、音声、翻訳、ホットワード SDK のエラーは、サニタイズ済み SDK コールバック項目、例外型とメッセージ、独自属性、完全な traceback、cause/context を現在の Debug JSONL に保存します。Python/SDK の stderr も収集します。API Key、Token、Password、Authorization/Cookie、バイナリ音声本文は記録せず、過大なリモート診断には明示的な上限制御マーカーを付けます。
+
+### Apple Speech Provider
+
+`apple_speech` は macOS 26 以降専用です。Electron は Python 起動前に Swift ヘルパーの `probe`、`model-status`、`model-install`、`model-release` を使用して実行時機能と `AssetInventory` モデルを管理し、これらは字幕エンジンの起動タイムアウトとは分離されています。認識時は `-ash/--apple_speech_helper` でヘルパーを指定し、Python Provider が既存の音声パイプラインからモノラル PCM16 を stdin に書き、バージョン1の NDJSON を読みます。Swift は volatile/final 結果を安定 ID に変換し、volatile の撤回を追加公開イベント `caption_remove` に変換します。外部翻訳は final ごとに一度だけ共有サービスから実行されます。システム出力は既存の BlackHole 経路を継続します。
 
 ## その他
 

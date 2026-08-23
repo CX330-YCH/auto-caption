@@ -117,7 +117,8 @@ export default {
         "vosk": "ローカル / Vosk",
         "sosv": "ローカル / SOSV",
         "glm": "クラウド / 智譜 AI / GLM-ASR",
-        "funAsr": "クラウド / Alibaba Cloud / Fun-ASR Realtime"
+        "funAsr": "クラウド / Alibaba Cloud / Fun-ASR Realtime",
+        "appleSpeech": "ローカル / macOS システム音声認識"
       },
       languages: {
         "auto": "自動検出",
@@ -131,7 +132,10 @@ export default {
         "ru": "ロシア語",
         "es": "スペイン語",
         "it": "イタリア語",
-        "yue": "広東語"
+        "yue": "広東語",
+        "zhCN": "簡体字中国語（中国本土）",
+        "enUS": "英語（米国）",
+        "jaJP": "日本語（日本）"
       },
       translation: {
         "ollama": "Ollama モデルまたは OpenAI 互換モデル",
@@ -200,6 +204,40 @@ export default {
         "process_failed": "ローカル HotwordService の起動または応答に失敗しました。",
         "sdk_error": "Alibaba Cloud SDK が失敗しました。アカウント、リージョン、Workspace、クォータ、ネットワークを確認してください。",
         "model_mismatch": "語彙ターゲットモデルが現在の Fun-ASR モデルと一致しません。"
+      }
+    },
+    appleSpeech: {
+      "modelTitle": "macOS 言語モデル",
+      "check": "モデル状態を確認",
+      "manage": "言語モデルをインストール",
+      "locale": "認識言語",
+      "download": "言語モデルをダウンロード",
+      "retry": "再確認",
+      "close": "閉じる",
+      "reservationFull": "言語モデルの上限に達しました",
+      "reservationFullDescription": "macOS はアプリごとに予約できる言語モデル数を制限します。不要なモデルを先に解放してください。",
+      "release": "{locale} を解放",
+      "unavailableTitle": "macOS システムエンジンは利用できません",
+      disabled: {
+        "unsupported_os": "macOS 26 以降が必要です。",
+        "helper_missing": "Apple Speech ヘルパーがありません。アプリを再ビルドするか完全版をインストールしてください。",
+        "helper_incompatible": "Apple Speech ヘルパーのプロトコルに互換性がありません。",
+        "speech_unavailable": "この Mac は SpeechAnalyzer に対応していないか、システム音声サービスを利用できません。",
+        "no_supported_locales": "オンデバイス認識で利用可能な言語がシステムから返されませんでした。",
+        "probe_failed": "Apple Speech の機能確認に失敗しました。ソフトウェアログを確認して再試行してください。"
+      },
+      states: {
+        "unknown": "未確認", "checking": "確認中", "supported": "ダウンロード可能",
+        "downloading": "ダウンロード中", "installed": "インストール済み", "unsupported": "非対応", "failed": "確認失敗"
+      },
+      descriptions: {
+        "unknown": "このエンジンを選択すると現在の言語モデルを確認します。",
+        "checking": "macOS に言語モデルの状態を問い合わせています。",
+        "supported": "この言語は対応していますが、モデルは未インストールです。ダウンロードは macOS が管理し、完了するまで字幕エンジンを開始できません。",
+        "downloading": "macOS が言語モデルをダウンロードしてインストールしています。アプリを起動したままにしてください。",
+        "installed": "言語モデルはインストール済みで、字幕エンジンを開始できます。",
+        "unsupported": "現在のシステムはこの認識言語に対応していません。別のソース言語を選択してください。",
+        "failed": "言語モデル状態の確認に失敗しました。再試行してソフトウェアログを確認してください。"
       }
     },
     custom: {

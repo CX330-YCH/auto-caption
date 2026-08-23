@@ -6,6 +6,7 @@ out
 *.log*
 __pycache__
 .venv
+.test-env
 test.py
 
 engine/build
@@ -13,6 +14,8 @@ engine/portaudio
 engine/pyinstaller_cache
 engine/models
 engine/notebook
+native/apple-speech-helper/.build
+native/apple-speech-helper/dist
 # engine/main.spec
 
 .repomap
