@@ -191,23 +191,23 @@ Renderer 向主进程发送经过长度限制的 Vue、全局 JavaScript 和 Pro
 
 ### `control.appleSpeech.availability`
 
-**介绍：** 查询 macOS 系统语音引擎能力。非 macOS 返回 `hidden`；macOS 版本、辅助程序、硬件或语言能力不满足时返回 `disabled` 及结构化原因；可用时返回运行时语言和模型保留信息。
+**介绍：** 查询 macOS 系统语音引擎能力。非 macOS 返回 `hidden`；macOS 版本、辅助程序、硬件或语言能力不满足时返回 `disabled` 及结构化原因；可用时返回运行时语言和资源保留信息。Electron 在边界把系统下划线 locale 规范为 BCP-47 连字符格式并去重，例如 `zh_CN` → `zh-CN`。
 
 **数据类型：** 请求为可选 `force: boolean`；响应为 `AppleSpeechAvailability`
 
 ### `control.appleSpeech.modelStatus`
 
-**介绍：** 查询一个已校验 locale 的 `AssetInventory` 状态。状态不是 `installed` 时，主进程拒绝启动 Apple Speech 字幕引擎。
+**介绍：** 查询一个已校验 locale 的 `AssetInventory` 模块状态。响应同时包含 `systemInstalled`：`supported + false` 映射为“未下载”，`supported + true` 映射为“待启用”，只有 `state === installed` 映射为“已就绪”并允许启动。
 
-**数据类型：** 请求为 2–64 字符且仅含字母、数字、下划线或连字符的 locale；响应为 `AppleSpeechModelStatus`
+**数据类型：** 请求为 2–64 字符且仅含字母、数字、下划线或连字符的 locale；主进程先规范为 BCP-47，响应为带 `locale`、`state`、`systemInstalled`、`reservedLocales` 和 `maximumReservedLocales` 的 `AppleSpeechModelStatus`
 
 ### `control.appleSpeech.installModel`
 
-**介绍：** 用户明确触发语言模型安装。主进程同时最多允许一个安装操作，立即返回操作 ID；Swift 辅助程序通过 `AssetInstallationRequest.progress` 下载并安装，不进入 30 秒引擎启动计时。
+**介绍：** 用户明确触发语言资源准备。主进程同时最多允许一个操作，立即返回操作 ID；Swift 辅助程序通过 `AssetInstallationRequest.progress` 复用已有资源或下载缺失内容，不进入 30 秒引擎启动计时。
 
 **数据类型：** 请求为已校验 locale；响应为 `{ accepted, operationId?, reason? }`
 
-安装过程由主进程向所有应用窗口发送 `control.appleSpeech.modelProgress`，数据为带 `operationId`、`state` 和可选 `fractionCompleted` 的 `AppleSpeechModelProgress`。最终状态为 `installed` 或 `failed`。
+准备过程由主进程向所有应用窗口发送 `control.appleSpeech.modelProgress`，数据为带 `operationId`、`state`、`systemInstalled`、保留列表和可选 `fractionCompleted` 的 `AppleSpeechModelProgress`。最终状态为 `installed` 或 `failed`。
 
 ### `control.appleSpeech.releaseModel`
 

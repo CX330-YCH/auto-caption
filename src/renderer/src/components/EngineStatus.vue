@@ -101,7 +101,7 @@
       <p class="about-desc">{{ $t('status.about.desc') }}</p>
       <a-divider />
       <div class="about-info">
-        <p><b>{{ $t('status.about.version') }}</b><a-tag color="green">v2.24.0</a-tag></p>
+        <p><b>{{ $t('status.about.version') }}</b><a-tag color="green">v2.25.0</a-tag></p>
         <p>
           <b>{{ $t('status.about.author') }}</b>
           <a
@@ -144,6 +144,7 @@
 <script setup lang="ts">
 import type { EngineInfo } from '@renderer/types'
 import type { AppleSpeechStartResult } from '../../../shared/appleSpeech.ts'
+import { appleSpeechLocalesEqual } from '../../../shared/appleSpeech.ts'
 import { computed, ref, watch, h } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useCaptionLogStore } from '@renderer/stores/captionLog'
@@ -178,7 +179,10 @@ const engine = computed(() => {
 const appleSpeechStartBlocked = computed(() => {
   if (getActiveBuiltinProvider(engineConfig.value) !== 'apple_speech') return false
   return appleSpeechModelStatus.value.state !== 'installed' ||
-    appleSpeechModelStatus.value.locale !== engineConfig.value.common.sourceLanguage
+    !appleSpeechLocalesEqual(
+      appleSpeechModelStatus.value.locale,
+      engineConfig.value.common.sourceLanguage
+    )
 })
 
 const pid = ref(0)

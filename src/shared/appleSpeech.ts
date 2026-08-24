@@ -31,6 +31,7 @@ export type AppleSpeechModelState =
 export interface AppleSpeechModelStatus {
   locale: string
   state: AppleSpeechModelState
+  systemInstalled: boolean
   reservedLocales: string[]
   maximumReservedLocales: number
   fractionCompleted?: number
@@ -46,4 +47,42 @@ export interface AppleSpeechStartResult {
   reason?: AppleSpeechDisabledReason | 'model_not_installed' | 'status_failed'
   availability?: AppleSpeechAvailability
   modelStatus?: AppleSpeechModelStatus
+}
+
+export type AppleSpeechReadiness =
+  | 'unknown'
+  | 'checking'
+  | 'needs_download'
+  | 'needs_activation'
+  | 'preparing'
+  | 'ready'
+  | 'unsupported'
+  | 'failed'
+
+export function normalizeAppleSpeechLocale(locale: string): string {
+  const bcp47 = locale.trim().replaceAll('_', '-')
+  try {
+    return Intl.getCanonicalLocales(bcp47)[0] ?? bcp47
+  }
+  catch {
+    return bcp47
+  }
+}
+
+export function appleSpeechLocalesEqual(left: string, right: string): boolean {
+  return normalizeAppleSpeechLocale(left) === normalizeAppleSpeechLocale(right)
+}
+
+export function getAppleSpeechReadiness(
+  status: AppleSpeechModelStatus
+): AppleSpeechReadiness {
+  switch (status.state) {
+  case 'unknown': return 'unknown'
+  case 'checking': return 'checking'
+  case 'supported': return status.systemInstalled ? 'needs_activation' : 'needs_download'
+  case 'downloading': return 'preparing'
+  case 'installed': return 'ready'
+  case 'unsupported': return 'unsupported'
+  case 'failed': return 'failed'
+  }
 }

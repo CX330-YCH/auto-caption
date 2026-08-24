@@ -3,7 +3,7 @@
     <h1 align="center">auto-caption</h1>
     <p>Auto Caption はクロスプラットフォームのリアルタイム字幕表示ソフトウェアです。</p>
     <p>
-      <a href="https://github.com/HiMeditator/auto-caption/releases"><img src="https://img.shields.io/badge/release-2.24.0-blue"></a>
+      <a href="https://github.com/HiMeditator/auto-caption/releases"><img src="https://img.shields.io/badge/release-2.25.0-blue"></a>
       <a href="https://github.com/HiMeditator/auto-caption/issues"><img src="https://img.shields.io/github/issues/HiMeditator/auto-caption?color=orange"></a>
       <img src="https://img.shields.io/github/languages/top/HiMeditator/auto-caption?color=royalblue">
       <img src="https://img.shields.io/github/repo-size/HiMeditator/auto-caption?color=green">
@@ -14,7 +14,7 @@
         | <a href="./README_en.md">English</a>
         | <b>日本語</b> |
     </p>
-    <p><i>v2.24.0 がリリースされました。macOS arm64 ビルドを含みます...</i></p>
+    <p><i>v2.25.0 がリリースされました。macOS arm64 ビルドを含みます...</i></p>
 </div>
 
 ![](./assets/media/main_ja.png)
@@ -53,7 +53,7 @@ https://github.com/user-attachments/assets/9c188d78-9520-4397-bacf-4c8fdcc54874
 
 ## 📖 基本使い方
 
-> ⚠️ 注意：現在の v2.24.0 は Windows と macOS arm64 ビルドを提供しています。Linux はソースまたは既存のビルド手順での検証が必要です。
+> ⚠️ 注意：現在の v2.25.0 は Windows と macOS arm64 ビルドを提供しています。Linux はソースまたは既存のビルド手順での検証が必要です。
 
 このソフトウェアは Windows、macOS、Linux プラットフォームに対応しています。テスト済みのプラットフォーム情報は以下の通りです：
 
@@ -196,7 +196,7 @@ https://docs.bigmodel.cn/ja/guide/models/sound-and-video/glm-asr-2512
 
 ### macOS システム音声認識エンジン（ローカル）
 
-Apple の `SpeechAnalyzer`、`SpeechTranscriber`、`AssetInventory` を使ってオンデバイスでリアルタイム認識します。macOS のみ表示され、OS、ネイティブヘルパー、ハードウェア、対応言語が条件を満たさない場合は灰色の項目から理由だけを確認できます。選択時にソース言語モデルを直ちに確認し、未インストールなら専用の進捗ダイアログで完了するまで通常の字幕エンジンを開始できません。モデル取得は30秒の起動タイムアウトとは別です。システム出力の取得は引き続き BlackHole を使用します。
+Apple の `SpeechAnalyzer`、`SpeechTranscriber`、`AssetInventory` を使ってオンデバイスでリアルタイム認識します。macOS のみ表示され、OS、ネイティブヘルパー、ハードウェア、対応言語が条件を満たさない場合は灰色の項目から理由だけを確認できます。ソース言語はローカライズ名で表示し、`zh_CN` と `zh-CN` のような等価 locale を統一します。言語選択後は「未ダウンロード」「有効化待ち」「準備中」「準備完了」を表示し、ユーザーが専用ダイアログから準備を開始します。macOS は既存資源を再利用するか不足分をダウンロードし、30秒の起動タイムアウトには含まれません。システム出力の取得は引き続き BlackHole を使用します。
 
 ### Vosk字幕エンジン（ローカル）
 

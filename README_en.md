@@ -3,7 +3,7 @@
     <h1 align="center">auto-caption</h1>
     <p>Auto Caption is a cross-platform real-time caption display software.</p>
     <p>
-      <a href="https://github.com/HiMeditator/auto-caption/releases"><img src="https://img.shields.io/badge/release-2.24.0-blue"></a>
+      <a href="https://github.com/HiMeditator/auto-caption/releases"><img src="https://img.shields.io/badge/release-2.25.0-blue"></a>
       <a href="https://github.com/HiMeditator/auto-caption/issues"><img src="https://img.shields.io/github/issues/HiMeditator/auto-caption?color=orange"></a>
       <img src="https://img.shields.io/github/languages/top/HiMeditator/auto-caption?color=royalblue">
       <img src="https://img.shields.io/github/repo-size/HiMeditator/auto-caption?color=green">
@@ -14,7 +14,7 @@
         | <b>English</b>
         | <a href="./README_ja.md">日本語</a> |
     </p>
-    <p><i>v2.24.0 has been released with a macOS arm64 build...</i></p>
+    <p><i>v2.25.0 has been released with a macOS arm64 build...</i></p>
 </div>
 
 ![](./assets/media/main_en.png)
@@ -53,7 +53,7 @@ https://github.com/user-attachments/assets/9c188d78-9520-4397-bacf-4c8fdcc54874
 
 ## 📖 Basic Usage
 
-> ⚠️ Note: v2.24.0 currently provides Windows and macOS arm64 builds; Linux still needs verification from source or the existing build pipeline.
+> ⚠️ Note: v2.25.0 currently provides Windows and macOS arm64 builds; Linux still needs verification from source or the existing build pipeline.
 
 The software has been adapted for Windows, macOS, and Linux platforms. The tested platform information is as follows:
 
@@ -195,7 +195,7 @@ https://docs.bigmodel.cn/en/guide/models/sound-and-video/glm-asr-2512
 
 ### macOS System Speech Engine (Local)
 
-This engine uses Apple `SpeechAnalyzer`, `SpeechTranscriber`, and `AssetInventory` for on-device live recognition. It appears only on macOS; unsupported macOS versions, helper builds, hardware, or locale inventories leave a gray option that explains the reason without changing the selection. Selecting it immediately checks the source-locale model. A missing model must be installed through the separate progress dialog before the normal engine start is allowed, so model download never consumes the 30-second startup timeout. System-output capture still uses BlackHole.
+This engine uses Apple `SpeechAnalyzer`, `SpeechTranscriber`, and `AssetInventory` for on-device live recognition. It appears only on macOS; unsupported macOS versions, helper builds, hardware, or locale inventories leave a gray option that explains the reason without changing the selection. Source locales use localized names and canonicalize equivalent `zh_CN`/`zh-CN` forms. Selecting a language shows Not downloaded, Needs enabling, Preparing, or Ready. The separate user-triggered preparation dialog lets macOS reuse existing assets or download missing content without consuming the 30-second engine startup timeout. System-output capture still uses BlackHole.
 
 ### Vosk Subtitle Engine (Local)
 

@@ -13,6 +13,10 @@ import type {
   AppleSpeechModelStatus,
   AppleSpeechStartResult
 } from '../../../shared/appleSpeech.ts'
+import {
+  appleSpeechLocalesEqual,
+  normalizeAppleSpeechLocale
+} from '../../../shared/appleSpeech.ts'
 import { createDefaultConfig } from '../../../shared/config/schema'
 import type { EngineValidationIssue } from '@renderer/engines/types.ts'
 import {
@@ -38,10 +42,12 @@ export const useEngineControlStore = defineStore('engineControl', () => {
   const appleSpeechModelStatus = ref<AppleSpeechModelStatus>({
     locale: '',
     state: 'unknown',
+    systemInstalled: false,
     reservedLocales: [],
     maximumReservedLocales: 0
   })
   const appleSpeechModelDialogSignal = ref(0)
+  let appleSpeechModelRequestSequence = 0
 
   function sendEngineConfigChange(): void {
     window.electron.ipcRenderer.send(
@@ -78,29 +84,42 @@ export const useEngineControlStore = defineStore('engineControl', () => {
   async function checkAppleSpeechModel(
     locale: string
   ): Promise<AppleSpeechModelStatus> {
+    const normalizedLocale = normalizeAppleSpeechLocale(locale)
+    const requestSequence = ++appleSpeechModelRequestSequence
     appleSpeechModelStatus.value = {
-      locale,
+      locale: normalizedLocale,
       state: 'checking',
+      systemInstalled: appleSpeechAvailability.value.installedLocales.some(
+        (installedLocale) => appleSpeechLocalesEqual(installedLocale, normalizedLocale)
+      ),
       reservedLocales: appleSpeechModelStatus.value.reservedLocales,
       maximumReservedLocales: appleSpeechModelStatus.value.maximumReservedLocales
     }
     const result = await window.electron.ipcRenderer.invoke(
       'control.appleSpeech.modelStatus',
-      locale
+      normalizedLocale
     ) as AppleSpeechModelStatus
-    appleSpeechModelStatus.value = result
+    if (
+      requestSequence === appleSpeechModelRequestSequence &&
+      appleSpeechLocalesEqual(result.locale, normalizedLocale)
+    ) {
+      appleSpeechModelStatus.value = result
+    }
     return result
   }
 
   async function installAppleSpeechModel(locale: string): Promise<boolean> {
+    const normalizedLocale = normalizeAppleSpeechLocale(locale)
     const result = await window.electron.ipcRenderer.invoke(
       'control.appleSpeech.installModel',
-      locale
+      normalizedLocale
     ) as { accepted: boolean; operationId?: string }
     if (result.accepted) {
+      appleSpeechModelRequestSequence += 1
       appleSpeechModelStatus.value = {
-        locale,
+        locale: normalizedLocale,
         state: 'downloading',
+        systemInstalled: appleSpeechModelStatus.value.systemInstalled,
         reservedLocales: appleSpeechModelStatus.value.reservedLocales,
         maximumReservedLocales: appleSpeechModelStatus.value.maximumReservedLocales,
         fractionCompleted: 0
@@ -110,15 +129,16 @@ export const useEngineControlStore = defineStore('engineControl', () => {
   }
 
   async function releaseAppleSpeechModel(locale: string): Promise<void> {
+    const normalizedLocale = normalizeAppleSpeechLocale(locale)
     const result = await window.electron.ipcRenderer.invoke(
       'control.appleSpeech.releaseModel',
-      locale
+      normalizedLocale
     ) as AppleSpeechModelStatus
-    if (appleSpeechModelStatus.value.locale === locale) {
+    if (appleSpeechLocalesEqual(appleSpeechModelStatus.value.locale, normalizedLocale)) {
       appleSpeechModelStatus.value = result
     }
     await refreshAppleSpeechAvailability(true)
-    if (appleSpeechModelStatus.value.locale !== locale) {
+    if (!appleSpeechLocalesEqual(appleSpeechModelStatus.value.locale, normalizedLocale)) {
       await checkAppleSpeechModel(appleSpeechModelStatus.value.locale)
     }
   }
@@ -136,7 +156,9 @@ export const useEngineControlStore = defineStore('engineControl', () => {
   window.electron.ipcRenderer.on(
     'control.appleSpeech.modelProgress',
     (_, progress: AppleSpeechModelProgress) => {
-      appleSpeechModelStatus.value = progress
+      if (appleSpeechLocalesEqual(progress.locale, appleSpeechModelStatus.value.locale)) {
+        appleSpeechModelStatus.value = progress
+      }
       if (progress.state === 'installed') {
         void refreshAppleSpeechAvailability(true)
       }

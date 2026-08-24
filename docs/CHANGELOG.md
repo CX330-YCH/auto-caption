@@ -1,5 +1,10 @@
 ## 未发布
 
+## v2.25.0 - 2026-08-24
+
+- Apple Speech 源语言改为本地化名称，并在 Electron 边界统一 `zh_CN`/`zh-CN` 等 locale；选择语言后区分“未下载”“待启用”“准备中”“已就绪”，准备操作可复用系统已有资源或下载缺失内容。
+- 将应用及中英日文档版本统一更新至 `2.25.0`，并重新生成、验证 macOS arm64 应用、ZIP、DMG、Swift 辅助程序与 Python 引擎。
+
 ## v2.24.0 - 2026-08-24
 
 - 新增持久化且即时生效的 Debug Mode，完整记录脱敏后的 Electron、Renderer、Python、SDK/native helper 错误、协议事件、逐帧音频元数据、队列延迟/积压、Provider/翻译状态和进程指标。

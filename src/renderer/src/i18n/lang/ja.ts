@@ -213,17 +213,23 @@ export default {
       }
     },
     appleSpeech: {
-      "modelTitle": "macOS 言語モデル",
-      "check": "モデル状態を確認",
-      "manage": "言語モデルをインストール",
+      "modelTitle": "macOS 言語リソース",
+      "check": "リソース状態を確認",
       "locale": "認識言語",
-      "download": "言語モデルをダウンロード",
+      "prepare": "言語リソースを準備",
+      "activate": "言語リソースを有効化",
       "retry": "再確認",
       "close": "閉じる",
-      "reservationFull": "言語モデルの上限に達しました",
-      "reservationFullDescription": "macOS はアプリごとに予約できる言語モデル数を制限します。不要なモデルを先に解放してください。",
+      "reservationFull": "言語リソースの上限に達しました",
+      "reservationFullDescription": "macOS はアプリごとに予約できる言語リソース数を制限します。不要なリソースを先に解放してください。",
       "release": "{locale} を解放",
       "unavailableTitle": "macOS システムエンジンは利用できません",
+      localeNames: {
+        "zhCN": "簡体字中国語（中国本土）",
+        "zhHK": "繁体字中国語（香港）",
+        "zhTW": "繁体字中国語（台湾）",
+        "yueCN": "広東語（中国本土）"
+      },
       disabled: {
         "unsupported_os": "macOS 26 以降が必要です。",
         "helper_missing": "Apple Speech ヘルパーがありません。アプリを再ビルドするか完全版をインストールしてください。",
@@ -232,18 +238,20 @@ export default {
         "no_supported_locales": "オンデバイス認識で利用可能な言語がシステムから返されませんでした。",
         "probe_failed": "Apple Speech の機能確認に失敗しました。ソフトウェアログを確認して再試行してください。"
       },
-      states: {
-        "unknown": "未確認", "checking": "確認中", "supported": "ダウンロード可能",
-        "downloading": "ダウンロード中", "installed": "インストール済み", "unsupported": "非対応", "failed": "確認失敗"
+      readiness: {
+        "unknown": "未確認", "checking": "確認中", "needs_download": "未ダウンロード",
+        "needs_activation": "有効化待ち", "preparing": "準備中", "ready": "準備完了",
+        "unsupported": "非対応", "failed": "確認失敗"
       },
-      descriptions: {
-        "unknown": "このエンジンを選択すると現在の言語モデルを確認します。",
-        "checking": "macOS に言語モデルの状態を問い合わせています。",
-        "supported": "この言語は対応していますが、モデルは未インストールです。ダウンロードは macOS が管理し、完了するまで字幕エンジンを開始できません。",
-        "downloading": "macOS が言語モデルをダウンロードしてインストールしています。アプリを起動したままにしてください。",
-        "installed": "言語モデルはインストール済みで、字幕エンジンを開始できます。",
+      readinessDescriptions: {
+        "unknown": "このエンジンを選択すると現在の言語リソースを確認します。",
+        "checking": "macOS に言語リソースの状態を問い合わせています。",
+        "needs_download": "macOS はこの言語リソースをインストール済みとして報告していません。準備時にダウンロードが必要な場合があり、完了するまで字幕エンジンを開始できません。",
+        "needs_activation": "macOS にはこの言語リソースがありますが、Auto Caption 用の準備が完了していません。有効化は通常すぐに完了します。",
+        "preparing": "macOS が言語リソースを確認、割り当て、またはダウンロードしています。アプリを起動したままにしてください。",
+        "ready": "現在の言語リソースは準備完了で、字幕エンジンを開始できます。",
         "unsupported": "現在のシステムはこの認識言語に対応していません。別のソース言語を選択してください。",
-        "failed": "言語モデル状態の確認に失敗しました。再試行してソフトウェアログを確認してください。"
+        "failed": "言語リソース状態の確認に失敗しました。再試行してソフトウェアログを確認してください。"
       }
     },
     custom: {

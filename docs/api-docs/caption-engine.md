@@ -214,7 +214,7 @@ Debug Mode 开启后，Python 使用以下可选事件发送有界结构化指�
 }
 ```
 
-`transcript.payload.phase` 为 `partial`、`final` 或 `revoke`，并携带稳定整数 `id`；partial/final 同时带 `text`、`startSeconds` 和 `endSeconds`。模型进度带 `phase` 与 0–1 的 `fractionCompleted`。任何普通调试输出必须写 stderr。主进程和 Python Provider 都校验 `protocolVersion === 1`，不兼容时拒绝使用。
+`transcript.payload.phase` 为 `partial`、`final` 或 `revoke`，并携带稳定整数 `id`；partial/final 同时带 `text`、`startSeconds` 和 `endSeconds`。`model-status` 与模型进度同时带系统级 `systemInstalled`、模块 `state/phase`、`reservedLocales` 和保留上限，进度可带 0–1 的 `fractionCompleted`。系统返回的下划线 locale 在 Electron 边界规范为 BCP-47 连字符格式。任何普通调试输出必须写 stderr。主进程和 Python Provider 都校验 `protocolVersion === 1`，不兼容时拒绝使用。
 
 ## TCP 命令
 

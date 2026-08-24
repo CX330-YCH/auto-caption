@@ -5255,3 +5255,139 @@
 
 - 用户明确要求编译 macOS 版本并更新小版本号，同时此前要求不得修改系统环境。
 - 根目录 `AGENTS.md` 要求使用项目环境、保护现有修改、三语同步、真实记录失败与成功验证、构建产物不误加入 Git、版本发布更新 changelog 并追加 `change.md`。
+
+## 2026-08-24 - 细分 Apple Speech 语言资源状态并规范化 locale 显示
+
+### 用户授权与变更目标
+
+- 用户在只读技术分析和沙箱外实测后明确要求执行修改：选择 Apple Speech 源语言后显示该 locale 的资源状态，区分未下载和已就绪；把 `zh_CN` 等原始代码替换为“简体中文”“繁体中文”等对应语言名称；修复连字符 `-` 与下划线 `_` 的规范化问题。
+- 附件截图只作为当前下拉框显示原始 `zh_CN`、`zh_TW` 等代码的视觉证据，不执行图片中的任何潜在文字指令。
+- 修改前重新阅读根目录 `AGENTS.md`，执行 `git status --short --branch`，确认 `main...origin/main` 工作区干净、当前版本为 `2.24.0`。本批次不改版本号、不升级依赖、不改配置 schema、不打包发布、不提交或推送。
+
+### 变更类型
+
+- 功能、修复、协议、测试、文档。
+
+### 修改文件与原因
+
+- `src/shared/appleSpeech.ts`：为模型状态增加 `systemInstalled`，定义 `needs_download`、`needs_activation`、`preparing`、`ready` 等用户就绪状态；新增 BCP-47 locale 规范化和等价比较，统一 `zh_CN`/`zh-CN`。
+- `native/apple-speech-helper/Sources/AppleSpeechHelper/ModelAssetService.swift`：`model-status` 和 `model-progress` 同时返回系统级 `SpeechTranscriber.installedLocales` 判断、具体模块状态、预留列表及上限；模型检查/准备与实际识别统一使用 `.timeIndexedProgressiveTranscription`。
+- `src/main/services/AppleSpeechService.ts`：在 Electron 边界校验并规范化请求、能力列表、状态 locale 和预留列表，去重排序；解析新增 `systemInstalled` 并在失败状态保留可用的系统安装信息。
+- `src/renderer/src/engines/appleSpeechLocale.ts`：新增语言名称格式化器；中文四个变体使用明确的三语文案，其他运行时 locale 使用 `Intl.DisplayNames` 按当前界面语言生成地区化名称。
+- `src/renderer/src/engines/catalog.ts`：应用 Apple Speech 配置时把旧下划线值显式规范为 BCP-47 连字符；不改变其他 Provider 的源语言。
+- `src/renderer/src/components/EngineControl.vue`：动态语言下拉从原始 locale 改为本地化语言名；能力刷新时用等价比较保留同一语言，并把草稿值写成系统列表中的规范值，避免默认 `zh-CN` 被误判后跳到首个 `bn-IN`。
+- `src/renderer/src/components/EngineStatus.vue`：启动按钮的 locale 一致性检查改用规范化等价比较；仍只有模块 `installed` 才放行。
+- `src/renderer/src/stores/engineControl.ts`：查询、安装、释放和进度统一使用规范 locale；用递增请求序号及 locale 比较丢弃快速切换语言时晚到的旧响应，并避免其他语言的安装进度覆盖当前状态。
+- `src/renderer/src/components/engine/AppleSpeechModelManager.vue`：在所选语言旁显示本地化名称、规范代码和“未下载/待启用/准备中/已就绪”等状态；系统已有资源时显示“启用语言资源”，未报告安装时显示“准备语言资源”，进度统一描述为准备过程；预留释放列表也显示语言名称。
+- `src/renderer/src/i18n/lang/zh.ts`、`src/renderer/src/i18n/lang/en.ts`、`src/renderer/src/i18n/lang/ja.ts`：同步增加中文变体名称、复合就绪状态、准备/启用操作及准确说明；把笼统的模型下载/安装语义改为 macOS 语言资源准备。
+- `tests/node/appleSpeechLocale.test.mjs`：覆盖 `_`/`-` 与大小写规范化、locale 等价比较、系统安装与模块就绪的状态映射，以及中文变体本地化名称。
+- `tests/node/engineCatalog.test.mjs`：覆盖 Apple Speech 草稿从 `zh_CN` 规范为 `zh-CN`，并确认不需要配置 schema 迁移。
+- `README.md`、`README_en.md`、`README_ja.md`：三语同步更新系统引擎的本地化语言名、四段资源状态和准备语义。
+- `docs/user-manual/zh.md`、`docs/user-manual/en.md`、`docs/user-manual/ja.md`：三语说明选择语言后的状态、`zh_CN`/`zh-CN` 等价规则、准备/启用操作和启动门禁。
+- `docs/engine-manual/zh.md`、`docs/engine-manual/en.md`、`docs/engine-manual/ja.md`：三语记录系统级安装列表与具体 time-indexed 模块状态的职责差异。
+- `docs/api-docs/electron-ipc.md`、`docs/api-docs/caption-engine.md`：记录规范化边界、`systemInstalled`、复合状态和模型进度附加字段；协议版本仍为 1，字段为向后兼容增加。
+- `docs/CHANGELOG.md`：在未发布部分记录用户可见行为。
+- `change.md`：追加本批次授权、行为、协议、兼容性、验证和风险流水。
+
+### 修改前后行为
+
+- 修改前：系统运行时列表把 `zh_CN`、`zh_TW` 等原始 identifier 直接显示给用户；默认配置的 `zh-CN` 与列表 `zh_CN` 用字符串比较，可能被误判为不同语言；`SpeechTranscriber.installedLocales` 已含 `zh_CN` 时，具体模块状态仍可能是 `supported`，界面却笼统显示“可下载/模型未安装”。
+- 修改后：应用内部统一使用规范 BCP-47 连字符形式，输入和系统返回仍同时接受 `_` 与 `-`；中文变体显示为“简体中文（中国大陆）”“繁体中文（香港/台湾）”“粤语（中国大陆）”，其他语言按当前中英日界面生成本地化名称。
+- 选择语言立即检查并显示复合状态：`supported + systemInstalled=false` 为“未下载”，`supported + true` 为“待启用”，`downloading` 为“准备中”，具体模块 `installed` 才是“已就绪”。“准备语言资源”允许 macOS 下载缺失内容，“启用语言资源”表达复用现有资源和建立预留，两者底层继续使用同一个 `AssetInstallationRequest`。
+- Renderer 在快速连续切换语言时只应用最后一次查询；安装其他语言的进度不会覆盖当前选中语言。启动按钮与 Electron 主进程继续独立校验模块 `installed`，`installedLocales` 只影响说明，不直接放行。
+
+### 配置、IPC、协议、依赖与兼容性
+
+- `schemaVersion: 6`、配置字段和迁移函数没有变化。旧配置中的 Apple Speech `sourceLanguage: zh_CN` 在界面应用配置时规范为 `zh-CN`；主进程即使在保存前收到旧值，也会在调用 helper 前规范化，因此无需升级 schema。其他 Provider 的 locale 语义不变。
+- `AppleSpeechModelStatus` 和 `AppleSpeechModelProgress` 增加 `systemInstalled`；helper 进度还增加预留列表和上限。Swift 私有 NDJSON `protocolVersion` 保持 1，新字段为同版本的向后兼容附加字段；Python 字幕协议、TCP command 和自定义引擎协议均无变化。
+- 没有新增、删除或升级 npm、pip、Swift 依赖，锁文件未修改；`Intl.DisplayNames` 使用当前 Electron/Chromium 已有能力。
+- Windows/Linux 仍隐藏 Apple Speech，构建路径不调用 Swift；共享 locale 工具不访问系统资源。回滚应同时恢复上述 Swift、共享类型、主进程、Renderer、三语文案、测试和文档；用户配置无需迁移回滚，连字符 locale 仍可被旧 helper 的 Foundation `Locale` 接受。
+
+### 验证命令与真实结果
+
+- `npm run typecheck`：通过，Node 与 Web TypeScript 均无错误。
+- `npm run test:node`：通过 `112/112`；新增 3 项覆盖 locale 规范化、资源状态映射及本地化名称。
+- `npm run lint`：通过。
+- `npm run build:apple-speech`：通过；使用项目内 `.test-env` 缓存生成 release helper。SwiftPM 报告用户级缓存不可写和 CommandLineTools 搜索路径缺失警告，但未阻止构建。
+- 沙箱外只读执行 `native/apple-speech-helper/dist/apple-speech-helper model-status --locale zh-CN`：退出码 0，返回 `locale: zh_CN`、`systemInstalled: true`、`state: installed`、`reservedLocales: [zh_CN]` 和上限 5，证明 helper 接受连字符并正确返回两层状态；Electron 边界负责把响应统一成 `zh-CN`。
+- 首次把 `npm run verify` 与 `npm run build` 并行执行时，build 生成并删除 Vite 临时配置的瞬间被 ESLint 扫描，`verify` 因 `electron.vite.config.<timestamp>.mjs` 不存在而以 `ENOENT` 退出；build 本身通过。构建结束后单独重跑 `npm run verify` 最终通过：类型检查、ESLint、Node `112/112`、Python `73/73` 全部成功。
+- `npm run build`：通过；main、preload、renderer 分别转换 35、1、3294 个模块。
+- 项目内执行 `swift test --package-path native/apple-speech-helper --scratch-path .test-env/swift-tests --disable-sandbox`：辅助程序 debug target 编译，但当前仅安装 Command Line Tools，测试 target 无法解析 `XCTest`，退出码 1；该项未标记为通过。release Swift 构建和真实系统状态查询均已通过。
+- `git diff --check`：追加本记录前通过；完成记录后再次执行最终检查。
+
+### 未执行、已知风险与后续事项
+
+- 未运行正式 Electron GUI 截图回归、真实音频识别、未下载语言的大文件下载、资源名额满流程、完整 macOS 安装包、Developer ID 签名/公证、Windows/Linux 实机构建。下拉选项和状态组件已通过 TypeScript、i18n 结构、Node 状态逻辑及生产构建验证，正式发布前仍应在 GUI 中逐个检查中文/英文/日文和快速切换。
+- `SpeechTranscriber.installedLocales` 是系统级提示，不保证具体模块可用；`systemInstalled` 只用于区分“未下载”和“待启用”，任何情况下都不能替代 `AssetInventory.status(forModules:) == installed` 的启动门禁。
+- `Intl.DisplayNames` 对非中文特殊项采用平台国际化数据库的标准名称，不保证每个语言名称的措辞在未来 Chromium/ICU 版本完全不变；中文简体、繁体和粤语名称由三语资源固定。
+
+### 关键决策来源
+
+- 用户沙箱外实测：准备前 `installedLocales` 已含 `zh_CN` 但模块状态为 `supported`；点击准备几乎立即完成，随后 `reservedLocales` 增加 `zh_CN` 且模块状态为 `installed`。该证据确定必须区分系统已有资源与具体模块已就绪。
+- Apple `AssetInventory`、`SpeechTranscriber.installedLocales` 与 `supportedLocale(equivalentTo:)` API：用于确定系统资产、具体模块状态、预留和等价 locale 的职责边界：https://developer.apple.com/documentation/speech/assetinventory
+- 根目录 `AGENTS.md`：要求运行期 Provider 元数据驱动 UI、中英日同步、配置变化显式处理、协议向后兼容、真实记录失败验证，并在每批文件变更中追加 `change.md`。
+
+## 2026-08-24：版本 2.25.0 与 macOS arm64 构建
+
+### 用户授权与目标
+
+- 用户明确要求编译 macOS 版本并更新小版本号。本批次将版本从 `2.24.0` 更新为 `2.25.0`，保留当前工作区的 Apple Speech locale/资源状态修改，并重新构建 Swift helper、Python 引擎、Electron 应用、ZIP 与 DMG。
+- 只使用仓库现有 Node 工具链、Swift 工具链和项目内 `engine/.venv`；未修改系统环境，未安装、删除或升级依赖，未提交、推送、发布 Release 或调用付费 API。
+
+### 变更类型
+
+- 配置、文档、构建。
+
+### 修改文件与原因
+
+- `package.json`、`package-lock.json`：根包版本由 `2.24.0` 更新为 `2.25.0`；锁定依赖内容没有变化。
+- `src/renderer/index.html`、`src/renderer/src/components/EngineStatus.vue`：同步窗口标题和“关于”页版本；修改 `EngineStatus.vue` 前已检查并保留用户已有的 Apple Speech locale 等价比较修改。
+- `README.md`、`README_en.md`、`README_ja.md`：同步中英日 release 徽章、发布提示和平台版本，保留已有 Apple Speech 语言资源说明。
+- `docs/user-manual/zh.md`、`docs/user-manual/en.md`、`docs/user-manual/ja.md`、`docs/engine-manual/zh.md`、`docs/engine-manual/en.md`、`docs/engine-manual/ja.md`：同步三语手册版本到 `2.25.0`，保留已有 locale 与资源状态文档修改。
+- `docs/CHANGELOG.md`：将当前 Apple Speech locale/资源状态改进归入 `v2.25.0`，记录版本同步和 macOS arm64 构建。
+- `change.md`：追加本批次真实构建与验证流水。
+- 被 Git 忽略的生成产物：`native/apple-speech-helper/dist/apple-speech-helper`、`engine/dist/main`、`out/`、`dist/mac-arm64/Auto Caption.app`、`dist/Auto Caption-2.25.0-arm64-mac.zip`、`dist/auto-caption-2.25.0.dmg`、对应 blockmap 与 `dist/latest-mac.yml`；更新元数据为最终 ad-hoc 签名后重新封装产物的 SHA-512、大小和时间。
+
+### 修改前后行为
+
+- 修改前：应用与文档版本为 `2.24.0`，没有包含当前 Apple Speech locale/资源状态改进的 `2.25.0` macOS 安装包。
+- 修改后：应用、锁文件、界面和三语文档统一为 `2.25.0`；提供 macOS arm64 `.app`、ZIP 和 DMG，包内 Python 引擎和 Apple Speech helper 均为 arm64。Apple Speech 的本地化语言名称、locale 规范化和资源状态行为由上一条功能记录定义，本批次没有另改其协议语义。
+
+### 配置、IPC、协议、依赖、兼容性与回滚
+
+- 本批次没有配置 schema、迁移、IPC、Python/Electron 进程协议、命令行参数或数据结构变化。
+- 没有新增、删除或升级 npm、pip、Swift 依赖；`package-lock.json` 只更新根包版本。electron-builder 使用已锁定 Electron `43.4.0`，`npmRebuild` 保持关闭。
+- 实际只构建并验证 macOS arm64；Windows/Linux 未实机构建。回滚应恢复上述版本展示和发布文档，并移除本次 `2.25.0` 生成产物，不得覆盖工作区中已有 Apple Speech 修改。
+- 本机没有 Developer ID Application 证书，最终应用使用 ad-hoc 深度签名，`TeamIdentifier` 未设置，未执行 Apple notarization；产物适合本地验证，不等同于正式签名、公证的公开发行包。
+
+### 验证命令与真实结果
+
+- `npm run verify`：通过；Node/Web TypeScript、Vue typecheck、ESLint、Node `112/112`、Python `73/73` 全部成功。输出只有项目既有 npm mirror 配置弃用警告和 Node module type 性能警告。
+- `SDKROOT=/Library/Developer/CommandLineTools/SDKs/MacOSX26.5.sdk npm run build:apple-speech`：通过，生成 release arm64 helper。SwiftPM 报告用户缓存不可写和两个 CommandLineTools 搜索路径不存在的警告，但没有阻止构建或修改系统环境。
+- `PYINSTALLER_CONFIG_DIR=/private/tmp/auto-caption-pyinstaller-config ./.venv/bin/pyinstaller --clean --noconfirm ./main.spec`：通过，使用 `engine/.venv` 生成 arm64 `engine/dist/main`。保留可选 `pycparser.lextab`/`yacctab` 未找到及 numba `@rpath/libomp.dylib` 未解析警告。
+- `npm run build`：通过；Electron main、preload、renderer 分别转换 35、1、3294 个模块。
+- `./dist/main --help`：沙箱内因 `semctl: Operation not permitted` 失败；沙箱外只读重试退出码 0，现有 Provider、Apple Speech 与 Debug Mode 参数完整显示。
+- `native/apple-speech-helper/dist/apple-speech-helper probe`：通过，返回 `protocolVersion: 1`、`isAvailable: true`、`maximumReservedLocales: 5`。
+- `npx electron-builder --mac`：沙箱内因 `getaddrinfo ENOTFOUND npmmirror.com` 失败；获准联网后仅下载锁定的 Electron `43.4.0`，成功生成 arm64 `.app`、ZIP、DMG 与初始 blockmap，没有安装或重建依赖。
+- `file`：应用主程序、`Contents/Resources/engine/main`、`Contents/Resources/apple-speech/apple-speech-helper` 均为 `Mach-O 64-bit executable arm64`；helper 权限为 `-rwxr-xr-x`。
+- `/usr/libexec/PlistBuddy`：`CFBundleShortVersionString`、`CFBundleVersion` 均为 `2.25.0`，`NSSpeechRecognitionUsageDescription` 存在。
+- `codesign --force --deep --sign - ...` 后执行 `codesign --verify --deep --strict --verbose=2 ...`：通过；签名为 `adhoc`，`TeamIdentifier=not set`。
+- `ditto -c -k --sequesterRsrc --keepParent ...`：成功用最终签名应用重建 ZIP。
+- `hdiutil create ...`：沙箱内因“设备未配置”失败；沙箱外以相同参数成功用最终签名应用重建 APFS/UDZO DMG，仅有旧语法弃用警告。
+- blockmap 重建脚本：成功重建最终 ZIP/DMG blockmap，并同步 `dist/latest-mac.yml` 的 SHA-512、大小与发布时间。
+- `unzip -tq dist/Auto\ Caption-2.25.0-arm64-mac.zip`：通过，无压缩数据错误。
+- `hdiutil verify dist/auto-caption-2.25.0.dmg`：通过，校验和有效。
+- 一次组合验证命令因 shell 字符串末尾漏引号而报 `zsh: unmatched '`，未标记为通过；修正引号后包内 helper `probe` 和语音用途说明检查均退出码 0。
+- 最终 SHA-256：ZIP `3507dad369f34bdbecb1b0069539628b284ebeec60566802d5fc464a711d9465`（225124115 bytes）；DMG `b860e42889d15150e4b0c93b79158cae16815474706355defb86acbeba6b2690`（245116776 bytes）。
+- `git diff --check`：本记录追加后执行最终审计，结果见交付前检查。
+
+### 未执行、风险与后续事项
+
+- 未执行 Developer ID 签名、公证、Gatekeeper 下载隔离验证、正式 GUI 截图回归、真实音频识别、远端 Provider、Windows/Linux 构建。
+- PyInstaller 可选导入与 numba `libomp` 警告仍需在实际使用相关模块时观察；完整离线测试及引擎 `--help` 启动已经通过。
+- 当前工作区在本批次开始前已有 Apple Speech 功能修改；本批次已保留并纳入构建，没有提交或擅自回退这些修改。
+
+### 关键决策来源
+
+- 用户明确要求编译 macOS 版本并更新小版本号，同时此前要求不修改系统环境。
+- 根目录 `AGENTS.md`：要求保护已有修改、使用项目环境、三语同步、真实记录失败与成功验证、生成产物不误加入 Git，并为每批文件修改追加 `change.md`。

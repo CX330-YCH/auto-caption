@@ -213,17 +213,23 @@ export default {
       }
     },
     appleSpeech: {
-      "modelTitle": "macOS Language Model",
-      "check": "Check model status",
-      "manage": "Install language model",
+      "modelTitle": "macOS Language Resources",
+      "check": "Check resource status",
       "locale": "Recognition language",
-      "download": "Download language model",
+      "prepare": "Prepare language resources",
+      "activate": "Enable language resources",
       "retry": "Check again",
       "close": "Close",
-      "reservationFull": "Language model capacity reached",
-      "reservationFullDescription": "macOS limits how many language models each app can reserve. Release a model you no longer need first.",
+      "reservationFull": "Language resource capacity reached",
+      "reservationFullDescription": "macOS limits how many language resources each app can reserve. Release a resource you no longer need first.",
       "release": "Release {locale}",
       "unavailableTitle": "macOS system engine unavailable",
+      localeNames: {
+        "zhCN": "Simplified Chinese (Mainland China)",
+        "zhHK": "Traditional Chinese (Hong Kong)",
+        "zhTW": "Traditional Chinese (Taiwan)",
+        "yueCN": "Cantonese (Mainland China)"
+      },
       disabled: {
         "unsupported_os": "macOS 26 or later is required.",
         "helper_missing": "The Apple Speech helper is missing. Rebuild the app or install a complete package.",
@@ -232,18 +238,20 @@ export default {
         "no_supported_locales": "The system did not report any supported on-device recognition languages.",
         "probe_failed": "Apple Speech capability detection failed. Check the software log and retry."
       },
-      states: {
-        "unknown": "Not checked", "checking": "Checking", "supported": "Download available",
-        "downloading": "Downloading", "installed": "Installed", "unsupported": "Unsupported", "failed": "Check failed"
+      readiness: {
+        "unknown": "Not checked", "checking": "Checking", "needs_download": "Not downloaded",
+        "needs_activation": "Needs enabling", "preparing": "Preparing", "ready": "Ready",
+        "unsupported": "Unsupported", "failed": "Check failed"
       },
-      descriptions: {
-        "unknown": "The app checks the current language model when this engine is selected.",
-        "checking": "Querying macOS for the language model status.",
-        "supported": "This language is supported, but its model is not installed. macOS manages the download and the caption engine cannot start until it finishes.",
-        "downloading": "macOS is downloading and installing the language model. Keep the app running.",
-        "installed": "The language model is installed and the caption engine can start.",
+      readinessDescriptions: {
+        "unknown": "The app checks the current language resources when this engine is selected.",
+        "checking": "Querying macOS for the language resource status.",
+        "needs_download": "macOS does not report this language resource as installed. Preparation may require a download, and the caption engine cannot start until it finishes.",
+        "needs_activation": "macOS already has this language resource, but it is not ready for Auto Caption. Enabling it usually completes quickly.",
+        "preparing": "macOS is checking, allocating, or downloading language resources. Keep the app running.",
+        "ready": "The current language resources are ready and the caption engine can start.",
         "unsupported": "This recognition language is not supported by the current system. Choose another source language.",
-        "failed": "The language model status check failed. Retry and check the software log."
+        "failed": "The language resource status check failed. Retry and check the software log."
       }
     },
     custom: {

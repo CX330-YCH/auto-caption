@@ -1,6 +1,6 @@
 # Auto Caption User Manual
 
-Corresponding Version: v2.24.0
+Corresponding Version: v2.25.0
 
 **Note: Due to limited personal resources, the English and Japanese documentation files for this project (except for the README document) will no longer be maintained. The content of this document may not be consistent with the latest version of the project. If you are willing to help with translation, please submit relevant Pull Requests.**
 
@@ -56,7 +56,7 @@ The UI exposes the model, semantic punctuation, maximum sentence silence (200–
 
 This local engine uses Apple `SpeechAnalyzer`, `SpeechTranscriber`, and `AssetInventory` and requires macOS 26 or later. It is hidden on non-macOS platforms. On macOS, an unsupported OS version, missing native helper, unsupported hardware, or an empty runtime locale list leaves the option visible but gray; clicking it only explains the reason and does not change the selection.
 
-Selecting the engine immediately queries the system model for the source locale. The caption engine can start only when the status is `Installed`. When a download is available, use the separate model dialog and wait for macOS progress to finish; model acquisition is not part of the default 30-second engine startup timeout. If the reservation limit is full, the dialog lists reserved locales so the user can explicitly release one before downloading. macOS stores, shares, and updates these assets; model state is not persisted in Auto Caption configuration. Source locales come from the runtime query and automatic language detection is not offered.
+Selecting the engine or changing its source locale immediately shows that language's resource state. The menu uses localized names such as “Simplified Chinese (Mainland China)” and “Traditional Chinese (Taiwan)”. Internally, locales use canonical BCP-47 hyphens, so system `zh_CN` and configured `zh-CN` are treated as the same language. The caption engine can start only when the resource is `Ready`. “Not downloaded” means macOS did not report the language as installed; “Needs enabling” means the system already has it but the selected module is not ready. Both states use an explicit Prepare/Enable action in the separate dialog. macOS may reuse existing assets or download missing content, and preparation is outside the default 30-second startup timeout. If the reservation limit is full, the dialog lists reserved languages for explicit release. macOS stores, shares, and updates the assets; state is not persisted in Auto Caption configuration. Source locales come from the runtime query and automatic language detection is not offered.
 
 Recognition runs on device. External translation still runs exactly once for each final caption. System-output capture continues to require the BlackHole setup below; this feature does not add ScreenCaptureKit capture.
 

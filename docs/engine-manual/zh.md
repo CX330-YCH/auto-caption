@@ -1,6 +1,6 @@
 # 字幕引擎说明文档
 
-对应版本：v2.24.0
+对应版本：v2.25.0
 
 ![](../../assets/media/structure_zh.png)
 
@@ -232,7 +232,7 @@ V6 Debug Mode 通过 `--debug-mode 0|1` 启动，并可由 TCP `debug_mode` comm
 
 ### Apple Speech Provider
 
-`apple_speech` 只在 macOS 26+ 使用。Electron 先通过 Swift 辅助程序的 `probe`、`model-status`、`model-install`、`model-release` 子命令管理系统能力和 `AssetInventory` 模型；这些操作与 Python 字幕引擎启动超时分离。真正识别时，Python Provider 用 `-ash/--apple_speech_helper` 指定辅助程序路径，把现有音频管线产生的单声道 PCM16 写入其 stdin，并读取版本为 1 的 NDJSON。Swift 侧将 `SpeechTranscriber` 的 volatile/final 结果映射为稳定 ID；撤回映射为公开增量 `caption_remove` 事件。final 仍只由统一 Session 触发一次外部翻译。系统音频来源继续复用现有 BlackHole 路径。
+`apple_speech` 只在 macOS 26+ 使用。Electron 先通过 Swift 辅助程序的 `probe`、`model-status`、`model-install`、`model-release` 子命令管理系统能力和 `AssetInventory` 资源；这些操作与 Python 字幕引擎启动超时分离。状态同时区分 `SpeechTranscriber.installedLocales` 的系统级安装和具体 time-indexed 模块的 `AssetInventory.Status`，只有后者为 `installed` 才放行；Electron 把 `zh_CN` 等系统标识规范为 BCP-47 `zh-CN`。真正识别时，Python Provider 用 `-ash/--apple_speech_helper` 指定辅助程序路径，把现有音频管线产生的单声道 PCM16 写入其 stdin，并读取版本为 1 的 NDJSON。Swift 侧将 `SpeechTranscriber` 的 volatile/final 结果映射为稳定 ID；撤回映射为公开增量 `caption_remove` 事件。final 仍只由统一 Session 触发一次外部翻译。系统音频来源继续复用现有 BlackHole 路径。
 
 ## 其他
 

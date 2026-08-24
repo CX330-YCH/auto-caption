@@ -2,7 +2,7 @@
 
 ## 注意：このドキュメントはメンテナンスが行われていないため、記載されている情報は古くなっています。最新の情報については、[中国語版](./zh.md)または[英語版](./en.md)のドキュメントをご参照ください。
 
-対応バージョン：v2.24.0
+対応バージョン：v2.25.0
 
 この文書は大規模モデルを使用して翻訳されていますので、内容に正確でない部分があるかもしれません。
 
@@ -206,7 +206,7 @@ V6 Debug Mode は `--debug-mode 0|1` で起動し、TCP `debug_mode` command で
 
 ### Apple Speech Provider
 
-`apple_speech` は macOS 26 以降専用です。Electron は Python 起動前に Swift ヘルパーの `probe`、`model-status`、`model-install`、`model-release` を使用して実行時機能と `AssetInventory` モデルを管理し、これらは字幕エンジンの起動タイムアウトとは分離されています。認識時は `-ash/--apple_speech_helper` でヘルパーを指定し、Python Provider が既存の音声パイプラインからモノラル PCM16 を stdin に書き、バージョン1の NDJSON を読みます。Swift は volatile/final 結果を安定 ID に変換し、volatile の撤回を追加公開イベント `caption_remove` に変換します。外部翻訳は final ごとに一度だけ共有サービスから実行されます。システム出力は既存の BlackHole 経路を継続します。
+`apple_speech` は macOS 26 以降専用です。Electron は Python 起動前に Swift ヘルパーの `probe`、`model-status`、`model-install`、`model-release` を使用して実行時機能と `AssetInventory` リソースを管理し、これらは字幕エンジンの起動タイムアウトとは分離されています。状態はシステムレベルの `SpeechTranscriber.installedLocales` と time-indexed モジュール固有の `AssetInventory.Status` を区別し、後者が `installed` の場合だけ起動できます。Electron は `zh_CN` などを BCP-47 の `zh-CN` に正規化します。認識時は `-ash/--apple_speech_helper` でヘルパーを指定し、Python Provider が既存の音声パイプラインからモノラル PCM16 を stdin に書き、バージョン1の NDJSON を読みます。Swift は volatile/final 結果を安定 ID に変換し、volatile の撤回を追加公開イベント `caption_remove` に変換します。外部翻訳は final ごとに一度だけ共有サービスから実行されます。システム出力は既存の BlackHole 経路を継続します。
 
 ## その他
 

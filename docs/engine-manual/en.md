@@ -1,6 +1,6 @@
 # Caption Engine Documentation
 
-Corresponding version: v2.24.0
+Corresponding version: v2.25.0
 
 ![](../../assets/media/structure_en.png)
 
@@ -232,7 +232,7 @@ V6 Debug Mode starts through `--debug-mode 0|1` and can be changed live by the T
 
 ### Apple Speech Provider
 
-`apple_speech` is macOS 26+ only. Before Python starts, Electron uses the Swift helper's `probe`, `model-status`, `model-install`, and `model-release` subcommands to manage runtime capability and `AssetInventory`; these operations are separate from the caption-engine startup timeout. During recognition, `-ash/--apple_speech_helper` supplies the helper path, the Python Provider writes mono PCM16 from the existing audio pipeline to helper stdin, and reads version-1 NDJSON. Swift maps volatile/final `SpeechTranscriber` results onto stable IDs and maps a volatile removal to the additive public `caption_remove` event. Only final captions enter the shared translation service once. System-output audio continues to use the existing BlackHole path.
+`apple_speech` is macOS 26+ only. Before Python starts, Electron uses the Swift helper's `probe`, `model-status`, `model-install`, and `model-release` subcommands to manage runtime capability and `AssetInventory`; these operations are separate from the caption-engine startup timeout. Status distinguishes system-level `SpeechTranscriber.installedLocales` from the concrete time-indexed module's `AssetInventory.Status`; only the latter being `installed` allows startup. Electron canonicalizes system identifiers such as `zh_CN` to BCP-47 `zh-CN`. During recognition, `-ash/--apple_speech_helper` supplies the helper path, the Python Provider writes mono PCM16 from the existing audio pipeline to helper stdin, and reads version-1 NDJSON. Swift maps volatile/final `SpeechTranscriber` results onto stable IDs and maps a volatile removal to the additive public `caption_remove` event. Only final captions enter the shared translation service once. System-output audio continues to use the existing BlackHole path.
 
 This Provider uses the official DashScope SDK and accepts 16 kHz mono PCM16. It only maps partial/final results, server timestamps, usage, and lifecycle callbacks into unified events; the Session and protocol layer retain translation, stdout, and shutdown responsibilities. Hotwords are not supported in this stage.
 

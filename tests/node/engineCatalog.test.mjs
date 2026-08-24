@@ -122,6 +122,11 @@ test('validates external translation and normalizes provider defaults from metad
     'https://open.bigmodel.cn/api/paas/v4/audio/transcriptions'
   )
   assert.equal(config.providers.glm.model, 'glm-asr-2512')
+
+  config.activeEngineId = 'apple_speech'
+  config.common.sourceLanguage = 'zh_CN'
+  normalizeEngineConfig(config)
+  assert.equal(config.common.sourceLanguage, 'zh-CN')
 })
 
 test('chooses provider-supported language defaults from the UI language', () => {

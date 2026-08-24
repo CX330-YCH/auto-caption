@@ -7,6 +7,10 @@ import type {
   AppleSpeechModelProgress,
   AppleSpeechModelStatus
 } from '../../shared/appleSpeech.ts'
+import {
+  appleSpeechLocalesEqual,
+  normalizeAppleSpeechLocale
+} from '../../shared/appleSpeech.ts'
 import { resolveAppleSpeechHelperPath } from '../engine/AppleSpeechHelperPath.ts'
 import { staticAppleSpeechAvailability } from '../engine/AppleSpeechAvailability.ts'
 import { Log } from '../utils/Log.ts'
@@ -42,7 +46,7 @@ export class AppleSpeechService {
     try {
       const envelope = await this.runSingle(helperPath, ['probe'], PROBE_TIMEOUT_MS)
       if (envelope.type !== 'capability') return this.cacheDisabled('helper_incompatible', osVersion)
-      const supportedLocales = stringArray(envelope.payload.supportedLocales)
+      const supportedLocales = localeArray(envelope.payload.supportedLocales)
       const result: AppleSpeechAvailability = {
         state: envelope.payload.isAvailable === true && supportedLocales.length > 0 ? 'available' : 'disabled',
         reason: envelope.payload.isAvailable !== true
@@ -50,8 +54,8 @@ export class AppleSpeechService {
           : supportedLocales.length === 0 ? 'no_supported_locales' : undefined,
         osVersion,
         supportedLocales,
-        installedLocales: stringArray(envelope.payload.installedLocales),
-        reservedLocales: stringArray(envelope.payload.reservedLocales),
+        installedLocales: localeArray(envelope.payload.installedLocales),
+        reservedLocales: localeArray(envelope.payload.reservedLocales),
         maximumReservedLocales: finiteNumber(envelope.payload.maximumReservedLocales) ?? 0
       }
       this.availabilityCache = result
@@ -70,6 +74,9 @@ export class AppleSpeechService {
       return {
         locale: normalizedLocale,
         state: 'failed',
+        systemInstalled: availability.installedLocales.some((installedLocale) =>
+          appleSpeechLocalesEqual(installedLocale, normalizedLocale)
+        ),
         reservedLocales: availability.reservedLocales,
         maximumReservedLocales: availability.maximumReservedLocales,
         errorCode: availability.reason ?? 'unavailable'
@@ -91,6 +98,9 @@ export class AppleSpeechService {
       return {
         locale: normalizedLocale,
         state: 'failed',
+        systemInstalled: availability.installedLocales.some((installedLocale) =>
+          appleSpeechLocalesEqual(installedLocale, normalizedLocale)
+        ),
         reservedLocales: availability.reservedLocales,
         maximumReservedLocales: availability.maximumReservedLocales,
         errorCode: 'status_failed'
@@ -119,6 +129,9 @@ export class AppleSpeechService {
         operationId,
         locale: normalizedLocale,
         state: 'failed',
+        systemInstalled: availability.installedLocales.some((installedLocale) =>
+          appleSpeechLocalesEqual(installedLocale, normalizedLocale)
+        ),
         reservedLocales: [],
         maximumReservedLocales: 0,
         errorCode: 'install_failed'
@@ -237,11 +250,19 @@ function validateLocale(value: unknown): string {
   if (typeof value !== 'string' || value.length < 2 || value.length > 64 || !/^[A-Za-z0-9_-]+$/.test(value)) {
     throw new TypeError('Invalid Apple Speech locale')
   }
-  return value
+  const normalized = normalizeAppleSpeechLocale(value)
+  if (normalized.length < 2 || normalized.length > 64 || !/^[A-Za-z0-9-]+$/.test(normalized)) {
+    throw new TypeError('Invalid normalized Apple Speech locale')
+  }
+  return normalized
 }
 
 function stringArray(value: unknown): string[] {
   return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : []
+}
+
+function localeArray(value: unknown): string[] {
+  return [...new Set(stringArray(value).map(normalizeAppleSpeechLocale))].sort()
 }
 
 function finiteNumber(value: unknown): number | undefined {
@@ -251,9 +272,12 @@ function finiteNumber(value: unknown): number | undefined {
 function parseModelStatus(payload: Record<string, unknown>, fallbackLocale: string): AppleSpeechModelStatus {
   const state = payload.state
   return {
-    locale: typeof payload.locale === 'string' ? payload.locale : fallbackLocale,
+    locale: normalizeAppleSpeechLocale(
+      typeof payload.locale === 'string' ? payload.locale : fallbackLocale
+    ),
     state: state === 'supported' || state === 'downloading' || state === 'installed' || state === 'unsupported' || state === 'failed' ? state : 'failed',
-    reservedLocales: stringArray(payload.reservedLocales),
+    systemInstalled: payload.systemInstalled === true,
+    reservedLocales: localeArray(payload.reservedLocales),
     maximumReservedLocales: finiteNumber(payload.maximumReservedLocales) ?? 0
   }
 }

@@ -213,17 +213,23 @@ export default {
       }
     },
     appleSpeech: {
-      "modelTitle": "macOS 语言模型",
-      "check": "检查模型状态",
-      "manage": "安装语言模型",
+      "modelTitle": "macOS 语言资源",
+      "check": "检查资源状态",
       "locale": "识别语言",
-      "download": "下载语言模型",
+      "prepare": "准备语言资源",
+      "activate": "启用语言资源",
       "retry": "重新检查",
       "close": "关闭",
-      "reservationFull": "语言模型名额已满",
-      "reservationFullDescription": "macOS 限制每个应用可保留的语言模型数量。请先释放一个不再使用的语言模型。",
+      "reservationFull": "语言资源名额已满",
+      "reservationFullDescription": "macOS 限制每个应用可保留的语言资源数量。请先释放一个不再使用的语言资源。",
       "release": "释放 {locale}",
       "unavailableTitle": "macOS 系统引擎不可用",
+      localeNames: {
+        "zhCN": "简体中文（中国大陆）",
+        "zhHK": "繁体中文（香港）",
+        "zhTW": "繁体中文（台湾）",
+        "yueCN": "粤语（中国大陆）"
+      },
       disabled: {
         "unsupported_os": "需要 macOS 26 或更高版本。",
         "helper_missing": "应用中缺少 Apple Speech 辅助程序，请重新构建或安装完整版本。",
@@ -232,18 +238,20 @@ export default {
         "no_supported_locales": "系统没有返回可用的本地识别语言。",
         "probe_failed": "无法完成 Apple Speech 能力检测，请查看软件日志后重试。"
       },
-      states: {
-        "unknown": "尚未检查", "checking": "检查中", "supported": "可下载",
-        "downloading": "下载中", "installed": "已安装", "unsupported": "不支持", "failed": "检查失败"
+      readiness: {
+        "unknown": "尚未检查", "checking": "检查中", "needs_download": "未下载",
+        "needs_activation": "待启用", "preparing": "准备中", "ready": "已就绪",
+        "unsupported": "不支持", "failed": "检查失败"
       },
-      descriptions: {
-        "unknown": "选择该引擎后会检查当前语言模型。",
-        "checking": "正在向 macOS 查询语言模型状态。",
-        "supported": "该语言受支持，但模型尚未安装。下载由 macOS 管理，完成前不能启动字幕引擎。",
-        "downloading": "macOS 正在下载并安装语言模型，请保持应用运行。",
-        "installed": "语言模型已经安装，可以启动字幕引擎。",
+      readinessDescriptions: {
+        "unknown": "选择该引擎后会检查当前语言资源。",
+        "checking": "正在向 macOS 查询语言资源状态。",
+        "needs_download": "macOS 未报告已安装该语言资源。准备过程可能需要下载，完成前不能启动字幕引擎。",
+        "needs_activation": "macOS 已存在该语言资源，但尚未为 Auto Caption 准备完成。启用通常会很快完成。",
+        "preparing": "macOS 正在检查、分配或下载语言资源，请保持应用运行。",
+        "ready": "当前语言资源已就绪，可以启动字幕引擎。",
         "unsupported": "当前系统不支持这个识别语言，请更换源语言。",
-        "failed": "语言模型状态查询失败，请重试并查看软件日志。"
+        "failed": "语言资源状态查询失败，请重试并查看软件日志。"
       }
     },
     custom: {

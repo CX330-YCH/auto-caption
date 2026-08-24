@@ -4,6 +4,7 @@ import Speech
 struct ModelStatusPayload: Encodable {
     let locale: String
     let state: String
+    let systemInstalled: Bool
     let reservedLocales: [String]
     let maximumReservedLocales: Int
 }
@@ -12,6 +13,9 @@ struct ModelProgressPayload: Encodable {
     let locale: String
     let phase: String
     let fractionCompleted: Double?
+    let systemInstalled: Bool
+    let reservedLocales: [String]
+    let maximumReservedLocales: Int
 }
 
 enum ModelAssetService {
@@ -19,11 +23,18 @@ enum ModelAssetService {
         guard let locale = await SpeechTranscriber.supportedLocale(
             equivalentTo: Locale(identifier: localeIdentifier)
         ) else {
-            return await payload(localeIdentifier, state: "unsupported")
+            return await payload(localeIdentifier, state: "unsupported", systemInstalled: false)
         }
-        let transcriber = SpeechTranscriber(locale: locale, preset: .progressiveTranscription)
+        let transcriber = SpeechTranscriber(
+            locale: locale,
+            preset: .timeIndexedProgressiveTranscription
+        )
         let status = await AssetInventory.status(forModules: [transcriber])
-        return await payload(locale.identifier, state: stateName(status))
+        return await payload(
+            locale.identifier,
+            state: stateName(status),
+            systemInstalled: await isSystemInstalled(locale)
+        )
     }
 
     static func install(localeIdentifier: String, writer: JSONLineWriter) async throws {
@@ -32,15 +43,14 @@ enum ModelAssetService {
         ) else {
             throw HelperCommandError.unsupportedLocale
         }
-        let transcriber = SpeechTranscriber(locale: locale, preset: .progressiveTranscription)
+        let transcriber = SpeechTranscriber(
+            locale: locale,
+            preset: .timeIndexedProgressiveTranscription
+        )
         if await AssetInventory.status(forModules: [transcriber]) == .installed {
             writer.write(
                 type: "model-progress",
-                payload: ModelProgressPayload(
-                    locale: locale.identifier,
-                    phase: "installed",
-                    fractionCompleted: 1
-                )
+                payload: await progressPayload(locale, phase: "installed", fractionCompleted: 1)
             )
             return
         }
@@ -49,19 +59,15 @@ enum ModelAssetService {
         ) else {
             writer.write(
                 type: "model-progress",
-                payload: ModelProgressPayload(
-                    locale: locale.identifier,
-                    phase: "installed",
-                    fractionCompleted: 1
-                )
+                payload: await progressPayload(locale, phase: "installed", fractionCompleted: 1)
             )
             return
         }
 
         writer.write(
             type: "model-progress",
-            payload: ModelProgressPayload(
-                locale: locale.identifier,
+            payload: await progressPayload(
+                locale,
                 phase: "downloading",
                 fractionCompleted: request.progress.fractionCompleted
             )
@@ -74,8 +80,8 @@ enum ModelAssetService {
                     previous = percent
                     writer.write(
                         type: "model-progress",
-                        payload: ModelProgressPayload(
-                            locale: locale.identifier,
+                        payload: await progressPayload(
+                            locale,
                             phase: "downloading",
                             fractionCompleted: request.progress.fractionCompleted
                         )
@@ -89,8 +95,8 @@ enum ModelAssetService {
         let verified = await AssetInventory.status(forModules: [transcriber])
         writer.write(
             type: "model-progress",
-            payload: ModelProgressPayload(
-                locale: locale.identifier,
+            payload: await progressPayload(
+                locale,
                 phase: verified == .installed ? "installed" : "failed",
                 fractionCompleted: verified == .installed ? 1 : nil
             )
@@ -103,13 +109,39 @@ enum ModelAssetService {
         return await status(localeIdentifier: localeIdentifier)
     }
 
-    private static func payload(_ locale: String, state: String) async -> ModelStatusPayload {
+    private static func payload(
+        _ locale: String,
+        state: String,
+        systemInstalled: Bool
+    ) async -> ModelStatusPayload {
         ModelStatusPayload(
             locale: locale,
             state: state,
+            systemInstalled: systemInstalled,
             reservedLocales: await AssetInventory.reservedLocales.map(\.identifier).sorted(),
             maximumReservedLocales: AssetInventory.maximumReservedLocales
         )
+    }
+
+    private static func progressPayload(
+        _ locale: Locale,
+        phase: String,
+        fractionCompleted: Double?
+    ) async -> ModelProgressPayload {
+        ModelProgressPayload(
+            locale: locale.identifier,
+            phase: phase,
+            fractionCompleted: fractionCompleted,
+            systemInstalled: await isSystemInstalled(locale),
+            reservedLocales: await AssetInventory.reservedLocales.map(\.identifier).sorted(),
+            maximumReservedLocales: AssetInventory.maximumReservedLocales
+        )
+    }
+
+    private static func isSystemInstalled(_ locale: Locale) async -> Bool {
+        await SpeechTranscriber.installedLocales.contains {
+            $0.identifier == locale.identifier
+        }
     }
 
     private static func stateName(_ status: AssetInventory.Status) -> String {

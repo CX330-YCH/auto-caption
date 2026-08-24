@@ -5,6 +5,7 @@ import {
   type KnownProviderName
 } from '../../../shared/config/schema.ts'
 import type { UILanguage } from '../../../shared/types.ts'
+import { normalizeAppleSpeechLocale } from '../../../shared/appleSpeech.ts'
 import {
   conditionsMatch,
   getEngineConfigValue,
@@ -216,6 +217,9 @@ export function getEngineFields(provider: KnownProviderName): readonly EngineFie
 export function normalizeEngineConfig(config: EngineConfig): void {
   const provider = getActiveBuiltinProvider(config)
   if (!provider) return
+  if (provider === 'apple_speech') {
+    config.common.sourceLanguage = normalizeAppleSpeechLocale(config.common.sourceLanguage)
+  }
   for (const field of getEngineFields(provider)) {
     if (
       field.defaultWhenEmpty &&

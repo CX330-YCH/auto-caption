@@ -167,6 +167,11 @@ import type { EngineFieldDescriptor } from '@renderer/engines/types.ts'
 import { getActiveBuiltinProvider, getActiveCustomEngine } from '../../../shared/config/schema.ts'
 import { useGeneralSettingStore } from '@renderer/stores/generalSetting'
 import { useEngineControlStore } from '@renderer/stores/engineControl'
+import { appleSpeechLocaleDisplayName } from '@renderer/engines/appleSpeechLocale.ts'
+import {
+  appleSpeechLocalesEqual,
+  normalizeAppleSpeechLocale
+} from '../../../shared/appleSpeech.ts'
 
 const { t } = useI18n()
 const showMore = ref(false)
@@ -210,7 +215,7 @@ const visibleFields = computed(() => {
         ...field,
         options: appleSpeechAvailability.value.supportedLocales.map((locale) => ({
           value: locale,
-          label: locale,
+          label: appleSpeechLocaleDisplayName(locale, uiLanguage.value, t),
           labelKey: 'engine.appleSpeech.locale'
         }))
       }
@@ -340,12 +345,13 @@ watch(
     if (provider) applyEngineLanguageDefaults(draft.value, provider, uiLanguage.value)
     if (provider === 'apple_speech') {
       void engineControl.refreshAppleSpeechAvailability().then((availability) => {
-        if (
-          availability.state === 'available' &&
-          !availability.supportedLocales.includes(draft.value.common.sourceLanguage) &&
-          availability.supportedLocales[0]
-        ) {
-          draft.value.common.sourceLanguage = availability.supportedLocales[0]
+        if (availability.state === 'available') {
+          const matchingLocale = availability.supportedLocales.find((locale) =>
+            appleSpeechLocalesEqual(locale, draft.value.common.sourceLanguage)
+          )
+          draft.value.common.sourceLanguage = matchingLocale ??
+            availability.supportedLocales[0] ??
+            normalizeAppleSpeechLocale(draft.value.common.sourceLanguage)
         }
         return engineControl.checkAppleSpeechModel(draft.value.common.sourceLanguage)
       })
