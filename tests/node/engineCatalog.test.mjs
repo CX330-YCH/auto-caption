@@ -25,7 +25,7 @@ function hasMessageKey(messages, key) {
   return key.split('.').reduce((current, segment) => current?.[segment], messages) !== undefined
 }
 
-test('registers each V5 provider once with capability and field metadata', () => {
+test('registers each V6 provider once with capability and field metadata', () => {
   const providerIds = engineDefinitions.map((definition) => definition.id)
 
   assert.deepEqual(providerIds, [

@@ -193,6 +193,7 @@ class AudioCoreTests(unittest.TestCase):
         running_checks = iter([True, True, False])
         stop_requests = []
         errors = []
+        metrics = []
         worker = AudioCaptureWorker(
             source=source,
             pipeline=AudioPipeline(
@@ -205,6 +206,9 @@ class AudioCoreTests(unittest.TestCase):
             request_stop=lambda: stop_requests.append(True),
             info_handler=lambda message: None,
             error_handler=errors.append,
+            metric_handler=lambda category, name, fields: metrics.append(
+                (category, name, fields)
+            ),
         )
 
         worker.run()
@@ -215,6 +219,12 @@ class AudioCoreTests(unittest.TestCase):
         self.assertEqual(frame.data, b'\x02\x01')
         self.assertEqual(stop_requests, [])
         self.assertEqual(errors, [])
+        self.assertEqual(metrics[0][0:2], (
+            'audio.capture',
+            'frame.enqueued',
+        ))
+        self.assertEqual(metrics[0][2]['queueDepth'], 1)
+        self.assertEqual(metrics[0][2]['queueCapacity'], 1)
 
     def test_capture_worker_reports_full_exception_diagnostic(self):
         source = FakeAudioSource()
@@ -338,6 +348,7 @@ class RecognitionSessionTests(unittest.TestCase):
         translation = FakeTranslationService()
         capture_starts = []
         stop_requests = []
+        metrics = []
         session = RecognitionSession(
             provider=provider,
             audio_queue=audio_queue,
@@ -347,6 +358,9 @@ class RecognitionSessionTests(unittest.TestCase):
             start_audio_capture=lambda: capture_starts.append(True),
             is_running=lambda: not audio_queue.empty(),
             request_stop=lambda: stop_requests.append(True),
+            metric_handler=lambda category, name, fields: metrics.append(
+                (category, name, fields)
+            ),
             queue_timeout=0.01,
         )
 
@@ -360,6 +374,12 @@ class RecognitionSessionTests(unittest.TestCase):
         self.assertEqual(len(translation.captions), 1)
         self.assertEqual(translation.captions[0].text, 'hello')
         self.assertEqual(stop_requests, [])
+        self.assertTrue(any(
+            category == 'recognition.session' and
+            name == 'frame.accepted' and
+            'frameAgeMs' in fields
+            for category, name, fields in metrics
+        ))
         self.assertEqual(
             sum(isinstance(event, CaptionPartial) for event in event_sink.events),
             1,

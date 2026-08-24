@@ -31,7 +31,7 @@
 - 发送：无数据
 - 接收：`FullConfig`
 
-`FullConfig.config` 是完整 `ConfigDocumentV5`，`FullConfig.engineEnabled` 是不持久化的运行状态。配置结构见 [配置文件 V5](config-v5.md)。
+`FullConfig.config` 是完整 `ConfigDocumentV6`，`FullConfig.engineEnabled` 是不持久化的运行状态。配置结构见 [配置文件 V6](config-v6.md)。
 
 ### `control.nativeTheme.get`
 
@@ -73,6 +73,20 @@
 - 接收：`"saved" | "canceled" | "unavailable" | "failed"`
 
 主进程从启动开始持续写入会话文件。`DEBUG` 仅存在于该文件，不进入原有日志记录页；原有 `INFO`、`WARN`、`ERROR` 显示行为不变。日志页的“清空”只清空当前可见表格，不清除会话文件。Provider 诊断、SDK 回调字段、异常 cause/自定义属性/traceback、字幕引擎 stderr 和热词 Worker stderr 都会保留；stderr 使用跨 Buffer 的增量 UTF-8 解码。API Key、Token、密码、Authorization、Cookie、环境变量和命令行凭据必须递归脱敏，二进制音频不得写入日志正文。
+
+### `control.debugLog.status`
+
+**介绍：** 获取 Debug Mode 与当前会话写入健康状态。
+
+**发起方：** 前端控制窗口
+
+**接收方：** 后端控制窗口实例
+
+**接收：** `{ enabled, available, writeHealthy, sessionId, bytesWritten, droppedRecords, lastError? }`。内部文件路径不在 UI 中展示。
+
+### `diagnostics.renderer.record`
+
+Renderer 向主进程发送经过长度限制的 Vue、全局 JavaScript 和 Promise rejection 诊断。主进程验证来源窗口、事件名、消息和 stack 后递归脱敏并写入会话文件；该 IPC 不接受任意文件或命令参数。
 
 ### `control.engine.info`
 

@@ -24,6 +24,10 @@ class CliTests(unittest.TestCase):
         self.assertTrue(options.fun_asr_heartbeat)
         self.assertEqual(options.fun_asr_vocabulary_id, '')
         self.assertEqual(options.fun_asr_context_terms, ())
+        self.assertFalse(options.debug_mode)
+
+    def test_parses_debug_mode(self):
+        self.assertTrue(parse_args(['--debug-mode', '1']).debug_mode)
 
     def test_parses_existing_provider_arguments_and_hides_credentials_in_repr(self):
         options = parse_args([

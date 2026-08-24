@@ -14,9 +14,9 @@ _SENSITIVE_KEY = re.compile(
     r'(api.?key|token|password|secret|authorization|credential|cookie)',
     re.IGNORECASE,
 )
-_MAX_DEPTH = 8
-_MAX_ITEMS = 256
-_MAX_TEXT_LENGTH = 65_536
+_MAX_DEPTH = 16
+_MAX_ITEMS = 4096
+_MAX_TEXT_LENGTH = 32 * 1024 * 1024
 
 
 def redact_diagnostic_text(
@@ -40,6 +40,20 @@ def redact_diagnostic_text(
     text = re.sub(
         r'\bBearer\s+[^\s"\']+',
         'Bearer <redacted>',
+        text,
+        flags=re.IGNORECASE,
+    )
+    text = re.sub(
+        r'(\b(?:authorization|proxy-authorization)\b["\']?\s*[:=]\s*'
+        r'["\']?(?:Basic|Digest)\s+)[^\s"\',;}]+',
+        r'\1<redacted>',
+        text,
+        flags=re.IGNORECASE,
+    )
+    text = re.sub(
+        r'(\b(?:cookie|set-cookie)\b["\']?\s*[:=]\s*["\']?)'
+        r'[^\r\n"\'}]+',
+        r'\1<redacted>',
         text,
         flags=re.IGNORECASE,
     )

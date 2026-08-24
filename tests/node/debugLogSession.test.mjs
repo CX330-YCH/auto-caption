@@ -38,7 +38,18 @@ test('debug session preserves records written before and after initialization', 
   assert.equal(session.exportTo(exported), true)
 
   const records = readFileSync(exported, 'utf8').trim().split('\n').map(JSON.parse)
-  assert.deepEqual(records, [first, second])
+  assert.deepEqual(
+    records.map((record) => ({
+      sequence: record.sequence,
+      timestamp: record.timestamp,
+      level: record.level,
+      source: record.source,
+      message: record.message
+    })),
+    [first, second]
+  )
+  assert.ok(records.every((record) => record.recordVersion === 2))
+  assert.equal(new Set(records.map((record) => record.sessionId)).size, 1)
 })
 
 test('recursive debug redaction preserves diagnostics but removes credentials', () => {
@@ -88,6 +99,14 @@ test('recursive debug redaction preserves diagnostics but removes credentials', 
     redactSensitiveText('Authorization: Bearer top-secret'),
     'Authorization: Bearer <redacted>'
   )
+  assert.equal(
+    redactSensitiveText('Authorization: Basic dXNlcjpwYXNz'),
+    'Authorization: Basic <redacted>'
+  )
+  assert.equal(
+    redactSensitiveText('Cookie: session=private-value'),
+    'Cookie: <redacted>'
+  )
 })
 
 test('config validation diagnostics preserve the error reason and stack', () => {
@@ -107,6 +126,15 @@ test('config validation diagnostics preserve the error reason and stack', () => 
   )
   assert.match(diagnostic.error.stack, /InvalidConfigError/)
   assert.match(diagnostic.error.stack, /Invalid engine\.providers\.gummy\.apiKey/)
+})
+
+test('diagnostic serialization summarizes binary data and bounds recursion', () => {
+  const binary = redactSensitiveValue(Buffer.alloc(4096, 7))
+  assert.deepEqual(binary, { type: 'Buffer', byteLength: 4096 })
+
+  let nested = { value: 'leaf' }
+  for (let index = 0; index < 20; index++) nested = { nested }
+  assert.match(JSON.stringify(redactSensitiveValue(nested)), /max-depth-exceeded/)
 })
 
 test('debug is file-only while existing user-facing levels remain visible', () => {

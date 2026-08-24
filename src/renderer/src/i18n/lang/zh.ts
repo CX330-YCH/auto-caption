@@ -52,7 +52,13 @@ export default {
     "light": "浅色",
     "dark": "深色",
     "system": "系统",
-    "color": "颜色"
+    "color": "颜色",
+    "debugMode": "Debug Mode",
+    "debugModeInfo": "开启后记录完整的脱敏诊断、协议事件和高频运行指标。日志可能包含识别文本、翻译文本及本地路径，但绝不记录密钥或音频正文。",
+    "debugModeConfirmTitle": "开启 Debug Mode？",
+    "debugModeConfirmContent": "Debug Mode 会显著增加日志量，并记录识别文本、翻译文本和本地路径，用于完整问题分析。",
+    "debugModeEnable": "开启",
+    "debugModeCancel": "取消"
   },
   captionToolbar: {
     "close": "关闭字幕窗口",
@@ -376,6 +382,10 @@ export default {
     "title2": "日志记录",
     "saveDebug": "保存完整 Debug 日志",
     "debugSaved": "完整 Debug 日志已保存",
-    "debugSaveFailed": "Debug 日志保存失败"
+    "debugSaveFailed": "Debug 日志保存失败",
+    "debugEnabled": "Debug Mode 已开启",
+    "debugDisabled": "Debug Mode 已关闭",
+    "debugHealthy": "日志写入正常",
+    "debugUnhealthy": "日志写入异常"
   }
 }

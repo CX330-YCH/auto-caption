@@ -1,4 +1,5 @@
 from abc import ABC, abstractmethod
+from collections.abc import Callable
 from queue import Empty, Full, Queue
 
 from .audio import AudioFrame
@@ -14,6 +15,11 @@ class RecognitionProvider(ABC):
         self._events: Queue[RecognitionEvent] = Queue(
             maxsize=max_pending_events
         )
+        self._metric_handler: Callable[
+            [str, str, dict[str, object]], None
+        ] = lambda category, name, fields: None
+        self._debug_enabled: Callable[[], bool] = lambda: False
+        self._event_high_water = 0
 
     @property
     @abstractmethod
@@ -36,8 +42,40 @@ class RecognitionProvider(ABC):
             except Empty:
                 return events
 
+    def set_metric_handler(
+        self,
+        handler: Callable[[str, str, dict[str, object]], None],
+    ) -> None:
+        self._metric_handler = handler
+
+    def set_debug_enabled(self, handler: Callable[[], bool]) -> None:
+        self._debug_enabled = handler
+
+    def diagnostic_snapshot(self) -> dict[str, object]:
+        return {
+            'provider': self.name,
+            'eventQueueDepth': self._events.qsize(),
+            'eventQueueCapacity': self._events.maxsize,
+            'eventQueueHighWater': self._event_high_water,
+        }
+
     def _emit(self, event: RecognitionEvent) -> None:
         try:
             self._events.put(event, timeout=0.5)
+            self._event_high_water = max(
+                self._event_high_water,
+                self._events.qsize(),
+            )
+            self._metric_handler(
+                'provider.events',
+                'event.enqueued',
+                {
+                    'provider': self.name,
+                    'eventType': type(event).__name__,
+                    'queueDepth': self._events.qsize(),
+                    'queueCapacity': self._events.maxsize,
+                    'queueHighWater': self._event_high_water,
+                },
+            )
         except Full as error:
             raise RuntimeError('Provider event queue is full') from error

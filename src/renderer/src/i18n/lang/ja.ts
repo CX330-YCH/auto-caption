@@ -52,7 +52,13 @@ export default {
     "light": "明るい",
     "dark": "暗い",
     "system": "システム",
-    "color": "カラー"
+    "color": "カラー",
+    "debugMode": "Debug Mode",
+    "debugModeInfo": "完全なマスキング済み診断、プロトコルイベント、高頻度の実行メトリクスを記録します。認識文、翻訳文、ローカルパスを含む場合がありますが、認証情報や音声本体は記録しません。",
+    "debugModeConfirmTitle": "Debug Mode を有効にしますか？",
+    "debugModeConfirmContent": "Debug Mode はログ量を大幅に増やし、完全な調査のため認識文、翻訳文、ローカルパスを記録します。",
+    "debugModeEnable": "有効にする",
+    "debugModeCancel": "キャンセル"
   },
   captionToolbar: {
     "close": "字幕ウィンドウを閉じる",
@@ -376,6 +382,10 @@ export default {
     "title2": "ログ記録",
     "saveDebug": "完全な Debug ログを保存",
     "debugSaved": "完全な Debug ログを保存しました",
-    "debugSaveFailed": "Debug ログを保存できませんでした"
+    "debugSaveFailed": "Debug ログを保存できませんでした",
+    "debugEnabled": "Debug Mode 有効",
+    "debugDisabled": "Debug Mode 無効",
+    "debugHealthy": "ログ書き込み正常",
+    "debugUnhealthy": "ログ書き込み異常"
   }
 }

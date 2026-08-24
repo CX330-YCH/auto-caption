@@ -45,6 +45,14 @@ class ProviderDebug:
 
 
 @dataclass(frozen=True)
+class ProviderMetric:
+    provider: str
+    category: str
+    name: str
+    fields: dict[str, object]
+
+
+@dataclass(frozen=True)
 class ProviderStopped:
     provider: str
     message: str
@@ -72,6 +80,7 @@ RecognitionEvent: TypeAlias = (
     | ProviderReady
     | ProviderInfo
     | ProviderDebug
+    | ProviderMetric
     | ProviderStopped
     | ProviderError
     | UsageUpdated

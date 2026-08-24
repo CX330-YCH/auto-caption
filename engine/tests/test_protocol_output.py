@@ -12,6 +12,7 @@ from core import (  # noqa: E402
     CaptionRevoked,
     ProviderError,
     ProviderDebug,
+    ProviderMetric,
     ProviderInfo,
     ProviderReady,
     UsageUpdated,
@@ -152,6 +153,42 @@ class ProtocolEventSinkTests(unittest.TestCase):
                 },
             },
         ])
+
+    def test_maps_metrics_and_chunks_large_error_diagnostics(self):
+        objects = []
+        sink = ProtocolEventSink(
+            command_writer=lambda command, content: None,
+            object_writer=objects.append,
+        )
+
+        sink.publish(ProviderMetric(
+            'fun_asr',
+            'audio.queue',
+            'snapshot',
+            {'depth': 4, 'capacity': 50},
+        ))
+        sink.publish(ProviderError(
+            'fun_asr',
+            'large failure',
+            True,
+            {'response': 'x' * (600 * 1024)},
+        ))
+
+        self.assertEqual(objects[0], {
+            'command': 'metric',
+            'event_version': 1,
+            'provider': 'fun_asr',
+            'category': 'audio.queue',
+            'name': 'snapshot',
+            'fields': {'depth': 4, 'capacity': 50},
+        })
+        chunks = [
+            item for item in objects
+            if item['command'] == 'diagnostic_chunk'
+        ]
+        self.assertGreater(len(chunks), 1)
+        self.assertEqual(objects[-1]['command'], 'error')
+        self.assertIn('diagnostic_ref', objects[-1])
 
 
 if __name__ == '__main__':

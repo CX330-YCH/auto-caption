@@ -46,6 +46,15 @@
         />
         <template #value>{{ ((leftBarWidth * 100) / 24).toFixed(0) }}%</template>
       </SettingsField>
+
+      <SettingsField
+        :label="$t('general.debugMode')"
+        kind="switch"
+        control-layout="intrinsic"
+      >
+        <a-switch :checked="debugMode" @change="confirmDebugModeChange" />
+        <template #description>{{ $t('general.debugModeInfo') }}</template>
+      </SettingsField>
     </SettingsForm>
   </a-card>
 </template>
@@ -55,11 +64,35 @@ import { ref, watch } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useGeneralSettingStore } from '@renderer/stores/generalSetting'
 import { InfoCircleOutlined, CheckOutlined } from '@ant-design/icons-vue'
+import { Modal } from 'ant-design-vue'
+import { useI18n } from 'vue-i18n'
 import SettingsField from '@renderer/components/settings/SettingsField.vue'
 import SettingsForm from '@renderer/components/settings/SettingsForm.vue'
 
 const generalSettingStore = useGeneralSettingStore()
-const { uiLanguage, realTheme, uiTheme, uiColor, leftBarWidth } = storeToRefs(generalSettingStore)
+const {
+  uiLanguage,
+  realTheme,
+  uiTheme,
+  uiColor,
+  leftBarWidth,
+  debugMode
+} = storeToRefs(generalSettingStore)
+const { t } = useI18n()
+
+function confirmDebugModeChange(checked: boolean): void {
+  if (!checked) {
+    debugMode.value = false
+    return
+  }
+  Modal.confirm({
+    title: t('general.debugModeConfirmTitle'),
+    content: t('general.debugModeConfirmContent'),
+    okText: t('general.debugModeEnable'),
+    cancelText: t('general.debugModeCancel'),
+    onOk: () => { debugMode.value = true }
+  })
+}
 
 const colorListLight = ['#1677ff', '#00b96b', '#fa8c16', '#9254de', '#eb2f96', '#000000']
 

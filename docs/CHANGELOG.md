@@ -1,5 +1,13 @@
 ## 未发布
 
+## v2.24.0 - 2026-08-24
+
+- 新增持久化且即时生效的 Debug Mode，完整记录脱敏后的 Electron、Renderer、Python、SDK/native helper 错误、协议事件、逐帧音频元数据、队列延迟/积压、Provider/翻译状态和进程指标。
+- 配置升级到 V6，V5 自动增加默认关闭的 `application.diagnostics.debugMode`；运行中的内置引擎可通过兼容 TCP command 切换，自定义引擎命令行不受影响。
+- 超过 512 KiB 的 Python 错误诊断改用带长度和 SHA-256 的分块协议，修复 1 MiB NDJSON 限制造成的根因丢失；补齐 Cookie 与 Basic/Digest Authorization 自由文本脱敏。
+- 将应用及中英日文档版本统一更新至 `2.24.0`。
+- 基于当前工作区生成并验证 macOS arm64 应用、ZIP、DMG、Swift 辅助程序与 Python 引擎。
+
 ## v2.23.0 - 2026-08-24
 
 - 新增 macOS 26+ 独占的 Apple SpeechAnalyzer/SpeechTranscriber 本地引擎：按平台动态隐藏或灰显，显示结构化禁用原因和运行时语言列表，并在选择时独立检查 `AssetInventory` 模型状态。

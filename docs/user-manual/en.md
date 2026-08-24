@@ -1,6 +1,6 @@
 # Auto Caption User Manual
 
-Corresponding Version: v2.23.0
+Corresponding Version: v2.24.0
 
 **Note: Due to limited personal resources, the English and Japanese documentation files for this project (except for the README document) will no longer be maintained. The content of this document may not be consistent with the latest version of the project. If you are willing to help with translation, please submit relevant Pull Requests.**
 
@@ -130,7 +130,7 @@ Caption settings can be divided into three categories: general settings, caption
 
 The minimum caption control window size is 900×600. When its content area is narrower than 1200px, the settings panel collapses into a Settings rail on the left. Hover over or focus the rail with the keyboard to open it temporarily, or click it to keep it open. Click it again, click outside the settings area, or press Esc to close it. Unapplied caption engine and caption style drafts remain intact while the panel opens, closes, or crosses the responsive breakpoint. Settings forms are capped at 640px, so radio buttons, selects, inputs, and sliders do not keep stretching when the left pane is enlarged. Standard fields keep labels and controls on one row above 360px and switch to the shared stacked layout only at 360px or below. Language, theme, color, and caption-line controls remain complete units. In wide panes, switches share the right-aligned label column used by standard fields. In hover-expanded and other panes no wider than 360px, each switch uses a compact, left-aligned “label + switch” row that starts at the content edge, so the pair neither drifts toward the middle nor separates. Source and translation fonts in Caption Style can search the locally installed fonts that the current system allows the app to enumerate. Font names are read only when the list is first opened, kept in local memory, and neither font files nor the font inventory are uploaded. If enumeration is unsupported or denied, or a configured font is not installed, switch to Manual Input to keep using one family name or a complete CSS font stack; enumeration failure never overwrites the existing value. Font edits remain style drafts and reach the caption window only after Apply. The caption style preview is docked at the bottom of the right pane and uses at most 35% of the content height; excess preview content scrolls inside that area instead of covering caption records.
 
-The current version uses a layered configuration file with `schemaVersion: 5`. Complete V2 configurations migrate through V3 and V4 to V5, while V3 and V4 continue through the remaining steps. Display Mode defaults to Sentence View and Sentence Boundaries defaults to Break at Sentences, so upgrading preserves existing behavior. Unversioned configuration still falls back to defaults.
+The current version uses a layered configuration file with `schemaVersion: 6`. V2–V5 configurations migrate explicitly to V6; V5→V6 only adds Debug Mode with a disabled default and does not change caption behavior. Unversioned configuration still falls back to defaults.
 
 Caption engine settings show the languages and provider fields for the selected engine. Disabling translation hides and omits translation-service parameters; after enabling it, "Configure Translation Engine" expands the provider, model, Base URL, and API key fields. "More Settings" shows the selected engine's credentials or local model path plus shared settings. Switching engines preserves saved settings, and changes are saved only after clicking "Apply Changes."
 
@@ -150,7 +150,7 @@ In the caption control window, you can see the records of all collected captions
 
 ### Saving the Complete Debug Log
 
-The Software Log view continues to show the existing INFO, WARN, and ERROR entries and does not display DEBUG. For troubleshooting, click "Save Complete Debug Log" to export the complete session since this software launch as a `.jsonl` file. Clearing the visible Software Log does not erase that session file. Structured diagnostics and exception stacks are preserved, while API keys, tokens, passwords, and Authorization values are always redacted. The export contains records produced up to the time the button is clicked.
+The Software Log view continues to show INFO, WARN, and ERROR. Enabling Debug Mode in General Settings immediately records complete redacted Electron, Renderer, Python, SDK, and Apple Speech helper errors, protocol events, per-frame audio metadata, queue depth/latency, Provider input state, translation backlog, and process metrics; a running built-in engine does not need a restart. Logs may contain recognized text, translations, and local paths, but never API keys, tokens, passwords, Cookie/Authorization values, or PCM audio bodies. The log page shows mode, writer health, and size. “Save Complete Debug Log” exports records produced so far; Clear only clears the table.
 
 ## Caption Engine
 

@@ -9,7 +9,7 @@ import {
   UnsupportedConfigVersionError,
   isKnownProviderName,
   type ApplicationConfig,
-  type ConfigDocumentV5,
+  type ConfigDocumentV6,
   type EngineConfig,
   type ProviderConfigs
 } from './schema.ts'
@@ -31,18 +31,21 @@ import {
   validateFunAsrEndpoint
 } from './validation.ts'
 
-export function parseConfigDocumentV5(value: unknown): ConfigDocumentV5 {
+export function parseConfigDocumentV6(value: unknown): ConfigDocumentV6 {
   if (!isRecord(value)) {
     throw new InvalidConfigError('Config root must be an object')
   }
   if (value.schemaVersion === 2) {
-    return parseConfigDocumentV5(migrateConfigDocumentV2ToV3(value))
+    return parseConfigDocumentV6(migrateConfigDocumentV2ToV3(value))
   }
   if (value.schemaVersion === 3) {
-    return parseConfigDocumentV5(migrateConfigDocumentV3ToV4(value))
+    return parseConfigDocumentV6(migrateConfigDocumentV3ToV4(value))
   }
   if (value.schemaVersion === 4) {
-    return parseConfigDocumentV5(migrateConfigDocumentV4ToV5(value))
+    return parseConfigDocumentV6(migrateConfigDocumentV4ToV5(value))
+  }
+  if (value.schemaVersion === 5) {
+    return parseConfigDocumentV6(migrateConfigDocumentV5ToV6(value))
   }
   if (value.schemaVersion !== CONFIG_SCHEMA_VERSION) {
     if (
@@ -64,6 +67,26 @@ export function parseConfigDocumentV5(value: unknown): ConfigDocumentV5 {
   }
 }
 
+function migrateConfigDocumentV5ToV6(
+  value: Record<string, unknown>
+): Record<string, unknown> {
+  const application = requireRecord(value.application, 'application')
+  const existingDiagnostics = isRecord(application.diagnostics)
+    ? application.diagnostics
+    : {}
+  return {
+    ...value,
+    schemaVersion: CONFIG_SCHEMA_VERSION,
+    application: {
+      ...application,
+      diagnostics: {
+        ...existingDiagnostics,
+        debugMode: false
+      }
+    }
+  }
+}
+
 function migrateConfigDocumentV4ToV5(
   value: Record<string, unknown>
 ): Record<string, unknown> {
@@ -71,7 +94,7 @@ function migrateConfigDocumentV4ToV5(
   const styles = requireRecord(caption.styles, 'caption.styles')
   return {
     ...value,
-    schemaVersion: CONFIG_SCHEMA_VERSION,
+    schemaVersion: 5,
     caption: {
       ...caption,
       styles: {
@@ -88,6 +111,9 @@ export function parseApplicationConfig(value: unknown): ApplicationConfig {
   }
   if (!isRecord(value.layout)) {
     throw new InvalidConfigError('Application layout must be an object')
+  }
+  if (!isRecord(value.diagnostics)) {
+    throw new InvalidConfigError('Application diagnostics must be an object')
   }
   return {
     ...value,
@@ -107,6 +133,13 @@ export function parseApplicationConfig(value: unknown): ApplicationConfig {
         'captionWindowWidth',
         480,
         10000
+      )
+    },
+    diagnostics: {
+      ...value.diagnostics,
+      debugMode: requireBoolean(
+        value.diagnostics.debugMode,
+        'diagnostics.debugMode'
       )
     }
   }
@@ -412,7 +445,7 @@ function parseProviderConfigs(value: Record<string, unknown>): ProviderConfigs {
 
 export function parseCaptionConfig(
   value: unknown
-): ConfigDocumentV5['caption'] {
+): ConfigDocumentV6['caption'] {
   if (!isRecord(value)) {
     throw new InvalidConfigError('Caption config must be an object')
   }

@@ -5,6 +5,9 @@ import { captionWindow } from './CaptionWindow'
 import { allConfig } from './utils/AllConfig'
 import { captionEngine } from './utils/CaptionEngine'
 import { Log } from './utils/Log'
+import { diagnosticsCoordinator } from './logging/DiagnosticsCoordinator.ts'
+
+diagnosticsCoordinator.install()
 
 app.whenReady().then(() => {
   Log.initialize(app.getPath('userData'))
@@ -32,6 +35,7 @@ app.whenReady().then(() => {
 })
 
 app.on('will-quit', async () => {
+  diagnosticsCoordinator.stop()
   captionEngine.kill()
   allConfig.writeConfig()
 });

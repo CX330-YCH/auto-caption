@@ -1,10 +1,13 @@
 import sys
 import json
 import sherpa_onnx
+import threading
 
 display_caption = False
 caption_index = -1
 display = sherpa_onnx.Display()
+_stdout_lock = threading.Lock()
+_stderr_lock = threading.Lock()
 
 def stdout(text: str):
     stdout_cmd("print", text)
@@ -14,8 +17,9 @@ def stdout_err(text: str):
 
 def stdout_cmd(command: str, content = ""):
     msg = { "command": command, "content": content }
-    sys.stdout.write(json.dumps(msg) + "\n")
-    sys.stdout.flush()
+    with _stdout_lock:
+        sys.stdout.write(json.dumps(msg) + "\n")
+        sys.stdout.flush()
 
 def change_caption_display(val: bool):
     global display_caption
@@ -53,9 +57,11 @@ def stdout_obj(obj):
     if obj['command'] == 'translation' and display_caption:
         translation_display(obj)
         return
-    sys.stdout.write(json.dumps(obj) + "\n")
-    sys.stdout.flush()
+    with _stdout_lock:
+        sys.stdout.write(json.dumps(obj) + "\n")
+        sys.stdout.flush()
 
 def stderr(text: str):
-    sys.stderr.write(text + "\n")
-    sys.stderr.flush()
+    with _stderr_lock:
+        sys.stderr.write(text + "\n")
+        sys.stderr.flush()

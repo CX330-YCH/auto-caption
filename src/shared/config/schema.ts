@@ -1,6 +1,6 @@
 import type { Styles, UILanguage, UITheme } from '../types'
 
-export const CONFIG_SCHEMA_VERSION = 5 as const
+export const CONFIG_SCHEMA_VERSION = 6 as const
 
 export type KnownProviderName = 'gummy' | 'vosk' | 'sosv' | 'glm' | 'fun_asr' | 'apple_speech'
 export type AudioSourceType = 0 | 1
@@ -115,12 +115,18 @@ export interface ApplicationLayoutConfig {
   captionWindowWidth: number
 }
 
+export interface DiagnosticsConfig {
+  [key: string]: unknown
+  debugMode: boolean
+}
+
 export interface ApplicationConfig {
   [key: string]: unknown
   language: UILanguage
   theme: UITheme
   accentColor: string
   layout: ApplicationLayoutConfig
+  diagnostics: DiagnosticsConfig
 }
 
 export interface CaptionConfig {
@@ -128,7 +134,7 @@ export interface CaptionConfig {
   styles: Styles
 }
 
-export interface ConfigDocumentV5 {
+export interface ConfigDocumentV6 {
   [key: string]: unknown
   schemaVersion: typeof CONFIG_SCHEMA_VERSION
   application: ApplicationConfig
@@ -176,7 +182,7 @@ export function createDefaultStyles(): Styles {
   }
 }
 
-export function createDefaultConfig(recordingPath: string): ConfigDocumentV5 {
+export function createDefaultConfig(recordingPath: string): ConfigDocumentV6 {
   return {
     schemaVersion: CONFIG_SCHEMA_VERSION,
     application: {
@@ -186,6 +192,9 @@ export function createDefaultConfig(recordingPath: string): ConfigDocumentV5 {
       layout: {
         leftBarWidth: 8,
         captionWindowWidth: 900
+      },
+      diagnostics: {
+        debugMode: false
       }
     },
     engine: {

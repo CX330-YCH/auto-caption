@@ -183,6 +183,23 @@ class GlmProvider(RecognitionProvider):
         if frame.channels != 1 or frame.sample_width != 2:
             raise ValueError('GLM requires mono PCM16 audio')
 
+    def diagnostic_snapshot(self) -> dict[str, object]:
+        worker = self._workers.snapshot() if self._workers else {
+            'pending': 0,
+            'active': 0,
+            'queued': 0,
+            'capacity': self._max_pending_requests,
+        }
+        return {
+            **super().diagnostic_snapshot(),
+            'started': self._started,
+            'acceptResults': self._accept_results,
+            'speechActive': self._is_speech,
+            'audioBufferFrames': len(self._audio_buffer),
+            'silenceFrames': self._silence_frames,
+            'requestQueue': worker,
+        }
+
     def _submit_segment(
         self,
         audio_frames: list[bytes],

@@ -34,6 +34,7 @@ class CliOptions:
     fun_asr_vocabulary_model: str = 'fun-asr-realtime'
     fun_asr_context_terms: tuple[str, ...] = ()
     apple_speech_helper: str = ''
+    debug_mode: bool = False
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -160,6 +161,10 @@ def build_parser() -> argparse.ArgumentParser:
         '-ash', '--apple_speech_helper', default='',
         help='Path to the macOS Apple Speech helper executable'
     )
+    parser.add_argument(
+        '--debug-mode', type=int, choices=(0, 1), default=0,
+        help='Enable complete diagnostic events and runtime metrics'
+    )
     return parser
 
 
@@ -198,4 +203,5 @@ def parse_args(arguments: list[str] | None = None) -> CliOptions:
         fun_asr_vocabulary_model=args.fun_asr_vocabulary_model,
         fun_asr_context_terms=tuple(args.fun_asr_context_term),
         apple_speech_helper=args.apple_speech_helper,
+        debug_mode=bool(args.debug_mode),
     )

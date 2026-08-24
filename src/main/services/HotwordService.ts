@@ -46,6 +46,7 @@ export class HotwordService {
 
     this.busy = true
     Log.info('Hotword operation started:', request.action)
+    Log.protocol('hotword.worker', 'request', { request })
     try {
       const response = await this.runWorker({
         workspaceId: config.workspaceId,
@@ -59,6 +60,7 @@ export class HotwordService {
         request.action,
         response.ok ? 'ok' : response.errorCode
       )
+      Log.protocol('hotword.worker', 'response', { response })
       return response
     }
     catch (error) {

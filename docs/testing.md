@@ -60,8 +60,8 @@ npm run build
 Node.js 测试覆盖：
 
 - 中英日界面文案的递归键结构一致性，防止新增用户可见文本时遗漏任一语言。
-- V5 分层配置默认值、V2/V3/V4 显式迁移、显示/断句方式校验、严格版本拒绝、命名自定义引擎校验、Fun-ASR 热词约束和未知扩展字段保留。
-- 从 V5 `EngineConfig` 为 Gummy、Vosk、SOSV、GLM、Fun-ASR 及自定义引擎生成启动参数，并验证关闭翻译后不传翻译服务参数。
+- V6 分层配置默认值、V2/V3/V4/V5 显式迁移、Debug Mode 布尔校验、显示/断句方式校验、严格版本拒绝、命名自定义引擎校验、Fun-ASR 热词约束和未知扩展字段保留。
+- 从 V6 `EngineConfig` 为 Gummy、Vosk、SOSV、GLM、Fun-ASR 及自定义引擎生成启动参数，并验证 Debug Mode 仅传给内置引擎、关闭翻译后不传翻译服务参数。
 - 公共字幕轨道的原文/译文 segment、逐句/连续组合、中英文连接符、视觉行字符范围、稳定行锚点、尾部增长/重写/生命周期/追加/历史变化分类、有界测量窗口和独立行额度。
 - 逐行字幕展示下界在 partial“增长 → 缩短/重写 → 再增长”期间只前进不后退；已滚出的历史不回填，原文/译文下界相互独立，显式布局重排可重新选行，partial→final 不移动或动画。
 - Renderer 引擎目录的 Provider 唯一注册、能力驱动字段组合、嵌套草稿路径读写、条件可见性、Provider 启动要求、默认值归一化和语言默认值。
@@ -75,6 +75,7 @@ Node.js 测试覆盖：
 - 翻译事件通过 `time_s` 关联字幕的当前行为。
 - 热词管理请求和 `text | weight | lang` 编辑格式的纯 TypeScript 校验，以及热词 UI 三语键结构一致性。
 - 本次启动 Debug 会话的初始化前缓冲、JSONL 持久化、完整导出、递归凭据脱敏，以及生产路由中 DEBUG 只持久化、不进入原有可见日志级别。
+- Debug Mode 启停、自由文本 Cookie/Basic/Digest Authorization 脱敏、大诊断分块/哈希重组、音频排队/帧龄、Provider event 队列、Fun-ASR 重连缓冲及 GLM/翻译 Worker 快照。
 - application 配置深度去重、Renderer 远端回填期间的反馈抑制和连续回填 revision；POSIX 独立进程组/负 PID 强杀、真实父子进程组无遗留进程，以及 Windows `taskkill /T /F` 选择逻辑。
 
 Python 测试覆盖：
@@ -108,7 +109,7 @@ Python 测试覆盖：
 - 真实音频设备和平台驱动。
 - Electron 窗口、热词管理 IPC/子进程超时和浏览器交互集成。
 - Ant Design Vue 通用引擎字段控件的浏览器交互、视觉布局和键盘可访问性。
-- Electron `userData/config.json` 的真实磁盘读写、V2→V3→V4→V5/V3→V4→V5/V4→V5 迁移和无版本配置回退的桌面端流程。
+- Electron `userData/config.json` 的真实磁盘读写、V2→V3→V4→V5→V6 迁移、Debug Mode 即时切换和无版本配置回退的桌面端流程。
 - 真实 Python/PyInstaller 子进程启动、超时和正常停止；POSIX 进程组强杀已用临时 Node 父子进程集成验证，但尚未使用 PyInstaller 包和 Windows/Linux 实机验证。
 - Electron 与真实 Python 子进程之间的端到端 Socket/stdio 集成。
 - 真实 Vosk/SOSV 模型文件以及实际 Gummy、GLM、Fun-ASR 或其他在线 Provider；阿里云远端热词表的 list/create/update/delete 也未执行。

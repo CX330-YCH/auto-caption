@@ -7,7 +7,7 @@ import type {
 } from '../types'
 import type {
   ApplicationConfig,
-  ConfigDocumentV5,
+  ConfigDocumentV6,
   EngineConfig
 } from '../../shared/config/schema'
 import {
@@ -18,7 +18,7 @@ import {
 import {
   parseApplicationConfig,
   parseCaptionConfig,
-  parseConfigDocumentV5,
+  parseConfigDocumentV6,
   parseEngineConfig
 } from '../../shared/config/document'
 import { Log } from './Log'
@@ -39,7 +39,7 @@ function getDesktopPath(): string {
 }
 
 class AllConfig {
-  private document: ConfigDocumentV5 = createDefaultConfig(getDesktopPath())
+  private document: ConfigDocumentV6 = createDefaultConfig(getDesktopPath())
   private readonly captions = new CaptionLog()
 
   public engineEnabled: boolean = false
@@ -48,7 +48,7 @@ class AllConfig {
     return this.captions.items
   }
 
-  public get config(): ConfigDocumentV5 {
+  public get config(): ConfigDocumentV6 {
     return this.document
   }
 
@@ -77,7 +77,7 @@ class AllConfig {
     if (!fs.existsSync(configPath)) return
     try {
       const raw: unknown = JSON.parse(fs.readFileSync(configPath, 'utf-8'))
-      this.document = parseConfigDocumentV5(raw)
+      this.document = parseConfigDocumentV6(raw)
       Log.info(
         `Read config schema v${CONFIG_SCHEMA_VERSION} from:`,
         configPath
@@ -86,7 +86,7 @@ class AllConfig {
     catch (error) {
       this.document = createDefaultConfig(getDesktopPath())
       Log.error(
-        `Config rejected; V5 defaults will be used (${errorSummary(error)})`
+        `Config rejected; V6 defaults will be used (${errorSummary(error)})`
       )
       Log.debug('Config Error Diagnostic:', {
         version: 1,

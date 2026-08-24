@@ -2,6 +2,7 @@ import json
 import os
 import subprocess
 import threading
+import time
 from datetime import datetime, timedelta
 from typing import Any, Callable
 
@@ -11,9 +12,12 @@ from core import (
     CaptionPartial,
     CaptionRevoked,
     ProviderError,
+    ProviderDebug,
     ProviderReady,
     ProviderStopped,
     RecognitionProvider,
+    exception_diagnostic,
+    safe_diagnostic_value,
 )
 
 
@@ -38,12 +42,19 @@ class AppleSpeechProvider(RecognitionProvider):
         self._wall_clock = wall_clock
         self._process: subprocess.Popen | None = None
         self._reader_thread: threading.Thread | None = None
+        self._stderr_thread: threading.Thread | None = None
         self._ready = threading.Event()
         self._ready_success = False
         self._start_error = ''
         self._stopping = False
         self._session_started_at = wall_clock()
         self._write_lock = threading.Lock()
+        self._written_frames = 0
+        self._written_bytes = 0
+        self._write_duration_ms = 0.0
+        self._output_events = 0
+        self._stderr_lines = 0
+        self._last_output_monotonic: float | None = None
 
     @property
     def name(self) -> str:
@@ -72,6 +83,12 @@ class AppleSpeechProvider(RecognitionProvider):
             daemon=True,
         )
         self._reader_thread.start()
+        self._stderr_thread = threading.Thread(
+            target=self._read_stderr,
+            name='apple-speech-stderr',
+            daemon=True,
+        )
+        self._stderr_thread.start()
         if not self._ready.wait(self._ready_timeout):
             self._terminate()
             raise TimeoutError('Apple Speech helper did not become ready')
@@ -88,8 +105,14 @@ class AppleSpeechProvider(RecognitionProvider):
         if process is None or process.stdin is None or process.poll() is not None:
             raise RuntimeError('Apple Speech helper is not running')
         with self._write_lock:
+            write_started_at = time.monotonic()
             process.stdin.write(frame.data)
             process.stdin.flush()
+            self._write_duration_ms += (
+                time.monotonic() - write_started_at
+            ) * 1000
+            self._written_frames += 1
+            self._written_bytes += len(frame.data)
 
     def stop(self) -> None:
         self._stopping = True
@@ -103,6 +126,8 @@ class AppleSpeechProvider(RecognitionProvider):
                 self._terminate()
         if self._reader_thread is not None:
             self._reader_thread.join(timeout=2)
+        if self._stderr_thread is not None:
+            self._stderr_thread.join(timeout=2)
         self._emit(ProviderStopped(self.name, 'Apple Speech stopped.'))
 
     def _read_output(self) -> None:
@@ -124,11 +149,17 @@ class AppleSpeechProvider(RecognitionProvider):
                 provider=self.name,
                 message=f'Apple Speech helper output failed ({type(error).__name__})',
                 fatal=not self._stopping,
+                details=exception_diagnostic(
+                    error,
+                    operation='apple_speech.read_output',
+                ),
             ))
         finally:
             self._ready.set()
 
     def _handle_envelope(self, envelope: dict[str, Any]) -> None:
+        self._output_events += 1
+        self._last_output_monotonic = time.monotonic()
         if envelope.get('protocolVersion') != 1:
             raise ValueError('Unsupported Apple Speech helper protocol')
         event_type = envelope.get('type')
@@ -149,6 +180,10 @@ class AppleSpeechProvider(RecognitionProvider):
                 provider=self.name,
                 message=f"Apple Speech helper failed ({payload.get('code', 'unknown')})",
                 fatal=True,
+                details={
+                    'operation': 'apple_speech.helper.error',
+                    'payload': safe_diagnostic_value(payload),
+                },
             ))
             return
         if event_type != 'transcript':
@@ -174,6 +209,66 @@ class AppleSpeechProvider(RecognitionProvider):
             ended_at=self._timestamp(float(end_seconds)),
             text=text,
         ))
+
+    def _read_stderr(self) -> None:
+        process = self._process
+        if process is None or process.stderr is None:
+            return
+        try:
+            for raw_line in process.stderr:
+                self._stderr_lines += 1
+                if not self._debug_enabled():
+                    continue
+                self._emit(ProviderDebug(
+                    provider=self.name,
+                    message='Apple Speech helper stderr.',
+                    details={
+                        'line': raw_line.decode(
+                            'utf-8',
+                            errors='replace',
+                        ).rstrip('\r\n'),
+                    },
+                ))
+        except Exception as error:
+            self._emit(ProviderError(
+                provider=self.name,
+                message=(
+                    'Apple Speech stderr reader failed '
+                    f'({type(error).__name__})'
+                ),
+                fatal=False,
+                details=exception_diagnostic(
+                    error,
+                    operation='apple_speech.read_stderr',
+                ),
+            ))
+
+    def diagnostic_snapshot(self) -> dict[str, object]:
+        last_output_age_ms = None
+        if self._last_output_monotonic is not None:
+            last_output_age_ms = (
+                time.monotonic() - self._last_output_monotonic
+            ) * 1000
+        return {
+            **super().diagnostic_snapshot(),
+            'helperPid': self._process.pid if self._process else None,
+            'helperRunning': (
+                self._process is not None and self._process.poll() is None
+            ),
+            'writtenFrames': self._written_frames,
+            'writtenBytes': self._written_bytes,
+            'writtenAudioMs': self._written_bytes / self._sample_rate / 2 * 1000,
+            'writeDurationMs': self._write_duration_ms,
+            'outputEvents': self._output_events,
+            'stderrLines': self._stderr_lines,
+            'lastOutputAgeMs': last_output_age_ms,
+            'outputThreadAlive': bool(
+                self._reader_thread and self._reader_thread.is_alive()
+            ),
+            'stderrThreadAlive': bool(
+                self._stderr_thread and self._stderr_thread.is_alive()
+            ),
+        }
 
     def _timestamp(self, offset_seconds: float) -> str:
         value = self._session_started_at + timedelta(seconds=max(0, offset_seconds))

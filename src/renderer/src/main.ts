@@ -7,8 +7,10 @@ import router from './router'
 import { i18n } from './i18n'
 import Antd from 'ant-design-vue';
 import 'ant-design-vue/dist/reset.css';
+import { installRendererDiagnostics } from './diagnostics'
 
 const app = createApp(App)
+installRendererDiagnostics(app)
 app.use(createPinia())
 app.use(router)
 app.use(i18n)

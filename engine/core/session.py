@@ -1,4 +1,5 @@
 from collections.abc import Callable
+import time
 from queue import Empty, Queue
 from typing import Protocol
 
@@ -30,6 +31,9 @@ class RecognitionSession:
         start_audio_capture: Callable[[], None],
         is_running: Callable[[], bool],
         request_stop: Callable[[], None],
+        metric_handler: Callable[
+            [str, str, dict[str, object]], None
+        ] | None = None,
         queue_timeout: float = 0.1,
     ) -> None:
         if queue_timeout <= 0:
@@ -42,6 +46,9 @@ class RecognitionSession:
         self._start_audio_capture = start_audio_capture
         self._is_running = is_running
         self._request_stop = request_stop
+        self._metric_handler = metric_handler or (
+            lambda category, name, fields: None
+        )
         self._queue_timeout = queue_timeout
         self._translated_caption_ids: set[int] = set()
 
@@ -57,7 +64,26 @@ class RecognitionSession:
                 except Empty:
                     self._publish_pending_events()
                     continue
+                dequeued_at = time.monotonic()
+                accept_started_at = time.monotonic()
                 self._provider.accept_audio(frame)
+                accepted_at = time.monotonic()
+                self._metric_handler(
+                    'recognition.session',
+                    'frame.accepted',
+                    {
+                        'provider': self._provider.name,
+                        'frameAgeMs': (
+                            dequeued_at - frame.captured_at
+                        ) * 1000,
+                        'acceptAudioMs': (
+                            accepted_at - accept_started_at
+                        ) * 1000,
+                        'queueDepth': self._audio_queue.qsize(),
+                        'queueCapacity': self._audio_queue.maxsize,
+                        'frameBytes': len(frame.data),
+                    },
+                )
                 self._publish_pending_events()
         except Exception as error:
             self._event_sink.publish(ProviderError(
@@ -125,7 +151,18 @@ class RecognitionSession:
                         ))
 
     def _publish_pending_events(self) -> None:
-        for event in self._provider.drain_events():
+        events = self._provider.drain_events()
+        if events:
+            counts: dict[str, int] = {}
+            for event in events:
+                event_name = type(event).__name__
+                counts[event_name] = counts.get(event_name, 0) + 1
+            self._metric_handler(
+                'recognition.events',
+                'batch.drained',
+                {'count': len(events), 'types': counts},
+            )
+        for event in events:
             self._event_sink.publish(event)
             if isinstance(event, ProviderError) and event.fatal:
                 self._request_stop()

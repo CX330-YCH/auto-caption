@@ -7,6 +7,7 @@ ENGINE_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ENGINE_ROOT))
 
 from core import exception_diagnostic, sdk_diagnostic  # noqa: E402
+from core import redact_diagnostic_text  # noqa: E402
 
 
 class FakeSdkResult:
@@ -23,6 +24,16 @@ class FakeSdkResult:
 
 
 class DiagnosticTests(unittest.TestCase):
+    def test_redacts_cookie_and_non_bearer_authorization_text(self):
+        self.assertEqual(
+            redact_diagnostic_text('Authorization: Basic dXNlcjpwYXNz'),
+            'Authorization: Basic <redacted>',
+        )
+        self.assertEqual(
+            redact_diagnostic_text('Cookie: session=private-value'),
+            'Cookie: <redacted>',
+        )
+
     def test_preserves_exception_traceback_attributes_and_cause(self):
         try:
             try:

@@ -20,6 +20,7 @@ export const useGeneralSettingStore = defineStore('generalSetting', () => {
     accentColor: uiColor
   } = toRefs(applicationConfig)
   const { leftBarWidth } = toRefs(applicationConfig.layout)
+  const { debugMode } = toRefs(applicationConfig.diagnostics)
   const realTheme = ref<RealTheme>('light')
   const antdTheme = ref(getTheme())
   const applicationConfigSync = new ApplicationConfigSync(
@@ -36,9 +37,10 @@ export const useGeneralSettingStore = defineStore('generalSetting', () => {
 
   function setApplicationConfig(value: ApplicationConfig): void {
     applicationConfigSync.applyRemote(() => {
-      const { layout, ...application } = value
+      const { layout, diagnostics, ...application } = value
       Object.assign(applicationConfig, application)
       Object.assign(applicationConfig.layout, layout)
+      Object.assign(applicationConfig.diagnostics, diagnostics)
     })
   }
 
@@ -89,6 +91,10 @@ export const useGeneralSettingStore = defineStore('generalSetting', () => {
     sendApplicationConfig()
   })
 
+  watch(debugMode, () => {
+    sendApplicationConfig()
+  })
+
   window.electron.ipcRenderer.on(
     'both.application.set',
     (_, value: ApplicationConfig) => setApplicationConfig(value)
@@ -125,6 +131,7 @@ export const useGeneralSettingStore = defineStore('generalSetting', () => {
     uiTheme,
     uiColor,
     leftBarWidth,
+    debugMode,
     antdTheme
   }
 })

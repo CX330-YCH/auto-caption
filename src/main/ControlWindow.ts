@@ -12,12 +12,19 @@ import { hotwordService } from './services/HotwordService'
 import { appleSpeechService } from './services/AppleSpeechService.ts'
 import type { AppleSpeechStartResult } from '../shared/appleSpeech.ts'
 import { getActiveBuiltinProvider } from '../shared/config/schema.ts'
+import { diagnosticsCoordinator } from './logging/DiagnosticsCoordinator.ts'
 
 class ControlWindow {
   mounted: boolean = false;
   window: BrowserWindow | undefined;
 
   public createWindow(): void {
+    allConfig.readConfig()
+    diagnosticsCoordinator.setEnabled(
+      allConfig.application.diagnostics.debugMode
+    )
+    Log.verbose('debug-mode', 'configuration-snapshot', allConfig.config)
+
     this.window = new BrowserWindow({
       icon: icon,
       width: 1200,
@@ -33,7 +40,7 @@ class ControlWindow {
       }
     })
 
-    allConfig.readConfig()
+    diagnosticsCoordinator.attachWindow(this.window, 'control-renderer')
 
     this.window.on('ready-to-show', () => {
       this.window?.show()
@@ -110,6 +117,32 @@ class ControlWindow {
       }
     })
 
+    ipcMain.handle('control.debugLog.status', () => Log.getDebugStatus())
+
+    ipcMain.on('diagnostics.renderer.record', (event, value: unknown) => {
+      if (!isRendererDiagnostic(value)) return
+      if (
+        event.sender !== this.window?.webContents &&
+        event.sender !== captionWindow.window?.webContents
+      ) return
+      const source = captionWindow.window?.webContents === event.sender
+        ? 'caption-renderer'
+        : 'control-renderer'
+      if (value.event === 'vue-warning') {
+        Log.verbose(source, value.event, {
+          message: value.message,
+          component: value.component,
+          detail: value.detail
+        })
+        return
+      }
+      Log.exception(source, value.event, new Error(value.message), {
+        stack: value.stack,
+        component: value.component,
+        detail: value.detail
+      })
+    })
+
     ipcMain.handle('control.engine.info', async () => {
       const info: EngineInfo = {
         pid: 0, ppid: 0, port: 0, cpu: 0, mem: 0, elapsed: 0
@@ -146,11 +179,18 @@ class ControlWindow {
     })
 
     ipcMain.on('control.application.change', (_, args) => {
+      const previousDebugMode = allConfig.application.diagnostics.debugMode
       let changed = false
       if (!this.applyConfig('application', () => {
         changed = allConfig.setApplication(args)
       })) return
       if (!changed) return
+      const nextDebugMode = allConfig.application.diagnostics.debugMode
+      if (nextDebugMode !== previousDebugMode) {
+        diagnosticsCoordinator.setEnabled(nextDebugMode)
+        Log.verbose('debug-mode', 'configuration-snapshot', allConfig.config)
+        captionEngine.setDebugMode(nextDebugMode)
+      }
       if (captionWindow.window) {
         captionWindow.window.webContents.send(
           'both.application.set',
@@ -246,3 +286,38 @@ class ControlWindow {
 }
 
 export const controlWindow = new ControlWindow()
+
+function isRendererDiagnostic(value: unknown): value is {
+  event: string
+  message: string
+  stack?: string
+  component?: string
+  detail?: unknown
+} {
+  if (typeof value !== 'object' || value === null) return false
+  const record = value as Record<string, unknown>
+  return typeof record.event === 'string' && record.event.length <= 128 &&
+    typeof record.message === 'string' && record.message.length <= 65536 &&
+    (record.stack === undefined || (
+      typeof record.stack === 'string' && record.stack.length <= 262144
+    )) &&
+    (record.component === undefined || (
+      typeof record.component === 'string' && record.component.length <= 256
+    )) && isRendererDiagnosticDetail(record.detail)
+}
+
+function isRendererDiagnosticDetail(value: unknown, depth = 0): boolean {
+  if (value === undefined || value === null) return true
+  if (typeof value === 'string') return value.length <= 65536
+  if (typeof value === 'number' || typeof value === 'boolean') return true
+  if (depth >= 4 || typeof value !== 'object') return false
+  if (Array.isArray(value)) {
+    return value.length <= 64 && value.every(
+      (item) => isRendererDiagnosticDetail(item, depth + 1)
+    )
+  }
+  const entries = Object.entries(value)
+  return entries.length <= 64 && entries.every(([key, child]) => (
+    key.length <= 256 && isRendererDiagnosticDetail(child, depth + 1)
+  ))
+}

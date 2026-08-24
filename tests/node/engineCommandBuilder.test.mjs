@@ -13,7 +13,7 @@ function valueAfter(args, flag) {
   return args[index + 1]
 }
 
-test('builds common and Provider-specific arguments from V5 config', () => {
+test('builds common and Provider-specific arguments from V6 config', () => {
   const engine = createDefaultConfig('/recordings').engine
   engine.common.audioSource = 1
   engine.common.recording.enabled = true
@@ -89,6 +89,27 @@ test('requires the native helper path for Apple Speech', () => {
   assert.throws(
     () => buildBundledEngineArguments(engine, 'apple_speech', 2345),
     /helper path/
+  )
+})
+
+test('passes Debug Mode only to bundled engines', () => {
+  const engine = createDefaultConfig('').engine
+  const bundled = buildBundledEngineArguments(
+    engine,
+    'vosk',
+    2345,
+    undefined,
+    true
+  )
+  assert.equal(valueAfter(bundled, '--debug-mode'), '1')
+  assert.equal(
+    buildCustomEngineArguments({
+      id: 'custom-debug',
+      name: 'Custom Debug',
+      executable: '/engine',
+      command: '--mode live'
+    }, 2345).includes('--debug-mode'),
+    false
   )
 })
 

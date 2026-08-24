@@ -770,6 +770,25 @@ class FunAsrProvider(RecognitionProvider):
                 message='Fun-ASR reconnect audio buffer dropped one frame.',
             ))
 
+    def diagnostic_snapshot(self) -> dict[str, object]:
+        with self._lock:
+            return {
+                **super().diagnostic_snapshot(),
+                'generation': self._generation,
+                'generationState': self._generation_states.get(
+                    self._generation,
+                    'unknown',
+                ),
+                'ready': self._ready,
+                'stopping': self._stopping,
+                'reconnects': self._reconnects,
+                'maxReconnects': self._max_reconnects,
+                'pendingAudioFrames': len(self._pending_audio),
+                'pendingAudioCapacity': self._pending_audio.maxlen or 0,
+                'sentAudioOffsetMs': self._latest_audio_offset_ms,
+                'finalizedCaptions': len(self._finalized_caption_ids),
+            }
+
     def _flush_pending_audio(self) -> None:
         while self._pending_audio and not self._stopping:
             with self._lock:

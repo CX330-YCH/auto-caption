@@ -3,7 +3,7 @@
     <h1 align="center">auto-caption</h1>
     <p>Auto Caption はクロスプラットフォームのリアルタイム字幕表示ソフトウェアです。</p>
     <p>
-      <a href="https://github.com/HiMeditator/auto-caption/releases"><img src="https://img.shields.io/badge/release-2.23.0-blue"></a>
+      <a href="https://github.com/HiMeditator/auto-caption/releases"><img src="https://img.shields.io/badge/release-2.24.0-blue"></a>
       <a href="https://github.com/HiMeditator/auto-caption/issues"><img src="https://img.shields.io/github/issues/HiMeditator/auto-caption?color=orange"></a>
       <img src="https://img.shields.io/github/languages/top/HiMeditator/auto-caption?color=royalblue">
       <img src="https://img.shields.io/github/repo-size/HiMeditator/auto-caption?color=green">
@@ -14,7 +14,7 @@
         | <a href="./README_en.md">English</a>
         | <b>日本語</b> |
     </p>
-    <p><i>v2.23.0 がリリースされました。macOS arm64 ビルドを含みます...</i></p>
+    <p><i>v2.24.0 がリリースされました。macOS arm64 ビルドを含みます...</i></p>
 </div>
 
 ![](./assets/media/main_ja.png)
@@ -49,11 +49,11 @@ https://github.com/user-attachments/assets/9c188d78-9520-4397-bacf-4c8fdcc54874
 - 柔軟な字幕エンジン選択（阿里云Gummyクラウドモデル、GLM-ASRクラウドモデル、ローカルVoskモデル、ローカルSOSVモデル、または独自にモデルを開発可能）
 - 多言語認識と翻訳（下記「⚙️ 字幕エンジン説明」参照）
 - 字幕記録表示とエクスポート（`.srt` および `.json` 形式のエクスポートに対応）
-- INFO/WARN/ERROR のログ画面と非表示の完全 Debug セッションを分離し、すべての字幕エンジン、SDK コールバック、例外 traceback、stderr を起動単位のサニタイズ済み `.jsonl` 診断ログとして保存可能
+- 即時切替可能な Debug Mode で Electron、Renderer、Python、SDK/native helper の完全なマスキング済みエラー、フレーム単位音声メタデータ、キュー遅延/滞留、Provider/翻訳状態、プロセスメトリクスを起動単位の `.jsonl` に保存・出力可能
 
 ## 📖 基本使い方
 
-> ⚠️ 注意：現在の v2.23.0 は Windows と macOS arm64 ビルドを提供しています。Linux はソースまたは既存のビルド手順での検証が必要です。
+> ⚠️ 注意：現在の v2.24.0 は Windows と macOS arm64 ビルドを提供しています。Linux はソースまたは既存のビルド手順での検証が必要です。
 
 このソフトウェアは Windows、macOS、Linux プラットフォームに対応しています。テスト済みのプラットフォーム情報は以下の通りです：
 

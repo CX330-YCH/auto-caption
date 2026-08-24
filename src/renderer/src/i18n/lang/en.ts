@@ -52,7 +52,13 @@ export default {
     "light": "light",
     "dark": "dark",
     "system": "system",
-    "color": "Color"
+    "color": "Color",
+    "debugMode": "Debug Mode",
+    "debugModeInfo": "Records complete redacted diagnostics, protocol events, and high-frequency runtime metrics. Logs may include recognized text, translations, and local paths, but never credentials or audio bodies.",
+    "debugModeConfirmTitle": "Enable Debug Mode?",
+    "debugModeConfirmContent": "Debug Mode greatly increases log volume and records recognized text, translations, and local paths for complete troubleshooting.",
+    "debugModeEnable": "Enable",
+    "debugModeCancel": "Cancel"
   },
   captionToolbar: {
     "close": "Close caption window",
@@ -376,6 +382,10 @@ export default {
     "title2": "Software Log",
     "saveDebug": "Save Complete Debug Log",
     "debugSaved": "Complete debug log saved",
-    "debugSaveFailed": "Failed to save debug log"
+    "debugSaveFailed": "Failed to save debug log",
+    "debugEnabled": "Debug Mode enabled",
+    "debugDisabled": "Debug Mode disabled",
+    "debugHealthy": "Log writer healthy",
+    "debugUnhealthy": "Log writer failed"
   }
 }

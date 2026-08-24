@@ -12,6 +12,9 @@ class NoTranslationService:
     def close(self) -> None:
         return
 
+    def diagnostic_snapshot(self) -> dict[str, object]:
+        return {'enabled': False}
+
 
 class QueuedTranslationService:
     """Run translations on bounded daemon workers instead of per-caption threads."""
@@ -53,6 +56,9 @@ class QueuedTranslationService:
             return
         self._closed = True
         self._workers.close(cancel_pending=False, wait_timeout=0)
+
+    def diagnostic_snapshot(self) -> dict[str, object]:
+        return {'enabled': True, **self._workers.snapshot()}
 
     def _translate(self, caption: CaptionFinal) -> None:
         try:

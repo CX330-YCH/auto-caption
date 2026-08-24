@@ -58,7 +58,7 @@ interface CaptionItem {
 - `captionBoundaryMode: sentence`：每个规范化 `CaptionItem` 边界插入硬换行，保持原有逐句呈现。
 - `captionBoundaryMode: continuous`：字幕边界使用语言感知连接符而不是硬换行；下一条字幕利用上一行剩余宽度。原文和译文同时切换，但仍是两个独立轨道。
 - 轨道从最近 segment 开始测量，不足 `lineNumber + 2` 个安全视觉行时向前扩展；达到目标后以实测行首锚点裁剪。该测量锚点只控制隐藏 DOM 的性能窗口，不参与“哪些行已经滚出”的展示语义。每轨最多测量 256 个 segment 和 16384 个 UTF-16 code unit，避免字幕记录增长导致隐藏 DOM 无界。
-- 显示与断句方式属于持久化样式配置；V3→V4 默认 `static`，V4→V5 默认 `sentence`，升级不会改变行为。
+- 显示与断句方式属于持久化样式配置；V3→V4 默认 `static`，V4→V5 默认 `sentence`，V5→V6 只增加默认关闭的 Debug Mode，升级不会改变字幕行为。
 - 工具栏采用绝对定位覆盖层，不参与字幕测量宽度或对称安全边距；鼠标离开后自动隐藏，进入或键盘聚焦时显示。
 - Renderer 报告字幕根节点的向上取整内容高度；主进程验证消息来源与 `22–16384px` 数值范围后，把原生窗口最小/最大高度锁定为该值。窗口因此只允许横向调整，宽度重排后再由相同测量链更新高度。
 - 生命周期协议和旧引擎兼容规则以 [字幕引擎进程协议](./caption-engine.md) 为准；IPC 字段以 [Electron IPC API](./electron-ipc.md) 为准。

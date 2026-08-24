@@ -46,6 +46,8 @@ def _handle_batch(batch):
         if message['command'] == 'stop':
             shared_data.status = 'stop'
             return True
+        if message['command'] == 'debug_mode':
+            shared_data.set_debug_mode(message.get('content') == 'enabled')
     return False
 
 

@@ -19,6 +19,7 @@ interface HelperEnvelope {
 
 const HELPER_PROTOCOL_VERSION = 1
 const PROBE_TIMEOUT_MS = 10_000
+const STDERR_ERROR_TAIL_LENGTH = 256 * 1024
 
 export class AppleSpeechService {
   private availabilityCache: AppleSpeechAvailability | undefined
@@ -171,6 +172,7 @@ export class AppleSpeechService {
     return new Promise((resolve, reject) => {
       const child = spawn(executable, args, { stdio: ['ignore', 'pipe', 'pipe'] })
       const decoder = new StringDecoder('utf8')
+      const stderrDecoder = new StringDecoder('utf8')
       let buffer = ''
       let stderr = ''
       let settled = false
@@ -194,17 +196,34 @@ export class AppleSpeechService {
           if (envelope.protocolVersion !== HELPER_PROTOCOL_VERSION || typeof envelope.type !== 'string') {
             throw new Error('Incompatible Apple Speech helper protocol')
           }
+          Log.protocol('apple-speech.helper', 'envelope', {
+            executable,
+            args,
+            envelope
+          })
           if (envelope.type === 'error') throw new Error(String(envelope.payload.code ?? 'helper-error'))
           onEnvelope(envelope)
         }
+      }
+      const appendStderr = (text: string): void => {
+        if (!text) return
+        Log.verbose('apple-speech.helper', 'stderr', {
+          executable,
+          args,
+          text
+        })
+        stderr = `${stderr}${text}`.slice(-STDERR_ERROR_TAIL_LENGTH)
       }
       child.stdout.on('data', (chunk: Buffer) => {
         try { parseLines(decoder.write(chunk)) }
         catch (error) { child.kill(); finish(() => reject(error)) }
       })
-      child.stderr.on('data', (chunk: Buffer) => { stderr += chunk.toString('utf8').slice(0, 4096) })
+      child.stderr.on('data', (chunk: Buffer) => {
+        appendStderr(stderrDecoder.write(chunk))
+      })
       child.once('error', (error) => finish(() => reject(error)))
       child.once('close', (code) => {
+        appendStderr(stderrDecoder.end())
         try { parseLines(decoder.end(), true) }
         catch (error) { finish(() => reject(error)); return }
         if (code === 0) finish(resolve)

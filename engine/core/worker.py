@@ -15,6 +15,10 @@ class BoundedWorkerPool:
         self._tasks: Queue[Callable[[], None]] = Queue(maxsize=max_pending)
         self._condition = threading.Condition()
         self._pending_count = 0
+        self._active_count = 0
+        self._submitted_count = 0
+        self._completed_count = 0
+        self._rejected_count = 0
         self._closed = False
         self._workers = [
             threading.Thread(target=self._run, daemon=True)
@@ -28,14 +32,29 @@ class BoundedWorkerPool:
             if self._closed:
                 return False
             self._pending_count += 1
+            self._submitted_count += 1
         try:
             self._tasks.put_nowait(task)
             return True
         except Full:
             with self._condition:
                 self._pending_count -= 1
+                self._rejected_count += 1
                 self._condition.notify_all()
             return False
+
+    def snapshot(self) -> dict[str, object]:
+        with self._condition:
+            return {
+                'pending': self._pending_count,
+                'active': self._active_count,
+                'queued': self._tasks.qsize(),
+                'capacity': self._tasks.maxsize,
+                'submitted': self._submitted_count,
+                'completed': self._completed_count,
+                'rejected': self._rejected_count,
+                'closed': self._closed,
+            }
 
     def close(
         self,
@@ -86,9 +105,13 @@ class BoundedWorkerPool:
                         return
                 continue
             try:
+                with self._condition:
+                    self._active_count += 1
                 task()
             finally:
                 self._tasks.task_done()
                 with self._condition:
+                    self._active_count -= 1
                     self._pending_count -= 1
+                    self._completed_count += 1
                     self._condition.notify_all()

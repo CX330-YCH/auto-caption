@@ -88,6 +88,9 @@ class AudioCaptureWorker:
         diagnostic_handler: Callable[
             [str, dict[str, object]], None
         ] | None = None,
+        metric_handler: Callable[
+            [str, str, dict[str, object]], None
+        ] | None = None,
         record: bool = False,
         recording_path: str = '',
     ) -> None:
@@ -101,29 +104,72 @@ class AudioCaptureWorker:
         self._diagnostic_handler = diagnostic_handler or (
             lambda message, details: None
         )
+        self._metric_handler = metric_handler or (
+            lambda category, name, fields: None
+        )
         self._record = record
         self._recording_path = recording_path
 
     def run(self) -> None:
         recording = None
         recording_name = ''
+        frame_sequence = 0
         try:
             self._source.open_stream()
             if self._record:
                 recording_name, recording = self._open_recording()
                 self._info_handler('Audio recording...')
             while self._is_running():
+                read_started_at = time.monotonic()
                 raw_chunk = self._source.read_chunk()
+                captured_at = time.monotonic()
                 if raw_chunk is None:
                     continue
                 if recording is not None:
                     recording.writeframes(raw_chunk)
                 frame = self._pipeline.process(raw_chunk)
+                processed_at = time.monotonic()
+                enqueue_started_at = processed_at
+                full_waits = 0
                 while self._is_running():
                     try:
                         self._output_queue.put(frame, timeout=0.1)
+                        frame_sequence += 1
+                        enqueued_at = time.monotonic()
+                        audio_duration_ms = (
+                            len(frame.data) * 1000 /
+                            frame.sample_rate /
+                            frame.channels /
+                            frame.sample_width
+                        )
+                        self._metric_handler(
+                            'audio.capture',
+                            'frame.enqueued',
+                            {
+                                'frameSequence': frame_sequence,
+                                'rawBytes': len(raw_chunk),
+                                'processedBytes': len(frame.data),
+                                'sampleRate': frame.sample_rate,
+                                'channels': frame.channels,
+                                'sampleWidth': frame.sample_width,
+                                'audioDurationMs': audio_duration_ms,
+                                'readMs': (
+                                    captured_at - read_started_at
+                                ) * 1000,
+                                'processMs': (
+                                    processed_at - captured_at
+                                ) * 1000,
+                                'enqueueWaitMs': (
+                                    enqueued_at - enqueue_started_at
+                                ) * 1000,
+                                'queueDepth': self._output_queue.qsize(),
+                                'queueCapacity': self._output_queue.maxsize,
+                                'queueFullWaits': full_waits,
+                            },
+                        )
                         break
                     except Full:
+                        full_waits += 1
                         continue
         except Exception as error:
             self._error_handler(

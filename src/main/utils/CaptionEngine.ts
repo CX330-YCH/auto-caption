@@ -35,6 +35,7 @@ import {
   shouldCreateProcessGroup
 } from '../engine/EngineProcessControl.ts'
 import { resolveAppleSpeechHelperPath } from '../engine/AppleSpeechHelperPath.ts'
+import { EngineDiagnosticAssembler } from '../engine/protocol/EngineDiagnosticAssembler.ts'
 
 export class CaptionEngine {
   appPath: string = ''
@@ -46,8 +47,10 @@ export class CaptionEngine {
   timerID: NodeJS.Timeout | undefined
   startTimeoutID: NodeJS.Timeout | undefined
   private readonly protocol = new EngineProtocol()
+  private readonly diagnosticAssembler = new EngineDiagnosticAssembler()
   private engineRunSequence: number = 0
   private activeEngineRunId: number = 0
+  private stdoutDebugDecoder = new StringDecoder('utf8')
   private stderrDecoder = new StringDecoder('utf8')
   private stderrSecrets: string[] = []
 
@@ -81,7 +84,8 @@ export class CaptionEngine {
         engineConfig,
         provider,
         this.port,
-        provider === 'apple_speech' ? resolveAppleSpeechHelperPath() : undefined
+        provider === 'apple_speech' ? resolveAppleSpeechHelperPath() : undefined,
+        allConfig.application.diagnostics.debugMode
       ))
     }
     else {
@@ -101,6 +105,7 @@ export class CaptionEngine {
     }
     this.client = net.createConnection({ port: this.port }, () => {
       Log.info('Connected to caption engine server');
+      this.setDebugMode(allConfig.application.diagnostics.debugMode)
     });
     this.status = 'running'
     allConfig.setEngineEnabled(true)
@@ -123,6 +128,20 @@ export class CaptionEngine {
     Log.info('Send command to Python server:', command)
   }
 
+  public setDebugMode(enabled: boolean): void {
+    if (
+      !this.client ||
+      this.status !== 'running' ||
+      !getActiveBuiltinProvider(allConfig.engine)
+    ) return
+    const data = this.protocol.encodeCommand(
+      'debug_mode',
+      enabled ? 'enabled' : 'disabled'
+    )
+    this.client.write(data)
+    Log.protocol('engine.command', 'debug-mode', { enabled })
+  }
+
   public start(): void {
     if (this.status !== 'stopped') {
       Log.warn('Caption engine is not stopped, current status:', this.status)
@@ -131,6 +150,8 @@ export class CaptionEngine {
     if(!this.getApp()){ return }
 
     this.protocol.reset()
+    this.diagnosticAssembler.reset()
+    this.stdoutDebugDecoder = new StringDecoder('utf8')
     this.stderrDecoder = new StringDecoder('utf8')
     this.stderrSecrets = [
       ...sensitiveArgumentValues(this.command),
@@ -162,14 +183,18 @@ export class CaptionEngine {
     }, timeoutMs)
     
     this.process.stdout.on('data', (data: Buffer) => {
+      Log.metric('engine.stdout', 'chunk', { bytes: data.length })
+      this.logEngineStdout(this.stdoutDebugDecoder.write(data))
       this.handleProtocolBatch(this.protocol.push(data))
     });
 
     this.process.stderr.on('data', (data: Buffer) => {
+      Log.metric('engine.stderr', 'chunk', { bytes: data.length })
       this.logEngineStderr(this.stderrDecoder.write(data))
     });
 
     this.process.on('close', (code: number | null, signal: NodeJS.Signals | null) => {
+      this.logEngineStdout(this.stdoutDebugDecoder.end())
       this.logEngineStderr(this.stderrDecoder.end())
       this.handleProtocolBatch(this.protocol.finish())
       this.process = undefined;
@@ -255,7 +280,12 @@ export class CaptionEngine {
     }
 
     for (const message of batch.messages) {
-      handleEngineData(message, this.activeEngineRunId)
+      Log.protocol('engine.stdout', 'message', {
+        engineRunId: this.activeEngineRunId,
+        message
+      })
+      const assembled = this.diagnosticAssembler.accept(message)
+      if (assembled) handleEngineData(assembled, this.activeEngineRunId)
     }
   }
 
@@ -265,6 +295,14 @@ export class CaptionEngine {
       'Engine stderr:',
       redactSensitiveText(value, this.stderrSecrets)
     )
+  }
+
+  private logEngineStdout(value: string): void {
+    if (!value) return
+    Log.verbose('engine.stdout', 'raw', {
+      engineRunId: this.activeEngineRunId,
+      text: redactSensitiveText(value, this.stderrSecrets)
+    })
   }
 }
 
@@ -319,6 +357,9 @@ function handleEngineData(data: EngineMessage, engineRunId: number): void {
         if ('diagnostic' in data) {
           Log.debug('Engine Error Diagnostic:', data.diagnostic)
         }
+        if ('diagnostic_incomplete' in data) {
+          Log.error('Engine Error Diagnostic is incomplete:', data.diagnostic_incomplete)
+        }
         controlWindow.sendErrorMessage(data.content)
       }
       else Log.error('Invalid error event received from caption engine')
@@ -326,6 +367,12 @@ function handleEngineData(data: EngineMessage, engineRunId: number): void {
     case 'usage':
       if (isContentEngineMessage(data)) Log.info('Engine Token Usage:', data.content)
       else Log.error('Invalid usage event received from caption engine')
+      return
+    case 'metric':
+      Log.metric('python-engine', 'telemetry', {
+        engineRunId,
+        ...data
+      })
       return
     default:
       Log.warn('Unknown engine command:', data.command)

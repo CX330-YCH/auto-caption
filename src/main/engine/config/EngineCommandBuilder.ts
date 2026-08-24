@@ -82,7 +82,8 @@ export function buildBundledEngineArguments(
   config: EngineConfig,
   provider: KnownProviderName,
   port: number,
-  appleSpeechHelperPath?: string
+  appleSpeechHelperPath?: string,
+  debugMode = false
 ): string[] {
   const args = [
     '-a', config.common.audioSource === 1 ? '1' : '0'
@@ -92,6 +93,7 @@ export function buildBundledEngineArguments(
     args.push('-rp', quotePath(config.common.recording.path))
   }
   args.push('-p', port.toString())
+  args.push('--debug-mode', debugMode ? '1' : '0')
   args.push(
     '-t',
     config.common.translation.enabled

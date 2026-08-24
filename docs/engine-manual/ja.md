@@ -2,7 +2,7 @@
 
 ## 注意：このドキュメントはメンテナンスが行われていないため、記載されている情報は古くなっています。最新の情報については、[中国語版](./zh.md)または[英語版](./en.md)のドキュメントをご参照ください。
 
-対応バージョン：v2.23.0
+対応バージョン：v2.24.0
 
 この文書は大規模モデルを使用して翻訳されていますので、内容に正確でない部分があるかもしれません。
 
@@ -201,6 +201,8 @@ python main.py -e fun_asr -s ja -t zh -a 0 -c 10 \
 Fun-ASR は接続 generation ごとに冪等な状態を保持し、同一タスクの `on_error → on_close → stop` は最大1回の再接続または1回の fatal だけを発生させます。恒久的なサービスエラーは即時停止し、一時的なエラーだけを最大3回のバックオフ付きで再試行します。task-failed 後に SDK `stop()` は呼びません。ライフサイクル診断は非表示の `debug` プロトコルイベントとして完全 Debug ログだけに保存され、既存のログ記録画面には表示されません。fatal 時は Session が通常終了を試み、タイムアウトなどの異常経路だけで Electron がパッケージ済みプロセスツリー全体を強制終了します。
 
 すべての内蔵字幕エンジン（Gummy、Fun-ASR、GLM、Vosk、SOSV）と、音声、翻訳、ホットワード SDK のエラーは、サニタイズ済み SDK コールバック項目、例外型とメッセージ、独自属性、完全な traceback、cause/context を現在の Debug JSONL に保存します。Python/SDK の stderr も収集します。API Key、Token、Password、Authorization/Cookie、バイナリ音声本文は記録せず、過大なリモート診断には明示的な上限制御マーカーを付けます。
+
+V6 Debug Mode は `--debug-mode 0|1` で起動し、TCP `debug_mode` command で実行中に切り替えられます。有効時は `ProviderMetric` が音声の読み取り/変換/投入時間、キュー深度とフレーム経過時間、Provider event キュー、Fun-ASR 再接続バッファ、GLM/翻訳 Worker、Apple Speech helper 状態を出力します。Provider 固有項目は `diagnostic_snapshot()` で拡張し、Session に Provider 分岐を追加しません。512 KiB を超える診断は長さと SHA-256 を検証する `diagnostic_chunk` に分割します。
 
 ### Apple Speech Provider
 

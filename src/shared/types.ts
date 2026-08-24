@@ -52,7 +52,7 @@ export interface SoftwareLogItem {
 
 export interface FullConfig {
   platform: string
-  config: import('./config/schema').ConfigDocumentV5
+  config: import('./config/schema').ConfigDocumentV6
   engineEnabled: boolean
   captionLog: CaptionItem[]
   softwareLog: SoftwareLogItem[]

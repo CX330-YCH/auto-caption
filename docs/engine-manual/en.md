@@ -1,6 +1,6 @@
 # Caption Engine Documentation
 
-Corresponding version: v2.23.0
+Corresponding version: v2.24.0
 
 ![](../../assets/media/structure_en.png)
 
@@ -227,6 +227,8 @@ The Provider uses the official DashScope SDK and accepts 16 kHz mono PCM16. `Hot
 Fun-ASR keeps an idempotent state for every connection generation: one task's `on_error → on_close → stop` sequence can cause at most one reconnect or one fatal result. Permanent service errors stop immediately, while transient errors use up to three bounded backoff retries; the SDK `stop()` method is not called after task-failed. Lifecycle diagnostics use the hidden `debug` protocol event and are written only to the complete Debug log, not the existing Software Log view. A fatal event asks the Session to close normally; Electron force-kills the complete packaged process tree only on exceptional timeout paths.
 
 Errors from every built-in caption engine (Gummy, Fun-ASR, GLM, Vosk, SOSV, and Apple Speech), audio capture, translation, and the hotword SDK preserve sanitized SDK callback fields, exception type and message, custom attributes, full traceback, and cause/context in the current Debug JSONL. Python and SDK stderr is collected as well. API keys, tokens, passwords, Authorization/Cookie values, and binary audio bodies are never logged; oversized remote diagnostics use explicit bounded-truncation markers.
+
+V6 Debug Mode starts through `--debug-mode 0|1` and can be changed live by the TCP `debug_mode` command. When enabled, `ProviderMetric` reports audio read/conversion/enqueue timing, queue depth and frame age, Provider event queues, the Fun-ASR reconnect buffer, GLM/translation workers, and Apple Speech helper state. Provider-specific fields extend `diagnostic_snapshot()` without adding Provider branches to Session. Error diagnostics above 512 KiB use length- and SHA-256-verified `diagnostic_chunk` messages so Electron's line limit does not discard the root cause.
 
 ### Apple Speech Provider
 

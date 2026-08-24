@@ -191,13 +191,13 @@ Vosk、SOSV、GLM 和 Fun-ASR 的 final 通过统一翻译服务调用已有 Goo
 
 现有翻译函数的网络取消、有限结果冲刷和外部稳定 ID 关联仍是后续独立改造事项。
 
-## Electron 配置 V5
+## Electron 配置 V6
 
-Electron 持久化、主进程、IPC 和渲染进程共享 `src/shared/config/` 中的 V5 分层模型：
+Electron 持久化、主进程、IPC 和渲染进程共享 `src/shared/config/` 中的 V6 分层模型：
 
 ```text
-ConfigDocumentV5
-├── application          # 语言、主题、颜色、窗口布局
+ConfigDocumentV6
+├── application          # 语言、主题、颜色、窗口布局、Debug Mode
 ├── engine
 │   ├── activeEngineId   # 当前内置 Provider 或自定义引擎 ID
 │   ├── common           # 语言、音频、翻译、录音、启动超时
@@ -206,11 +206,11 @@ ConfigDocumentV5
 └── caption              # 字幕样式
 ```
 
-`AllConfig` 是主进程中的配置所有者，只接受 `schemaVersion: 5`。Renderer 通过 application、engine、caption 三个完整层级交换配置，主进程重新校验后才更新内存；运行态 `engineEnabled` 与 PID、端口、日志不进入磁盘配置。
+`AllConfig` 是主进程中的配置所有者，只接受 `schemaVersion: 6`。Renderer 通过 application、engine、caption 三个完整层级交换配置，主进程重新校验后才更新内存；运行态 `engineEnabled` 与 PID、端口、日志不进入磁盘配置。
 
 引擎启动参数由纯函数 `EngineCommandBuilder` 从 `EngineConfig` 构建，`CaptionEngine` 不再读取扁平 controls 或拼装各 Provider 字段。Builder 内部使用 Provider 参数注册表，共用音频、录音、端口和目标语言参数只生成一次。
 
-完整 V2 会依次显式迁移到 V3、V4、V5；V4 为字幕样式增加 `displayMode` 并默认 `static`，V5 增加 `captionBoundaryMode` 并默认 `sentence`。无版本和其他不支持的版本仍被拒绝并使用默认 V5。完整字段、范围和凭据限制见 [`config-v5.md`](../api-docs/config-v5.md)。
+完整 V2 会依次显式迁移到 V3、V4、V5、V6；V6 为 application 增加默认关闭的 `diagnostics.debugMode`。无版本和其他不支持的版本仍被拒绝并使用默认 V6。完整字段、范围和凭据限制见 [`config-v6.md`](../api-docs/config-v6.md)。
 
 ## Renderer 字幕文本轨道
 
@@ -234,7 +234,7 @@ CaptionItem[]
 ```text
 src/renderer/src/engines/
 ├── catalog.ts                 # 注册、公共字段合成、默认值和统一校验
-├── form.ts                    # V5 配置路径读写、草稿复制和可见性判断
+├── form.ts                    # V6 配置路径读写、草稿复制和可见性判断
 ├── types.ts                   # capability、字段和校验描述类型
 └── providers/
     ├── gummy.ts
@@ -254,7 +254,7 @@ src/renderer/src/engines/
 
 `catalog.ts` 根据能力补齐语言、音频、翻译、录音和超时字段。`EngineFieldRenderer.vue` 统一渲染普通控件；`EngineSelector.vue` 负责内置 Provider、命名自定义引擎、创建入口和删除确认；`EngineControl.vue` 维护一份草稿并按字段 section 分组。外部翻译配置仅在启用翻译且用户展开“配置翻译引擎”时显示，折叠状态不持久化。Fun-ASR 专属字段和热词能力仍由目录元数据驱动。
 
-新增普通 Provider 的前端流程是：先扩展 V5 Provider 类型和主进程校验，再新增一个 `providers/<name>.ts` 定义并在目录注册。常规字段不得在 `EngineControl.vue` 增加 Provider `v-if`。热词远端资源管理器等包含列表编辑、远端创建/删除和确认流程的交互应使用专用组件，并由 capability 明确声明；不得把这类状态压成普通文本字段。
+新增普通 Provider 的前端流程是：先扩展 V6 Provider 类型和主进程校验，再新增一个 `providers/<name>.ts` 定义并在目录注册。常规字段不得在 `EngineControl.vue` 增加 Provider `v-if`。热词远端资源管理器等包含列表编辑、远端创建/删除和确认流程的交互应使用专用组件，并由 capability 明确声明；不得把这类状态压成普通文本字段。
 
 Provider 的启动前要求同样由目录字段校验提供，`EngineStatus.vue` 不再维护本地模型名单。目录和嵌套表单工具均为无 Vue 依赖的纯 TypeScript，可由 Node 单元测试验证。
 
@@ -265,7 +265,7 @@ Provider 的启动前要求同样由目录字段校验提供，`EngineStatus.vue
 - Vosk、SOSV、GLM 和 Fun-ASR 的 final 使用统一客户端翻译；Gummy 继续使用服务端翻译。
 - `-d 1` 现在按参数声明正确启用终端字幕显示；迁移前入口把整数错误地与字符串比较，导致该参数不生效。
 - 直接导入旧 `audio2text.*Recognizer` 的未文档化内部路径不再支持。应用公开扩展点仍是命令行和进程协议。
-- Electron 内部配置 IPC 使用 V5 application/engine/caption 分层对象；该 IPC 不作为第三方公开扩展点。
+- Electron 内部配置 IPC 使用 V6 application/engine/caption 分层对象；该 IPC 不作为第三方公开扩展点。
 
 ## 新 Provider 接入顺序
 

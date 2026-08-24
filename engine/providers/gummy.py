@@ -2,6 +2,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
+import time
 
 from core import (
     AudioFrame,
@@ -154,6 +155,11 @@ class GummyProvider(RecognitionProvider):
         self._usage = 0
         self._send_failures = 0
         self._started = False
+        self._accepted_frames = 0
+        self._accepted_bytes = 0
+        self._send_duration_ms = 0.0
+        self._callback_events = 0
+        self._last_callback_monotonic: float | None = None
 
     @property
     def name(self) -> str:
@@ -200,7 +206,13 @@ class GummyProvider(RecognitionProvider):
         if frame.channels != 1 or frame.sample_width != 2:
             raise ValueError('Gummy requires mono PCM16 audio')
         try:
+            send_started_at = time.monotonic()
             self._client.send_audio_frame(frame.data)
+            self._send_duration_ms += (
+                time.monotonic() - send_started_at
+            ) * 1000
+            self._accepted_frames += 1
+            self._accepted_bytes += len(frame.data)
         except self._retryable_errors as error:
             self._send_failures += 1
             details = exception_diagnostic(
@@ -320,6 +332,8 @@ class GummyProvider(RecognitionProvider):
         translation_result,
         usage,
     ) -> None:
+        self._callback_events += 1
+        self._last_callback_monotonic = time.monotonic()
         if usage:
             duration = usage.get('duration', 0)
             if isinstance(duration, (int, float)):
@@ -348,6 +362,24 @@ class GummyProvider(RecognitionProvider):
             text=text,
             translation=translation,
         ))
+
+    def diagnostic_snapshot(self) -> dict[str, object]:
+        callback_age_ms = None
+        if self._last_callback_monotonic is not None:
+            callback_age_ms = (
+                time.monotonic() - self._last_callback_monotonic
+            ) * 1000
+        return {
+            **super().diagnostic_snapshot(),
+            'started': self._started,
+            'acceptedFrames': self._accepted_frames,
+            'acceptedBytes': self._accepted_bytes,
+            'sentAudioMs': self._accepted_bytes / self._sample_rate / 2 * 1000,
+            'sendDurationMs': self._send_duration_ms,
+            'sendFailures': self._send_failures,
+            'callbackEvents': self._callback_events,
+            'lastCallbackAgeMs': callback_age_ms,
+        }
 
     @staticmethod
     def _read_translation(translation_result) -> str:

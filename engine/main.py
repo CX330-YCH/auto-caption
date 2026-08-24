@@ -9,7 +9,14 @@ SYSTEM_TRUST_BACKEND = initialize_system_trust()
 
 
 from cli import CliOptions, parse_args
-from core import AudioCaptureWorker, ProviderDebug, RecognitionSession
+from core import (
+    AudioCaptureWorker,
+    ProviderDebug,
+    ProviderMetric,
+    RecognitionSession,
+    RuntimeTelemetry,
+    install_runtime_diagnostics,
+)
 from protocol.output import ProtocolEventSink
 from protocol.server import start_server
 from providers import ProviderConfig, build_provider_registry
@@ -19,6 +26,8 @@ from services import run_hotword_worker
 
 
 def run(options: CliOptions) -> None:
+    shared_data.set_debug_mode(options.debug_mode)
+    install_runtime_diagnostics(lambda: shared_data.debug_mode)
     if options.port != 0:
         threading.Thread(
             target=start_server,
@@ -29,6 +38,20 @@ def run(options: CliOptions) -> None:
         change_caption_display(True)
 
     output = ProtocolEventSink()
+
+    def emit_metric(
+        category: str,
+        name: str,
+        fields: dict[str, object],
+    ) -> None:
+        if not shared_data.debug_mode:
+            return
+        output.publish(ProviderMetric(
+            provider=options.caption_engine,
+            category=category,
+            name=name,
+            fields=fields,
+        ))
     output.publish(ProviderDebug(
         provider='runtime',
         message='System CA trust initialized.',
@@ -45,6 +68,8 @@ def run(options: CliOptions) -> None:
             details=details,
         )),
     )
+    runtime.provider.set_metric_handler(emit_metric)
+    runtime.provider.set_debug_enabled(lambda: shared_data.debug_mode)
     audio_queue = Queue(maxsize=max(10, options.chunk_rate * 5))
     # Provider failures are reported through the event sink, then use the
     # normal cleanup path instead of asking Electron to kill the process.
@@ -65,6 +90,7 @@ def run(options: CliOptions) -> None:
                 details=details,
             )
         ),
+        metric_handler=emit_metric,
         record=options.record,
         recording_path=options.record_path,
     )
@@ -78,12 +104,24 @@ def run(options: CliOptions) -> None:
         start_audio_capture=capture_thread.start,
         is_running=is_running,
         request_stop=request_stop,
+        metric_handler=emit_metric,
+    )
+    telemetry = RuntimeTelemetry(
+        audio_queue=audio_queue,
+        provider=runtime.provider,
+        translation_service=runtime.translation_service,
+        emit=emit_metric,
+        is_running=is_running,
+        is_enabled=lambda: shared_data.debug_mode,
     )
     try:
+        telemetry.start()
         session.run()
     except KeyboardInterrupt:
         shared_data.status = 'stop'
         stdout('Keyboard interrupt detected. Exiting...')
+    finally:
+        telemetry.stop()
 
 
 

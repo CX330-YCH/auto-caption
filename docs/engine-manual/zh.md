@@ -1,6 +1,6 @@
 # 字幕引擎说明文档
 
-对应版本：v2.23.0
+对应版本：v2.24.0
 
 ![](../../assets/media/structure_zh.png)
 
@@ -227,6 +227,8 @@ python main.py -e fun_asr -s ja -t zh -a 0 -c 10 \
 Fun-ASR 为每个连接 generation 维护幂等状态：同一次任务的 `on_error → on_close → stop` 最多触发一次重连或一次 fatal。永久服务错误立即终止，暂时错误才进行三次有界退避重连；task-failed 后不会再次调用 SDK `stop()`。生命周期细节通过隐藏的 `debug` 协议事件写入完整 Debug 日志，原有日志记录页不显示 DEBUG。fatal 会请求 Session 正常关闭资源；只有超时等异常路径才由 Electron 强杀整个打包进程树。
 
 所有内置字幕引擎（Gummy、Fun-ASR、GLM、Vosk、SOSV、Apple Speech）及音频、翻译、热词 SDK 的错误都会把脱敏后的 SDK 回调字段、异常类型、消息、自定义属性、完整 traceback 和 cause/context 写入本次 Debug JSONL。Python/SDK stderr 同样完整收集。API Key、Token、密码、Authorization、Cookie 和二进制音频正文始终不记录；过大的远端响应采用明确的有界截断标记。
+
+V6 Debug Mode 通过 `--debug-mode 0|1` 启动，并可由 TCP `debug_mode` command 即时切换。开启后 `ProviderMetric` 统一输出音频帧读取/转换/入队、队列深度与帧龄、Provider event 队列、Fun-ASR 重连缓冲、GLM/翻译 Worker 和 Apple Speech helper 状态。Provider 专属指标通过 `diagnostic_snapshot()` 扩展，Session 不增加 Provider 条件分支。超过 512 KiB 的错误诊断使用带长度和 SHA-256 的 `diagnostic_chunk` 分块，避免 Electron 的单行限制丢失根因。
 
 ### Apple Speech Provider
 

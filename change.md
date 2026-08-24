@@ -5087,3 +5087,171 @@
 - 根目录 `AGENTS.md`：要求保留用户修改、使用项目环境、如实记录失败、不改系统环境或依赖，并明确实际验证平台。
 - 项目现有 `main.spec`、`electron-builder.yml`、`scripts/build-apple-speech-helper.mjs`：作为 Python、Electron 和 Swift macOS arm64 打包配置来源。
 - Apple Speech 权限文档与项目前序 Apple Speech 技术决策：确定最终 Info.plist 必须包含 `NSSpeechRecognitionUsageDescription`。
+
+## 2026-08-24 - 新增全链路 Debug Mode 与可分析运行诊断
+
+### 用户授权与变更目标
+
+- 用户先要求审查当前 Debug 日志逻辑并生成完整修改计划，随后明确要求执行修改：新增 Debug Mode 开关；开启后完整保留 Python、Electron、Renderer、SDK、子进程和协议错误；增加 Python 音频队列延迟/堆积、识别输入积压及 Provider/翻译队列等指标；Debug Mode 不考虑性能损耗，但日志必须可关联、可导出、可分析。
+- 修改前已完整阅读根目录 `AGENTS.md`，确认没有子目录附加规则，并执行 `git status --short --branch`；任务开始时工作区为 `## main...origin/main` 且无已有修改。本次不新增或升级依赖，不调用真实麦克风或付费 SDK，不构建安装包，不发布、不提交、不推送、不创建分支。
+- 安全边界仍优先于“完整”：API Key、Token、密码、Authorization、Cookie 和音频/其他二进制正文禁止进入日志；超出诊断安全上限时必须留下明确截断或不完整标记，不能静默丢失。
+
+### 变更类型
+
+- 功能、重构、配置、协议、测试、构建、文档。
+
+### 修改文件与原因
+
+- `src/shared/config/schema.ts`、`src/shared/types.ts`：配置升级为 `ConfigDocumentV6`，在 application 层增加必需的 `diagnostics.debugMode: boolean`，默认关闭；共享类型同步到主进程和 Renderer。
+- `src/shared/config/document.ts`、`src/main/utils/AllConfig.ts`：增加显式 V5→V6 迁移和 V6 严格校验；V5 同名 diagnostics 扩展字段继续保留，迁移仅覆盖新开关为 `false`；读写和拒绝提示切换到 V6。
+- `src/renderer/src/stores/generalSetting.ts`：暴露 Debug Mode 响应式状态、即时发送完整 application 配置，并在主进程配置回显时原位更新 diagnostics，避免替换嵌套对象导致开关引用失效。
+- `src/renderer/src/components/GeneralSetting.vue`：在共享设置布局中增加 Debug Mode switch；开启前明确提示日志量、识别文本、翻译文本和本地路径边界，关闭立即生效。
+- `src/renderer/src/components/SoftwareLog.vue`：显示 Debug Mode 开关状态、日志写入健康状态及本次会话字节数，每秒刷新；保留现有完整 JSONL 导出和可见日志清空语义。
+- `src/renderer/src/i18n/lang/zh.ts`、`src/renderer/src/i18n/lang/en.ts`、`src/renderer/src/i18n/lang/ja.ts`：同步补齐开关说明、二次确认、启停状态、写入健康和失败文本。
+- `src/main/logging/DebugLogSession.ts`：JSONL 记录升级为版本 2，加入会话 UUID、单调时钟、record type/category/event、写入字节数、丢弃数和最后错误；初始化/追加失败不再反向中断业务，使用 stderr 兜底并通过有界内存队列显式报告健康异常。
+- `src/main/utils/Log.ts`：集中管理 Debug Mode，增加 gated verbose/metric/protocol、结构化 exception 和只读健康状态；DEBUG 仍仅写文件，INFO/WARN/ERROR 的原可见行为不变，Renderer 不获得内部日志路径。
+- `src/main/utils/UtilsFunc.ts`：递归序列化 Error cause/属性、Map/Set/循环引用，二进制只保留类型与长度；补齐 Cookie、Set-Cookie、Basic/Digest Authorization 和结构化 header 脱敏；使用 32 MiB 字符串、4096 项、16 层的明确安全上限。
+- `src/main/logging/DiagnosticsCoordinator.ts`、`src/main/index.ts`：在应用生命周期最早阶段安装 Electron `uncaughtExceptionMonitor`、unhandled rejection、warning 和 child-process-gone 捕获；Debug Mode 开启时每秒记录主进程及 Electron 各进程内存、资源和 uptime，退出时停止采样。
+- `src/main/CaptionWindow.ts`、`src/main/ControlWindow.ts`：捕获控制/字幕 Renderer 崩溃、无响应、preload、加载及 console 事件；增加 Debug 状态 IPC 和受窗口来源、长度、层数、数量校验的 Renderer 诊断 IPC；配置变更时同步 Electron 与运行中的内置 Python 引擎。
+- `src/renderer/src/diagnostics.ts`、`src/renderer/src/main.ts`：安装 Vue error/warn、window error 和 unhandledrejection 捕获；Vue warning 仅在 Debug Mode 进入 verbose 文件，真实异常始终形成结构化错误记录。
+- `src/main/engine/config/EngineCommandBuilder.ts`：只为内置 Python 引擎增加 `--debug-mode 0|1`，旧自定义引擎命令和参数保持原样。
+- `src/main/utils/CaptionEngine.ts`：每次运行关联 engineRunId；Debug Mode 记录 stdout 原始增量 UTF-8 文本、解析后的协议消息、stderr、分块字节数和指标；运行中使用现有 TCP envelope 即时发送 `debug_mode`，仅作用于内置引擎。
+- `src/main/engine/protocol/EngineDiagnosticAssembler.ts`：重组超过单行上限的 Python error diagnostic，校验字节数和 SHA-256；限制 32 MiB、256 块和 16 个待组装对象，缺块、超限或校验失败显式标记 `diagnostic_incomplete`。
+- `src/main/services/AppleSpeechService.ts`：Apple helper stdout envelope 和完整增量 stderr 在 Debug Mode 记录；错误提示保留最近 256 KiB stderr，避免旧实现按任意 4 KiB 数据块截断 UTF-8。
+- `src/main/services/HotwordService.ts`：Debug Mode 记录已校验的热词 Worker 请求/响应；stderr 继续增量解码并用运行时 API Key 二次脱敏。
+- `engine/cli.py`、`engine/utils/shared.py`、`engine/protocol/server.py`：增加启动参数 `--debug-mode 0|1` 和可运行时切换的共享状态；TCP 仍使用原有 NDJSON command envelope，新增命令不改变 `stop`。
+- `engine/utils/sysout.py`：为 stdout/stderr 增加独立写锁，保证 telemetry、Provider callback 和异常线程同时输出时每条 NDJSON/诊断仍保持完整消息边界并立即刷新。
+- `engine/core/events.py`、`engine/core/__init__.py`：增加内部 `ProviderMetric` 事件并导出 telemetry/runtime diagnostics 公共入口，不把指标混入字幕事件。
+- `engine/core/runtime_diagnostics.py`：捕获 Python 主线程、后台线程、unraisable exception、warnings 和标准 logging/SDK logging；详细 warning/logging 仅在 Debug Mode 记录，原生异常 hook 在记录后继续执行，避免吞掉或改变默认异常语义。
+- `engine/core/diagnostics.py`：补齐 Cookie、Basic/Digest Authorization 自由文本脱敏；把有界完整诊断提升到单字符串 32 MiB、集合 4096 项、16 层，继续保留 traceback、cause/context、异常属性和 SDK 公开字段，二进制只记录尺寸。
+- `engine/core/telemetry.py`：新增每秒运行快照，统一采集音频队列深度/容量、Provider snapshot 和翻译任务池；关闭 Debug Mode 后立即停止产生高频指标。
+- `engine/core/audio.py`：每帧记录原始/处理字节数、采样格式、音频时长、读取/转换/入队耗时、满队列等待次数、队列深度和容量；异常继续通过统一脱敏诊断上报。
+- `engine/core/session.py`：记录帧龄、Provider `accept_audio` 耗时、输入队列积压及每批 Provider 事件类型/数量，保持 final 只翻译一次的既有策略。
+- `engine/core/provider.py`：Provider event 队列增加深度、容量、高水位和入队事件；增加动态 Debug 状态回调，供高频 Provider 辅助输出即时启停。
+- `engine/core/worker.py`、`engine/services/translation.py`：有界 Worker 统计 queued/pending/active/submitted/completed/rejected/closed；翻译开启与关闭状态均可快照，不改变原队列上限或失败保留原字幕语义。
+- `engine/providers/gummy.py`：记录音频发送帧/字节/累计耗时、发送失败、SDK callback 数量和最近 callback 延迟。
+- `engine/providers/fun_asr.py`：记录 generation 状态、ready/stopping、重连次数、待重发音频、发送音频偏移和 final 数量。
+- `engine/providers/glm.py`：记录 VAD/语音状态、音频 buffer、静音帧和请求 Worker 积压。
+- `engine/providers/apple_speech.py`：并发消费 helper stderr，Debug Mode 内逐行保留；错误携带完整脱敏诊断，并快照 stdin 写入耗时、累计音频、输出/错误行数和读写线程状态。
+- `engine/protocol/output.py`：`ProviderMetric` 映射为可选 `metric`；超过 512 KiB 的 error diagnostic 以 192 KiB Base64 块发送，最终 reference 带长度和 SHA-256；总诊断超过 32 MiB 时输出明确截断原因，不生成超限协议行。
+- `engine/main.py`：把 Debug 状态、统一 metric handler、RuntimeTelemetry 注入现有 AudioCaptureWorker/RecognitionSession/Provider/TranslationService，未增加按 Provider 复制的音频主循环。
+- `tests/node/configDocument.test.mjs`：覆盖 V6 默认值、V2–V5 显式迁移、V5 diagnostics 扩展字段保留和非法 debugMode 拒绝。
+- `tests/node/debugLogSession.test.mjs`：覆盖记录版本/会话关联、文件与 UI 路由边界、Error/cause 保留、Basic/Cookie 脱敏、二进制摘要和深度上限。
+- `tests/node/engineDiagnosticAssembler.test.mjs`：覆盖大诊断重组、哈希/字节恢复、缺块和超限拒绝。
+- `tests/node/engineCommandBuilder.test.mjs`：覆盖 Debug 参数只传内置引擎；`tests/node/engineCatalog.test.mjs` 同步当前 V6 测试描述。
+- `engine/tests/test_cli.py`：覆盖 Debug CLI；`engine/tests/test_diagnostics.py` 覆盖新增自由文本脱敏；`engine/tests/test_protocol_output.py` 覆盖 metric 与大诊断分块；`engine/tests/test_engine_core.py` 覆盖音频/Session 指标。
+- `docs/api-docs/config-v6.md`：新增 V6 字段、默认值、迁移、隐私和安全上限说明；`docs/api-docs/config-v3.md`、`config-v4.md`、`config-v5.md` 更新历史格式指向和完整迁移链。
+- `docs/api-docs/electron-ipc.md`：记录 V6 FullConfig、Debug status/export、Renderer diagnostic IPC 及字段边界；`docs/api-docs/caption-engine.md`：记录 Debug CLI/TCP、metric、原始日志、分片诊断和兼容性；`docs/api-docs/caption-presentation.md`：补充 V5→V6 不改变字幕呈现。
+- `README.md`、`README_en.md`、`README_ja.md`：三语同步 Debug Mode 能力和敏感内容提示。
+- `docs/user-manual/zh.md`、`docs/user-manual/en.md`、`docs/user-manual/ja.md`：三语说明开关位置、即时生效、日志内容、导出和隐私边界。
+- `docs/engine-manual/zh.md`、`docs/engine-manual/en.md`、`docs/engine-manual/ja.md`：三语说明 ProviderMetric、队列指标、动态命令和大诊断；`docs/engine-manual/architecture.md` 更新配置/诊断职责为 V6。
+- `docs/testing.md`：补充 V6、指标、分块、脱敏和命令构建覆盖；`docs/CHANGELOG.md`：在未发布部分记录用户可见功能；`change.md`：追加本批次完整流水。
+
+### 修改前后行为
+
+- 修改前：应用每次启动虽创建隐藏 JSONL，但没有用户可控 Debug Mode；大量 SDK/Renderer/Electron runtime 事件没有统一入口，文件写入失败可能反向影响业务；Python 只提供零散错误，无法判断音频队列是否堆积、帧从采集到识别等待多久、Provider/翻译任务是否阻塞；超大错误会撞上 1 MiB stdout 单行限制。
+- 修改后：V6 Debug Mode 默认关闭，用户确认后即时开启，并同步到当前 Python 引擎。开启期间完整保留经过脱敏和安全边界处理的主/渲染/Python/SDK/helper stderr、原始与解析协议、异常链、进程资源和高频队列指标；每条 JSONL 带 session、sequence、UTC、monotonic time、category/event，Python 消息关联 engineRunId/provider，便于按一次启动和一次识别运行重建时间线。
+- 日志页继续只展示 INFO/WARN/ERROR，DEBUG 和高频 metric/protocol 不污染 UI；状态标签显示是否启用、写入健康和文件大小。清空表格不删除会话，导出得到本次启动完整 JSONL。写入失败会报告 unhealthy/droppedRecords，并保留最多 1024 条待写记录，不使字幕主流程崩溃。
+
+### 配置、IPC、协议、命令行、数据结构与依赖
+
+- 持久化配置从 `schemaVersion: 5` 升级到 `6`，新增必需布尔字段 `application.diagnostics.debugMode`，默认 `false`。V2→V3→V4→V5→V6 显式迁移；V5→V6 不自动开启 Debug，保存未知兼容字段。向旧版回滚前应恢复 V5 配置备份，旧程序会拒绝 V6。
+- 新增 Electron IPC `control.debugLog.status` 与内部 `diagnostics.renderer.record`；原 `control.debugLog.export`、application/engine/caption IPC 和 UI 可见日志事件保持兼容。Renderer 诊断 IPC 不接收文件/命令，且验证来源、字符串长度、集合大小和嵌套深度。
+- 内置引擎 CLI 新增 `--debug-mode 0|1`；TCP 新增 additive `debug_mode` command；stdout 新增 additive `metric` 和 `diagnostic_chunk`。旧 `command` envelope、caption/translation/error、stop 和旧自定义引擎均未删除或改变，自定义引擎不会收到新参数/命令。
+- 没有新增、删除或升级 npm/pip/Swift 依赖，`package.json`、锁文件和打包配置未修改。
+
+### 兼容性、回滚与安全
+
+- Node/Vue/Python 代码保持 Windows、macOS、Linux 路径共享；本次实际只在 macOS arm64 开发环境执行离线测试和 Electron production build，未声称 Windows/Linux 实机已验证。
+- Debug Mode 明确可能记录字幕、翻译、Provider 响应、本地路径和模型信息。凭据通过结构化 key、运行时实际 secret、命令参数和自由文本规则双层脱敏；PCM、Buffer、bytes、ArrayBuffer 和 typed array 只保存类型/长度。诊断对象有 32 MiB/4096 项/16 层边界，分块总量 32 MiB/256 块/16 个 pending；任何截断、缺块、哈希失败或写入失败均显式可见。
+- 回滚应作为同一批次移除 V6 diagnostics 字段及迁移、UI/IPC、Electron coordinator、Python telemetry/runtime hooks、metric/chunk 协议、测试和三语文档，并恢复 V5 类型名称；不得只回滚 Electron 组装器而保留 Python chunk 输出，也不得删除用户的 V6 配置而不先备份。
+
+### 验证记录
+
+- `npm run verify`：最终通过；Node/Web TypeScript、Vue `vue-tsc`、全仓 ESLint、Node `109/109`、Python `73/73` 全部成功。输出仅包含项目既有 npm mirror 配置弃用警告和 Node `MODULE_TYPELESS_PACKAGE_JSON` 性能警告。
+- `npm run build`：通过；Electron main、preload、renderer production bundle 构建成功，分别转换 34、1、3292 个模块。
+- `git diff --check`：写入本记录前通过；完成记录后再次执行最终检查。
+- 中间验证如实记录：首次 TypeScript 检查因 Electron `console-message` 回调签名使用了错误的新式形态失败，改为项目 Electron 版本的参数形态后通过；早期 Node 测试因仍断言 V5/旧命令参数失败，迁移测试同步后通过；一项 Python metric 测试因测试变量漏初始化失败，补齐 fixture 后通过；一次 ESLint 因未使用的 `_filePath` 失败，改为显式公开健康字段后通过。
+- 曾直接运行 `node --import tsx --test tests/node/*.test.mjs`，因项目不安装 `tsx` 而全部无法加载；曾直接使用系统 `python3 -m unittest discover -s engine/tests -v`，因系统环境缺少 `resampy`/`truststore` 出现 2 failure、2 error。这两条是错误的测试入口，不记为通过；随后使用仓库规定的 `npm run verify` 启动器和项目 `.test-env` 完整通过，未安装系统依赖。
+
+### 未执行、已知风险与后续事项
+
+- 未用真实麦克风/系统输出运行长时间识别，未连接 Gummy、Fun-ASR、GLM、翻译或热词付费/远端 SDK；因此指标字段和异常捕获由伪 Provider/离线协议测试验证，仍需在 Windows 主发布平台以真实音频回归队列增长、断网、SDK 鉴权失败、Renderer 崩溃、磁盘写满和日志导出。
+- 未执行 PyInstaller 重打包、electron-builder 安装包、Windows/Linux build、macOS 签名/公证或发布。`npm run build` 只验证 Electron production bundle，不代表最终安装包已验证。
+- Debug Mode 设计上会显著增加同步文件 I/O、IPC/NDJSON 和序列化开销；这是用户明确接受的行为。32 MiB 单诊断和持续会话文件仍可能占用大量磁盘，当前不自动清理历史 debug-logs；日志页健康状态和手动导出可用于发现问题，后续如增加清理策略必须保持用户可控且不能破坏当前会话完整性。
+
+### 关键决策来源
+
+- 用户明确要求 Debug Mode 开启后完整保留 Python、Electron、SDK 等错误，并包含音频队列延迟、堆积和识别输入积压；明确接受 Debug Mode 的性能损害。
+- 根目录 `AGENTS.md`：要求配置显式版本迁移、stdout NDJSON 边界、协议向后兼容、异常可诊断但不得包含密钥、禁止无界队列、三语同步、测试离线和 `change.md` 完整流水。
+- 项目既有 `DebugLogSession`、`EngineProtocol`/`NDJSONDecoder`、`RecognitionSession`、`RecognitionProvider`、`BoundedWorkerPool` 和 Provider registry：作为本次渐进扩展边界；没有引入新依赖或复制新的识别主循环。
+
+## 2026-08-24：版本 2.24.0 与 macOS arm64 构建
+
+### 用户授权与目标
+
+- 用户明确要求编译 macOS 版本并更新小版本号。本批次将版本从 `2.23.0` 更新到 `2.24.0`，基于当前工作区重新构建 Swift Apple Speech 辅助程序、Python 字幕引擎、Electron 应用、ZIP 与 DMG。
+- 按用户此前要求，仅使用项目内 `engine/.venv` 和仓库已有 Node/Swift 工具链；未修改系统环境，未安装、删除或升级依赖，未提交、推送、发布 Release 或访问付费 API。
+
+### 变更类型
+
+- 配置、文档、构建。
+
+### 修改文件与原因
+
+- `package.json`、`package-lock.json`：将应用及锁文件根包版本从 `2.23.0` 更新为 `2.24.0`；依赖清单与解析版本未改变。
+- `src/renderer/index.html`、`src/renderer/src/components/EngineStatus.vue`：同步窗口标题与“关于”页显示版本。
+- `README.md`、`README_en.md`、`README_ja.md`：同步中英日 release 徽章、发布提示和平台说明到 `2.24.0`，并保留本次工作区已有的 Debug Mode 功能说明。
+- `docs/user-manual/zh.md`、`docs/user-manual/en.md`、`docs/user-manual/ja.md`、`docs/engine-manual/zh.md`、`docs/engine-manual/en.md`、`docs/engine-manual/ja.md`：同步中英日用户手册和引擎手册版本页眉。
+- `docs/CHANGELOG.md`：新增 `v2.24.0` 条目，记录 Debug Mode、V6 配置、诊断分块、版本更新和 macOS arm64 构建。
+- `change.md`：追加本次版本与构建的完整流水。
+- 生成但被 Git 忽略的构建产物：`native/apple-speech-helper/dist/apple-speech-helper`、`engine/dist/main`、`out/`、`dist/mac-arm64/Auto Caption.app`、`dist/Auto Caption-2.24.0-arm64-mac.zip`、`dist/auto-caption-2.24.0.dmg`、对应 `.blockmap` 与 `dist/latest-mac.yml`。`latest-mac.yml` 已按最终重新签名、重新封装后的文件重算 SHA-512、大小和发布时间。
+
+### 修改前后行为
+
+- 修改前：应用与文档版本为 `2.23.0`，没有本轮基于当前 Debug Mode/V6 工作区生成的 `2.24.0` macOS 产物。
+- 修改后：源代码、锁文件、界面和三语文档统一为 `2.24.0`；提供 macOS arm64 `.app`、ZIP 与 DMG，包内 Python 引擎及 Apple Speech helper 均为 arm64。运行功能与配置字段由同一工作区中的上一条 Debug Mode/V6 记录描述，本批次没有另行改变业务协议。
+
+### 配置、IPC、协议、命令行、数据结构与依赖
+
+- 本批次只更新应用版本和文档发布面；没有新增配置迁移、IPC、子进程协议或数据结构变化。
+- `engine/dist/main --help` 已确认包含当前 `--debug-mode`、Fun-ASR 与 Apple Speech 参数；这些参数来自已记录的功能变更，本批次未改变其语义。
+- 没有新增、删除或升级 npm、pip 或 Swift 依赖；`package-lock.json` 只改变根包版本。打包器使用锁定的 Electron `43.4.0`，`npmRebuild` 保持关闭。
+
+### 兼容性、迁移、回滚与安全
+
+- 实际产物只验证 macOS arm64；Windows/Linux 未在本批次构建，不能据此声称实机验证。版本更新不改变 V6 配置迁移或跨平台代码路径。
+- 回滚应恢复上述版本展示和文档条目，并移除本次 `2.24.0` 生成产物；不得覆盖工作区中用户已有的 Debug Mode/V6 修改。
+- 应用没有可用的 Developer ID Application 证书，因此最终 `.app` 使用 ad-hoc 深度签名，`TeamIdentifier` 未设置，未执行 Apple notarization。该产物适合本地测试，不等同于正式签名、公证的公开发行包。
+- 构建和日志中未写入 API Key、Token 或密码。
+
+### 验证命令与真实结果
+
+- `SDKROOT=/Library/Developer/CommandLineTools/SDKs/MacOSX26.5.sdk npm run build:apple-speech`：通过；生成 arm64 Swift helper。SwiftPM 仅报告用户缓存目录不可写警告，没有修改系统环境。
+- `npm run verify`：通过；Node/Web TypeScript、Vue typecheck、ESLint、Node `109/109`、Python `73/73` 全部成功。只有项目既有 npm mirror 配置弃用警告与 Node module type 性能警告。
+- `PYINSTALLER_CONFIG_DIR=/private/tmp/auto-caption-pyinstaller-config ./.venv/bin/pyinstaller --clean --noconfirm ./main.spec`：通过；使用项目 `engine/.venv` 生成 arm64 `engine/dist/main`。构建警告包括未找到可选 `pycparser.lextab`/`yacctab` 隐式导入，以及 numba 的 `@rpath/libomp.dylib` 未解析；未阻止产物生成。
+- `./dist/main --help`：沙箱内因 `semctl: Operation not permitted` 无法初始化 PyInstaller 同步信号量；在沙箱外只读重试后退出码为 0，并显示 Debug Mode、Apple Speech 及现有 Provider 参数。
+- `npm run build`：通过；main、preload、renderer 分别转换 34、1、3292 个模块。
+- `./native/apple-speech-helper/dist/apple-speech-helper probe` 与包内 helper `probe`：均退出码 0，返回 `protocolVersion: 1`、`isAvailable: true`、`maximumReservedLocales: 5`。
+- `npx electron-builder --mac`：沙箱内因 `getaddrinfo ENOTFOUND npmmirror.com` 失败；获准联网后仅下载已锁定 Electron `43.4.0` 并成功生成 arm64 `.app`、ZIP、DMG 和初始 blockmap，没有执行依赖安装或重建。
+- `file`：应用主程序、`Contents/Resources/engine/main` 和 `Contents/Resources/apple-speech/apple-speech-helper` 均为 `Mach-O 64-bit executable arm64`；helper 权限为 `-rwxr-xr-x`。
+- `/usr/libexec/PlistBuddy`：`CFBundleShortVersionString` 与 `CFBundleVersion` 均为 `2.24.0`；`NSSpeechRecognitionUsageDescription` 存在。
+- `codesign --force --deep --sign - ...` 后执行 `codesign --verify --deep --strict --verbose=2 ...`：通过；签名详情为 `Signature=adhoc`、`TeamIdentifier=not set`。
+- `ditto -c -k --sequesterRsrc --keepParent ...`：成功以最终已签名 `.app` 重建 ZIP。
+- `hdiutil create ...`：沙箱内因“设备未配置”失败；在沙箱外以相同命令成功用最终已签名 `.app` 重建 APFS/UDZO DMG。命令仅报告旧 `hdiutil create` 语法已弃用警告。
+- blockmap 重建脚本：成功为最终 ZIP/DMG 生成 gzip blockmap，并将最终 SHA-512、大小写入 `dist/latest-mac.yml`。
+- `unzip -tq dist/Auto\ Caption-2.24.0-arm64-mac.zip`：通过，无压缩数据错误。
+- `hdiutil verify dist/auto-caption-2.24.0.dmg`：通过，校验和有效。
+- 最终 SHA-256：ZIP `8607876641ebff900d358c45522284f954408ac752f5265921e7e95e5c3e91f8`（225113728 bytes）；DMG `0d6a6704d50c4815437717afba71726d8057e81e2bc153be6af7f2440d7180c8`（245100932 bytes）。
+- `git diff --check`：在本记录追加后执行最终检查，结果见交付前审计。
+
+### 未执行、已知风险与后续事项
+
+- 未执行 Apple Developer ID 签名、公证、Gatekeeper 下载隔离场景验证、真实麦克风/系统音频识别、远端/付费 Provider、Windows 或 Linux 构建。
+- PyInstaller 的可选隐式导入和 numba `libomp` 警告仍需在实际使用相关模块时观察；当前 `--help` 启动和完整离线测试通过。
+- Electron/Vite renderer 仍有较大的单一 JS bundle；这是既有构建状态，本次未扩大范围做拆包优化。
+
+### 关键决策来源
+
+- 用户明确要求编译 macOS 版本并更新小版本号，同时此前要求不得修改系统环境。
+- 根目录 `AGENTS.md` 要求使用项目环境、保护现有修改、三语同步、真实记录失败与成功验证、构建产物不误加入 Git、版本发布更新 changelog 并追加 `change.md`。

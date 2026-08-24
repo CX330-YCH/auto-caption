@@ -1,6 +1,8 @@
 # 配置文件 V5
 
-Auto Caption 的持久化配置位于 Electron `userData/config.json`。当前版本接受 `schemaVersion: 5`，磁盘、主进程、IPC 和渲染进程共享 `ConfigDocumentV5`。
+> 本文保留用于说明历史格式；当前格式为 [配置文件 V6](./config-v6.md)。应用会把完整 V5 显式迁移到 V6，并新增默认关闭的 `application.diagnostics.debugMode`。
+
+Auto Caption 的持久化配置位于 Electron `userData/config.json`。V5 使用 `schemaVersion: 5`，当时磁盘、主进程、IPC 和渲染进程共享 `ConfigDocumentV5`。
 
 ## 文档结构
 
@@ -53,7 +55,7 @@ Auto Caption 的持久化配置位于 Electron `userData/config.json`。当前�
 
 ## 校验
 
-- `schemaVersion` 必须严格等于 `5`；完整 V2、V3、V4 按顺序显式迁移。
+- V5 文档中的 `schemaVersion` 严格等于 `5`；当前应用会把完整 V2、V3、V4、V5 按顺序显式迁移到 V6。
 - `displayMode` 只能是 `static` 或 `rolling`。
 - `captionBoundaryMode` 只能是 `sentence` 或 `continuous`。
 - Renderer 发送的完整 caption 层由主进程重新校验。
@@ -65,10 +67,10 @@ Auto Caption 的持久化配置位于 Electron `userData/config.json`。当前�
 - V4→V5：保留全部分层配置和未知扩展字段，在 `caption.styles` 写入 `captionBoundaryMode: "sentence"`。
 - V3→V5：先写入 V4 的 `displayMode: "static"`，再执行 V4→V5。
 - V2→V5：先迁移命名自定义引擎到 V3，再依次执行 V3→V4→V5。
-- 无版本、V1、结构不完整和未来版本配置仍被拒绝，本次运行使用 V5 默认配置。
+- 无版本、V1、结构不完整和未来版本配置仍被拒绝，本次运行使用 V6 默认配置。
 
-迁移不会自动启用逐行滚动或连续排版，避免升级改变字幕窗口行为。向旧版程序回滚前，应恢复升级前配置备份；旧程序会把 V5 视为未来版本。
+迁移不会自动启用逐行滚动、连续排版或 Debug Mode，避免升级改变字幕窗口行为。向旧版程序回滚前，应恢复升级前配置备份；旧程序会把 V6 视为未来版本。
 
 ## IPC、协议和凭据
 
-V5 沿用 application、engine、caption 三个完整层级的现有 IPC，不新增通道。Python stdout NDJSON、本地 TCP command、字幕 partial/final、翻译关联和 CLI 参数不变。该版本不改变 API Key 的存储、传递和脱敏规则，也不新增远端请求或付费资源。
+V5 当时沿用 application、engine、caption 三个完整层级的 IPC，不新增通道。Python stdout NDJSON、本地 TCP command、字幕 partial/final、翻译关联和 CLI 参数不变。该版本不改变 API Key 的存储、传递和脱敏规则，也不新增远端请求或付费资源。

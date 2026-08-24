@@ -10,6 +10,7 @@ import {
   CAPTION_WINDOW_MIN_WIDTH,
   lockCaptionWindowHeight
 } from './CaptionWindowGeometry'
+import { diagnosticsCoordinator } from './logging/DiagnosticsCoordinator.ts'
 
 class CaptionWindow {
   window: BrowserWindow | undefined;
@@ -35,6 +36,7 @@ class CaptionWindow {
     })
 
     this.window.setAlwaysOnTop(true, 'screen-saver')
+    diagnosticsCoordinator.attachWindow(this.window, 'caption-renderer')
 
     this.window.on('ready-to-show', () => {
       this.window?.show()
