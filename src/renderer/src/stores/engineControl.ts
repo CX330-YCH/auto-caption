@@ -4,7 +4,6 @@ import { defineStore } from 'pinia'
 import { notification } from 'ant-design-vue'
 import { ExclamationCircleOutlined } from '@ant-design/icons-vue'
 import { h } from 'vue'
-import { useI18n } from 'vue-i18n'
 
 import type { EngineConfig } from '../../../shared/config/schema'
 import type {
@@ -23,9 +22,9 @@ import {
   getActiveBuiltinProvider,
   getActiveCustomEngine
 } from '../../../shared/config/schema.ts'
+import { translate } from '../i18n'
 
 export const useEngineControlStore = defineStore('engineControl', () => {
-  const { t } = useI18n()
   const platform = ref('unknown')
 
   const engineConfig = ref<EngineConfig>(createDefaultConfig('').engine)
@@ -63,8 +62,8 @@ export const useEngineControlStore = defineStore('engineControl', () => {
 
   function showConfigValidationError(issue: EngineValidationIssue): void {
     notification.open({
-      message: t(issue.titleKey),
-      description: t(issue.descriptionKey),
+      message: translate(issue.titleKey),
+      description: translate(issue.descriptionKey),
       duration: null,
       icon: () => h(ExclamationCircleOutlined, { style: 'color: #ff4d4f' })
     })
@@ -175,33 +174,33 @@ export const useEngineControlStore = defineStore('engineControl', () => {
     const provider = getActiveBuiltinProvider(config)
     const customEngine = getActiveCustomEngine(config)
     const str0 =
-      `${t('noti.sLang')}${common.sourceLanguage}${t('noti.trans')}${common.translation.enabled?'yes':'no'}` +
-      `${t('noti.engine')}${provider}${t('noti.audio')}${common.audioSource?t('noti.sysin'):t('noti.sysout')}` +
-      (common.translation.enabled ? `${t('noti.tLang')}${common.targetLanguage}` : '')
+      `${translate('noti.sLang')}${common.sourceLanguage}${translate('noti.trans')}${common.translation.enabled?'yes':'no'}` +
+      `${translate('noti.engine')}${provider}${translate('noti.audio')}${common.audioSource?translate('noti.sysin'):translate('noti.sysout')}` +
+      (common.translation.enabled ? `${translate('noti.tLang')}${common.targetLanguage}` : '')
     const str1 = customEngine
-      ? `${t('noti.custom')}${customEngine.name} (${customEngine.executable})${t('noti.args')}${customEngine.command}`
+      ? `${translate('noti.custom')}${customEngine.name} (${customEngine.executable})${translate('noti.args')}${customEngine.command}`
       : ''
     notification.open({
       placement: 'topLeft',
-      message: t('noti.started'),
+      message: translate('noti.started'),
       description:
         (customEngine ? str1 : str0) +
-        `${t('noti.pidInfo')}${args}`
+        `${translate('noti.pidInfo')}${args}`
     })
   })
 
   window.electron.ipcRenderer.on('control.engine.stopped', () => {
     notification.open({
       placement: 'topLeft',
-      message: t('noti.stopped'),
-      description: t('noti.stoppedInfo')
+      message: translate('noti.stopped'),
+      description: translate('noti.stoppedInfo')
     })
   })
 
   window.electron.ipcRenderer.on('control.error.occurred', (_, message) => {
     errorSignal.value = !errorSignal.value
     notification.open({
-      message: t('noti.error'),
+      message: translate('noti.error'),
       description: message,
       duration: null,
       icon: () => h(ExclamationCircleOutlined, { style: 'color: #ff4d4f' })

@@ -5391,3 +5391,129 @@
 
 - 用户明确要求编译 macOS 版本并更新小版本号，同时此前要求不修改系统环境。
 - 根目录 `AGENTS.md`：要求保护已有修改、使用项目环境、三语同步、真实记录失败与成功验证、生成产物不误加入 Git，并为每批文件修改追加 `change.md`。
+
+## 2026-08-27 - 修复字幕窗口异步初始化时的 i18n 上下文错误
+
+### 用户授权与变更目标
+
+- 用户在提供 Debug Mode 日志并完成只读根因分析后明确要求修复 i18n 错误。
+- 目标是消除字幕窗口首次在异步 IPC 回调中创建 `engineControl` Pinia store 时触发的 vue-i18n 错误码 26，确保窗口初始配置、字幕记录和软件日志的加载流程不会在中途被异常打断。
+- 修改前重新阅读根目录及目标目录适用的 `AGENTS.md`，执行 `git status --short --branch`，确认 `main...origin/main` 工作区干净。本批次不处理另一个 `ResizeObserver` 警告，不升级依赖、不改版本号、不打包发布、不提交或推送。
+
+### 变更类型
+
+- 修复、测试、文档。
+
+### 修改文件与原因
+
+- `src/renderer/src/i18n/index.ts`：新增基于全局 Composer 的 `translate()` 入口，使非组件代码无需 Vue 当前组件实例即可按当前 locale 翻译；为该模块的本地导入和再导出补充 `.ts` 扩展，以便现有 Node 测试运行器直接加载真实 i18n 单例。
+- `src/renderer/src/stores/engineControl.ts`：移除 Pinia setup store 内的 `useI18n()`，所有通知文案改为调用上下文无关的 `translate()`，同时继续在通知生成时读取当前界面语言。
+- `tests/node/rendererI18n.test.mjs`：新增无组件 setup 上下文的中英文翻译回归测试，并约束 `engineControl` store 不得重新依赖组件级 `useI18n()`。
+- `docs/CHANGELOG.md`：在“未发布”部分记录字幕窗口初始化错误修复。
+- `change.md`：追加本批次授权、根因、文件、兼容性、验证、失败尝试和剩余风险流水。
+
+### 修改前后行为
+
+- 修改前：控制窗口通常会在组件 setup 中先创建 `engineControl` store，因此不一定暴露问题；字幕窗口不渲染引擎控制组件，`App.vue` 的 `both.window.mounted` Promise 回调首次创建该 store 时已经没有 Vue 当前组件实例，store 内 `useI18n()` 抛出错误码 26。该未处理拒绝会阻止回调后续的引擎状态、初始字幕记录和软件日志赋值，但后续实时字幕 IPC 仍可能继续工作。
+- 修改后：`engineControl` store 可从组件 setup、异步 IPC 回调或其他非组件上下文安全创建；翻译在每次通知生成时通过全局 Composer 解析，界面语言切换行为保持不变；`App.vue` 既有初始化顺序无需改变即可继续执行到末尾。
+
+### 配置、IPC、协议、命令行、数据结构与依赖
+
+- 配置 `schemaVersion: 6`、默认值和迁移函数均无变化。
+- Electron IPC 名称、参数和返回数据无变化；`both.window.mounted` 只恢复既有完整执行，不改变契约。
+- Python/Electron 子进程协议、自定义引擎协议、TCP command、命令行参数和字幕数据结构均无变化。
+- 没有新增、删除或升级 npm、Python、Swift 依赖，`package.json` 与锁文件未修改；没有新增用户可见文案，因此不需要补充中英日资源键。
+
+### 兼容性、迁移、回滚与安全
+
+- 修复位于 Vue 渲染进程公共代码，对 Windows、macOS 和 Linux 使用相同路径；生产构建已验证，未进行三平台 GUI 实机回归。
+- 不需要配置或数据迁移。回滚应恢复 `i18n/index.ts` 和 `engineControl.ts`，删除新增测试及未发布 changelog 条目，并移除本条 `change.md` 记录；不得覆盖其他用户修改。
+- `translate()` 当前只覆盖 store 现有的字符串键调用；若未来需要具名参数、复数或局部 scope，应扩展明确类型，而不是重新在 store 中调用组件 hook。
+- 本批次不处理控制窗口一次性的 `ResizeObserver loop completed with undelivered notifications`；该警告与本次确定的 caption-renderer i18n 异常属于不同 renderer。
+- 没有读取、写入或记录 API Key、Token、密码及其他凭据。
+
+### 验证命令与真实结果
+
+- 首次执行 `node --experimental-strip-types --test tests/node/rendererI18n.test.mjs`：失败；语言文件已补充 `.ts` 扩展，但 `i18n/index.ts` 的 `config/theme` 等再导出仍为 Node ESM 无法直接解析的无扩展路径。随后为三个本地再导出补充 `.ts` 扩展并重试，没有把失败结果标记为通过。
+- `node --experimental-strip-types --test tests/node/rendererI18n.test.mjs`：修正导入扩展后通过，新增测试 `2/2`；输出只有项目既有的 `MODULE_TYPELESS_PACKAGE_JSON` 性能警告。
+- `npm run typecheck && npm run lint && npm run test:node`：通过；Node/Web TypeScript、ESLint 和 Node `114/114` 全部成功。
+- `npm run verify`：通过；类型检查、ESLint、Node `114/114`、Python `73/73` 全部成功。输出只有项目既有 npm mirror 配置弃用警告与 Node module type 性能警告。
+- `npm run build`：通过；Electron main、preload、renderer 分别转换 35、1、3294 个模块。
+- `git diff --check`：追加本记录前通过；完成记录后再次执行最终审计。
+
+### 未执行、已知风险与后续事项
+
+- 未运行 Electron GUI 自动化或人工重新导出 Debug Mode 日志，因此尚未用新版应用实测确认错误码 26 不再出现；上下文无关翻译行为、源码约束、类型、Lint、全量离线测试和生产构建均已验证。
+- 未执行真实麦克风/系统音频识别、远端或付费 Provider、Swift helper/Python 引擎重新打包、Windows/Linux 实机构建、macOS 安装包、签名或公证；本次只修改 Renderer i18n 初始化，不触及这些路径。
+- `ResizeObserver` 警告仍按此前分析保留，若后续日志中高频重复，应作为独立布局问题复现和修复，不应通过本次 i18n 修改顺带压制。
+
+### 关键决策来源
+
+- 用户提供的 Debug Mode 栈精确映射到生产 bundle 的 `useEngineControlStore` 初始化行；日志类别为 `caption-renderer`，错误发生在 Pinia effect scope 内。
+- 本地锁定的 vue-i18n `11.4.8` 源码将错误码 26 定义为 `MUST_BE_CALL_SETUP_TOP`，要求 `useI18n()` 只能在组件 setup 顶层调用。
+- 根目录 `AGENTS.md` 要求保护工作区、保持跨平台兼容、执行真实验证、记录失败尝试，并为每批仓库修改同步追加完整 `change.md` 流水。
+
+## 2026-08-27：版本 2.26.0 与 macOS arm64 构建
+
+### 用户授权与目标
+
+- 用户明确要求编译 macOS 版本并更新小版本号。本批次将版本由 `2.25.0` 更新为 `2.26.0`，保留当前工作区的字幕窗口异步 i18n 初始化修复，并重新构建 Swift Apple Speech helper、Python 引擎、Electron 应用、ZIP 与 DMG。
+- 只使用仓库现有 Node/Swift 工具链与项目内 `engine/.venv`；未修改系统环境，未安装、删除或升级依赖，未提交、推送、发布 Release 或访问付费 API。
+
+### 变更类型
+
+- 配置、文档、构建。
+
+### 修改文件与原因
+
+- `package.json`、`package-lock.json`：根包版本由 `2.25.0` 更新为 `2.26.0`；依赖清单和锁定解析版本不变。
+- `src/renderer/index.html`、`src/renderer/src/components/EngineStatus.vue`：同步窗口标题与“关于”页版本。
+- `README.md`、`README_en.md`、`README_ja.md`：同步中英日 release 徽章、发布提示和平台版本说明。
+- `docs/user-manual/zh.md`、`docs/user-manual/en.md`、`docs/user-manual/ja.md`、`docs/engine-manual/zh.md`、`docs/engine-manual/en.md`、`docs/engine-manual/ja.md`：同步三语手册版本到 `2.26.0`。
+- `docs/CHANGELOG.md`：将当前字幕窗口异步 i18n 初始化修复归入 `v2.26.0`，并记录版本同步与 macOS arm64 构建；修改前已检查并保留已有未提交条目。
+- `change.md`：追加本批次真实构建、失败尝试与验证流水，保留既有修复记录。
+- 被 Git 忽略的生成产物：`native/apple-speech-helper/dist/apple-speech-helper`、`engine/dist/main`、`out/`、`dist/mac-arm64/Auto Caption.app`、`dist/Auto Caption-2.26.0-arm64-mac.zip`、`dist/auto-caption-2.26.0.dmg`、对应 blockmap 与 `dist/latest-mac.yml`；元数据按最终 ad-hoc 签名并重新封装后的产物重算。
+
+### 修改前后行为
+
+- 修改前：应用与文档版本为 `2.25.0`，没有包含当前字幕窗口 i18n 初始化修复的 `2.26.0` macOS 安装包。
+- 修改后：应用、锁文件、界面和三语文档统一为 `2.26.0`；提供 macOS arm64 `.app`、ZIP 和 DMG，包内 Python 引擎与 Apple Speech helper 均为 arm64。字幕窗口 i18n 修复的行为、测试和兼容性由上一条记录描述，本批次没有改变其逻辑。
+
+### 配置、IPC、协议、依赖、兼容性与回滚
+
+- 本批次没有配置 schema、迁移、IPC、Python/Electron 子进程协议、TCP command、命令行参数或数据结构变化。
+- 没有新增、删除或升级 npm、pip、Swift 依赖；`package-lock.json` 只更新根包版本。打包器使用锁定的 Electron `43.4.0` 且 `npmRebuild` 关闭。构建期间 npm 提示 CLI `11.11.1 -> 11.19.1` 可更新，按用户不改系统环境及项目授权边界未执行升级。
+- 实际只构建并验证 macOS arm64；Windows/Linux 未实机构建。回滚应恢复上述版本展示和发布文档，并移除本次 `2.26.0` 生成产物，不得覆盖当前工作区已有的 i18n 修复。
+- 本机没有 Developer ID Application 证书，最终应用使用 ad-hoc 深度签名，`TeamIdentifier` 未设置且未执行 Apple notarization；产物适合本地验证，不等同于正式签名、公证的公开发行包。
+
+### 验证命令与真实结果
+
+- `npm run verify`：通过；Node/Web TypeScript、Vue typecheck、ESLint、Node `114/114`、Python `73/73` 全部成功。输出只有项目既有 npm mirror 配置弃用警告和 Node module type 性能警告。
+- `SDKROOT=/Library/Developer/CommandLineTools/SDKs/MacOSX26.5.sdk npm run build:apple-speech`：通过，生成 release arm64 helper。SwiftPM 报告用户缓存不可写和两个 CommandLineTools 链接搜索路径不存在的警告，未阻止构建，也未修改系统环境。
+- `PYINSTALLER_CONFIG_DIR=/private/tmp/auto-caption-pyinstaller-config ./.venv/bin/pyinstaller --clean --noconfirm ./main.spec`：通过，使用 `engine/.venv` 生成 arm64 `engine/dist/main`。输出包含可选 `pycparser.lextab`/`yacctab` 未找到及 numba `@rpath/libomp.dylib` 未解析警告。
+- `npm run build`：通过；Electron main、preload、renderer 分别转换 35、1、3294 个模块。
+- `./dist/main --help`：沙箱内因 `semctl: Operation not permitted` 失败；沙箱外只读重试退出码 0，现有 Provider、Apple Speech 和 Debug Mode 参数完整显示。
+- `native/apple-speech-helper/dist/apple-speech-helper probe`：通过，返回 `protocolVersion: 1`、`isAvailable: true`、`maximumReservedLocales: 5`。
+- `npx electron-builder --mac`：沙箱内因 `getaddrinfo ENOTFOUND npmmirror.com` 失败；获准联网后仅下载锁定 Electron `43.4.0`，成功生成 arm64 `.app`、ZIP、DMG 与初始 blockmap，没有安装或重建依赖。
+- `file`：应用主程序、`Contents/Resources/engine/main`、`Contents/Resources/apple-speech/apple-speech-helper` 均为 `Mach-O 64-bit executable arm64`；helper 权限为 `-rwxr-xr-x`。
+- `/usr/libexec/PlistBuddy`：`CFBundleShortVersionString`、`CFBundleVersion` 均为 `2.26.0`，`NSSpeechRecognitionUsageDescription` 存在。
+- `codesign --force --deep --sign - ...` 后执行 `codesign --verify --deep --strict --verbose=2 ...`：通过；签名为 `adhoc`，`TeamIdentifier=not set`。
+- `ditto -c -k --sequesterRsrc --keepParent ...`：成功用最终已签名应用重建 ZIP。
+- `hdiutil create ...`：沙箱内因“设备未配置”失败；沙箱外以相同参数成功用最终已签名应用重建 APFS/UDZO DMG，仅有旧命令语法弃用警告。
+- blockmap 重建脚本：成功为最终 ZIP/DMG 重建 gzip blockmap，并同步 `dist/latest-mac.yml` 的 SHA-512、大小和发布时间。
+- `unzip -tq dist/Auto\ Caption-2.26.0-arm64-mac.zip`：通过，无压缩数据错误。
+- `hdiutil verify dist/auto-caption-2.26.0.dmg`：通过，校验和有效。
+- 包内 Apple Speech helper `probe` 与 `NSSpeechRecognitionUsageDescription` 复查：退出码 0。
+- 最终 SHA-256：ZIP `18baedcde0096b5b47c3f446aaefeb00f638deb9f5b186f0210cb61099f6f227`（225127182 bytes）；DMG `6ee73cda94a3f757771287cc1a43c0dca8daaf9541fd85807e34883a0fcbbff9`（246262041 bytes）。
+- `git diff --check`：本记录追加后执行最终审计，结果见交付前检查。
+
+### 未执行、已知风险与后续事项
+
+- 未执行 Developer ID 签名、公证、Gatekeeper 下载隔离验证、Electron GUI 人工回归、真实麦克风/系统音频识别、远端 Provider、Windows/Linux 构建。
+- PyInstaller 可选导入与 numba `libomp` 警告仍需在实际调用相关模块时观察；完整离线测试及引擎 `--help` 启动已经通过。
+- 当前工作区在本批次开始前已有 i18n 修复；本批次保留并纳入构建，没有提交或擅自回退这些修改。
+
+### 关键决策来源
+
+- 用户明确要求编译 macOS 版本并更新小版本号，同时此前要求不修改系统环境。
+- 根目录 `AGENTS.md`：要求保护已有修改、使用项目环境、三语同步、真实记录失败与成功验证、构建产物不误加入 Git，并为每批文件修改追加 `change.md`。
