@@ -5517,3 +5517,174 @@
 
 - 用户明确要求编译 macOS 版本并更新小版本号，同时此前要求不修改系统环境。
 - 根目录 `AGENTS.md`：要求保护已有修改、使用项目环境、三语同步、真实记录失败与成功验证、构建产物不误加入 Git，并为每批文件修改追加 `change.md`。
+
+## 2026-08-28 - 将客户端翻译拆分为独立翻译引擎架构
+
+### 授权与目标
+
+- 用户明确授权：把翻译模块单独拆分为翻译引擎，使用与识别引擎类似的架构，并确认执行以下范围：先做不改变 Google/Ollama 行为的 Python 架构重构，再升级独立配置/UI 元数据；保留 V6 配置读取、现有 CLI 和 stdout 协议兼容。
+- 目标：建立 `TranslationRequest`、`TranslationResult`、`TranslationProvider`、Registry 和 Session 职责边界；将现有 Google、Ollama 作为两个翻译 Provider；把翻译公共配置与 Provider 专属配置从识别 `common` 中移出；为 Azure Translator 预留不可用元数据但不接入网络。
+- 变更类型：重构、配置、测试、文档。
+- 非目标：不实现 Azure Translator 请求；不新增独立翻译子进程或公开协议；不解决 Apple final/约 2.048 秒发布粒度；不宣称修复 Google 长时间运行时返回非目标语言；不访问真实翻译 API 或付费资源。
+
+### 修改文件与原因
+
+- Python 翻译架构：
+  - `engine/translation/__init__.py`、`models.py`、`provider.py`、`registry.py`、`session.py`：新增统一 request/result、`start → translate → stop` Provider 生命周期、注册表、有界任务 Session、无翻译 Session、稳定字幕 ID、诊断快照和异常脱敏。
+  - `engine/translation/providers/__init__.py`、`google.py`、`ollama.py`：迁移原 Google 与 Ollama/OpenAI 兼容翻译逻辑；保留目标语言传递、提示词、URL/API Key 选择和 `<think>` 清理行为。
+  - `engine/services/translation.py`、`engine/utils/translation.py`：删除被新 Provider/Session 完整替代的旧函数式翻译服务和直接 stdout 实现。
+  - `engine/services/__init__.py`、`engine/utils/__init__.py`：删除旧翻译导出，保留热词、音频和协议工具导出。
+  - `engine/core/session.py`、`engine/core/__init__.py`：将识别 Session 的依赖收窄为 `TranslationSessionProtocol`，在识别会话中启动翻译 Session，继续只对 final 且每个字幕 ID 一次提交。
+  - `engine/providers/registry.py`：识别 Registry 不再保存翻译配置或构造翻译函数，只返回识别 Provider、AudioPipeline 和是否需要外部翻译的能力标记；Gummy 标记为集成翻译。
+  - `engine/main.py`：识别 runtime 与翻译 Registry 分别装配；仅在外部翻译启用时创建 Google/Ollama TranslationSession。
+  - `engine/protocol/output.py`：集中把 `TranslationResult` 映射为既有 `command: translation` 对象，避免 Provider 直接写 stdout。
+- Python 测试：
+  - `engine/tests/test_translation_service.py`：重写为 Provider 注册、生命周期、稳定 ID、有界队列、错误脱敏、Google 目标语言和 Ollama 提示词/思考清理测试，全程使用伪造客户端，不访问网络。
+  - `engine/tests/test_engine_core.py`：测试翻译 Session 的启动和关闭，以及 final 单次提交。
+  - `engine/tests/test_provider_registry.py`：移除已经不属于识别 ProviderConfig 的翻译字段与凭据断言。
+  - `engine/tests/test_protocol_output.py`：新增统一 TranslationResult 到旧 stdout 消息的精确兼容测试。
+- V7 配置与主进程：
+  - `src/shared/config/schema.ts`：升级 `CONFIG_SCHEMA_VERSION` 到 7，新增翻译 common、Azure/Google/Ollama Provider 类型和默认配置，识别 common 不再包含翻译字段。
+  - `src/shared/config/document.ts`：新增 V6→V7 显式迁移、翻译 Provider ID/字段/URL/密钥长度校验，并继续保留同层未知扩展字段；V2–V5 继续通过原迁移链升级。
+  - `src/shared/types.ts`、`src/main/utils/AllConfig.ts`：共享和主进程类型切换为 `ConfigDocumentV7`，读取入口使用 V7 parser，错误回退日志同步版本。
+  - `src/main/engine/config/EngineCommandBuilder.ts`：从独立翻译配置生成原 `-t/-tm/-omn/-ourl/-okey`；Google 不携带 Ollama URL/Key；Azure 手工配置被防御性拒绝。
+- Renderer 翻译目录和界面：
+  - `src/renderer/src/translations/types.ts`、`catalog.ts`：新增独立翻译定义目录，声明 Azure/Google/Ollama 的语言、可用性、网络、凭据、端点能力和 Provider 专属字段；Azure 标记不可用。
+  - `src/renderer/src/engines/catalog.ts`、`types.ts`：识别目录只合成识别字段；配置路径扩展到独立翻译层；统一规范化和校验流程调用翻译目录。
+  - `src/renderer/src/engines/providers/apple_speech.ts`、`fun_asr.ts`、`glm.ts`、`sosv.ts`、`vosk.ts`：外部翻译识别 Provider 不再重复声明目标语言；Gummy 继续声明集成翻译目标语言。
+  - `src/renderer/src/components/EngineControl.vue`：组合识别和翻译两套字段目录，翻译配置开关读取 V7 路径。
+  - `src/renderer/src/components/engine/EngineFieldRenderer.vue`：把目录中的禁用状态和原因传递给选择项。
+  - `src/renderer/src/stores/engineControl.ts`：启动通知改读独立翻译开关和目标语言。
+  - `src/renderer/src/i18n/lang/zh.ts`、`en.ts`、`ja.ts`：补齐 Azure 不可用、字段名称和翻译不可用通知的中英日文本。
+- Node 测试：
+  - `tests/node/configDocument.test.mjs`：覆盖完整 V7 默认值、V2–V6 迁移、V6 翻译扩展字段保留、未知 Provider 和非法翻译 URL 拒绝。
+  - `tests/node/engineCatalog.test.mjs`：覆盖识别/翻译目录分离、三个翻译定义、Azure 禁用、Gummy 集成翻译、字段读写、默认语言、校验和三语键。
+  - `tests/node/engineCommandBuilder.test.mjs`：覆盖 V7 参数生成、旧 CLI 标志、Google/Ollama 配置隔离、关闭翻译和 Azure 启动门禁。
+- 用户与开发文档：
+  - `README.md`、`README_en.md`、`README_ja.md`：说明识别/翻译配置独立、Google/Ollama Provider 生命周期及 Azure 暂不可用。
+  - `docs/user-manual/zh.md`、`en.md`、`ja.md`：同步 V7 迁移、独立翻译设置、切换识别引擎不覆盖翻译配置和 Azure 禁用行为。
+  - `docs/engine-manual/zh.md`、`en.md`、`ja.md`：用 TranslationProvider/Registry/Session 接入说明替换已删除的函数式翻译样例。
+  - `docs/engine-manual/architecture.md`：更新 Python 目录、依赖方向、翻译生命周期、V7 配置和 Renderer 双目录架构。
+  - `docs/api-docs/config-v7.md`：新增完整 V7 层级、V6 字段映射、校验、安全、回滚和兼容性文档。
+  - `docs/api-docs/config-v6.md`、`config-v5.md`、`config-v4.md`、`config-v3.md`：标记历史格式并链接当前 V7。
+  - `docs/api-docs/electron-ipc.md`：`FullConfig` 类型和配置文档链接更新到 V7。
+  - `docs/api-docs/caption-engine.md`：记录内部翻译架构变化且确认公开 translation 消息不变。
+  - `docs/api-docs/caption-presentation.md`：补充 V6→V7 不改变字幕显示行为。
+  - `docs/testing.md`：测试范围更新为 V7、独立翻译目录与兼容 CLI。
+  - `docs/CHANGELOG.md`：在未发布版本记录独立翻译架构、V7 和 Azure 元数据边界。
+  - `change.md`：追加本批次授权、修改、验证、兼容性与风险流水。
+
+### 修改前后行为
+
+- 修改前：识别 Registry 同时持有翻译凭据并为每个识别 runtime 构造旧翻译函数；翻译函数直接写 stdout；Renderer 在识别目录里硬编码 Google/Ollama 字段；V6 把目标语言和翻译对象放在 `engine.common`。
+- 修改后：识别和翻译各有独立 Provider/Registry；TranslationSession 统一管理有界并发、稳定 ID、生命周期、结果和错误；协议输出层单独序列化翻译；V7 的 `engine.translation.common` 与 `engine.translation.providers` 分层保存翻译配置；界面从独立翻译能力目录生成字段。
+- Google 和 Ollama 的实际请求方式保持原样；Gummy 仍使用服务端集成翻译；其他识别 Provider 仍只在 final 后触发一次外部翻译。
+- Azure 只显示为不可用元数据。未新增 Azure Python Provider、网络请求、凭据使用、流量或费用。
+
+### 配置、IPC、协议、依赖与数据结构
+
+- 持久化配置：V6→V7。旧 `common.targetLanguage`、`common.translation.enabled/provider/model/url/apiKey` 显式迁移到新的翻译层；V6 的 Google/Ollama 选择保留；未知旧翻译 Provider 明确拒绝，不静默降级。
+- Electron IPC：通道和 application/engine/caption 传输方式不变，但内部 `FullConfig.config` 类型由 `ConfigDocumentV6` 升级为 `ConfigDocumentV7`。
+- Python CLI：路径、参数名和默认值不变；继续使用 `-t`、`-tm`、`-omn`、`-ourl`、`-okey`。
+- Python stdout/TCP 协议：`caption`、`translation`、`info`、`warn`、`error`、`usage`、`kill` 和 debug command 均不变；翻译消息仍包含 `caption_id/time_s/text/translation`。
+- Python 内部数据结构：新增 `TranslationRequest` 与 `TranslationResult`；识别 `ProviderRuntime` 由持有 service 改为持有 `external_translation` 能力。
+- 依赖和锁文件：没有新增、删除或升级 npm/pip/Swift 依赖；未修改锁文件。
+- 凭据：继续沿用现有用户配置存储方式；翻译 Config `repr` 隐藏 API Key，诊断按 Provider secrets 脱敏。本次没有扩大 Renderer 获取凭据或普通日志记录范围。
+
+### 兼容性、迁移与回滚
+
+- V2–V6 完整配置可顺序迁移到 V7；迁移保留同层未知扩展字段。无版本、结构不完整和未来版本继续使用默认配置。
+- 公开自定义字幕引擎协议和命令行保持兼容；旧自定义引擎无需实现内部 TranslationProvider。
+- Windows、macOS、Linux 共用 TypeScript/Python 路径，没有加入平台专属实现；本次仅在 macOS 主机执行离线验证，未声称其他平台实机已验证。
+- 回滚到旧应用前必须恢复 V6 配置备份，因为旧应用会把 V7 视为未来版本。代码回滚需要同时恢复旧 `engine/services/translation.py`、`engine/utils/translation.py`、识别 Registry 装配、V6 schema/parser/类型、Renderer 旧路径和对应文档测试，不能只删除新目录。
+
+### 实际验证与结果
+
+- `git status --short --branch`（修改前）：`## main...origin/main`，工作区干净；修改基线 `0d1cc67`。
+- 定向 Python：`.test-env/python/bin/python -m unittest engine/tests/test_translation_service.py engine/tests/test_provider_registry.py engine/tests/test_engine_core.py engine/tests/test_protocol_output.py`：23 项通过；修正测试夹具的 lifecycle 与异步诊断等待后重跑成功。
+- 定向 Node：`node --test tests/node/configDocument.test.mjs tests/node/engineCommandBuilder.test.mjs tests/node/engineCatalog.test.mjs tests/node/i18nParity.test.mjs`：21 项通过。
+- `npm run typecheck`：通过；Node TypeScript 与 Vue TypeScript 均无错误。首次运行发现翻译定义可选属性和条件路径推断错误，修正类型后重跑通过。
+- `npm run verify`：通过；类型检查、ESLint、Node 115 项、Python 78 项全部成功。输出仅包含项目既有 npm mirror 配置弃用警告和 Node module type 性能警告。
+- 新增协议输出测试后执行 `npm run test:python`：Python 79 项全部通过。
+- `npm run build`：通过；Electron main/preload/renderer 分别转换 35、1、3295 个模块并生成生产 bundle。
+- `.test-env/python/bin/python engine/main.py --help`：退出码 0；现有识别、翻译、Fun-ASR、Apple Speech 和 Debug Mode 参数完整，确认删除旧 utils 翻译导出后入口仍可导入。
+- `git diff --check`：追加本记录前后均通过，没有空白错误。
+
+### 未执行、已知风险与后续事项
+
+- 未执行真实 Google、Ollama/OpenAI 兼容或 Azure API 请求、长时间字幕会话、真实音频设备、Electron GUI 人工操作、PyInstaller 打包、安装包构建、Windows/Linux 实机验证。
+- 这次重构没有改变 Google 翻译库的客户端策略、响应语言校验或重试，因此用户观察到的长时间运行后语言漂移问题仍需在独立 Google Provider 中另行诊断和修复。
+- Apple Speech final 延迟和约 2.048 秒发布粒度导致的可视行跳过问题不在本次授权范围，仍需从字幕事件/显示轨道策略单独处理。
+- TranslationSession 保留旧行为：停止时不阻塞等待全部翻译结果；网络级取消、超时分类和有限冲刷仍待后续实现。翻译失败不会删除原字幕，队列满会跳过最新翻译并警告。
+- Azure 元数据不是可运行实现；启用真实 Azure 前必须增加 Python Provider、凭据/区域校验、超时/限流分类、离线伪客户端测试、三语费用与配额说明，并单独获得访问真实 API 的授权。
+
+### 关键决策来源
+
+- 用户确认的执行范围：Python 先做无行为重构；配置升级到 V7；翻译定义独立声明 Azure/Google/Ollama 字段、语言和能力；现有 Google/Ollama 作为两个引擎；保持 V6、CLI 和 stdout 兼容。
+- 根目录 `AGENTS.md`：TranslationService 职责、稳定字幕 ID、有界队列、配置 schemaVersion/显式迁移、Provider capability registry、三语文档、凭据脱敏、真实验证和完整 `change.md` 记录要求。
+
+## 2026-08-28：版本 2.27.0 与 macOS arm64 构建
+
+### 用户授权与目标
+
+- 用户明确要求编译 macOS 版本并更新小版本号。本批次将版本由 `2.26.0` 更新为 `2.27.0`，保留当前工作区的 V7 独立翻译 Provider/Registry/Session 架构修改，并重新构建 Swift Apple Speech helper、Python 引擎、Electron 应用、ZIP 与 DMG。
+- 只使用仓库已有 Node/Swift 工具链和项目内 `engine/.venv`；未修改系统环境，未安装、删除或升级依赖，未提交、推送、发布 Release 或访问真实/付费翻译 API。
+
+### 变更类型
+
+- 配置、文档、构建。
+
+### 修改文件与原因
+
+- `package.json`、`package-lock.json`：根包版本由 `2.26.0` 更新为 `2.27.0`；依赖清单与锁定解析版本不变。
+- `src/renderer/index.html`、`src/renderer/src/components/EngineStatus.vue`：同步窗口标题和“关于”页版本。
+- `README.md`、`README_en.md`、`README_ja.md`：同步中英日 release 徽章、发布提示及平台版本，并保留当前独立翻译引擎说明。
+- `docs/user-manual/zh.md`、`docs/user-manual/en.md`、`docs/user-manual/ja.md`、`docs/engine-manual/zh.md`、`docs/engine-manual/en.md`、`docs/engine-manual/ja.md`：同步三语手册版本为 `2.27.0`，保留 V7 配置和 TranslationProvider 架构文档。
+- `docs/CHANGELOG.md`：将当前独立翻译架构、V7 配置和 Azure 禁用元数据条目归入 `v2.27.0`，增加本次版本与 macOS 构建说明；修改前已阅读并保留已有 diff。
+- `change.md`：追加本次版本、构建、验证和风险流水，不修改或覆盖此前 V7 功能记录。
+- 被 Git 忽略的构建产物：`native/apple-speech-helper/dist/apple-speech-helper`、`engine/dist/main`、`out/`、`dist/mac-arm64/Auto Caption.app`、`dist/Auto Caption-2.27.0-arm64-mac.zip`、`dist/auto-caption-2.27.0.dmg`、对应 blockmap 与 `dist/latest-mac.yml`；元数据按最终 ad-hoc 签名并重新封装后的产物重算。
+
+### 修改前后行为
+
+- 修改前：应用与三语文档版本为 `2.26.0`，没有包含当前 V7 独立翻译架构的 `2.27.0` macOS 安装包。
+- 修改后：应用、锁文件、界面和三语文档统一为 `2.27.0`；提供 macOS arm64 `.app`、ZIP 与 DMG，包内 Python 引擎和 Apple Speech helper 均为 arm64。V7 配置迁移、Google/Ollama TranslationProvider 和兼容协议行为由上一条功能记录定义，本批次没有另改其业务语义。
+
+### 配置、IPC、协议、依赖、兼容性与回滚
+
+- 本批次仅更新发行版本；没有新增 V7 之外的配置 schema/迁移、IPC、Python/Electron stdout/TCP 协议、CLI 参数或数据结构变化。
+- 没有新增、删除或升级 npm、pip、Swift 依赖；`package-lock.json` 只更新根包版本。electron-builder 使用锁定 Electron `43.4.0`，`npmRebuild` 保持关闭。
+- 实际只构建验证 macOS arm64；Windows/Linux 未实机构建。回滚应恢复上述版本展示和发布文档，并移除本次 `2.27.0` 生成产物，不得覆盖当前工作区 V7/翻译架构修改。旧应用读取 V7 配置的回滚要求仍以此前功能记录为准。
+- 本机没有 Developer ID Application 证书，最终应用使用 ad-hoc 深度签名，`TeamIdentifier` 未设置且未执行 Apple notarization；产物适合本地测试，不等同于正式签名、公证的公开发行包。
+
+### 验证命令与真实结果
+
+- `npm run verify`：通过；Node/Web TypeScript、Vue typecheck、ESLint、Node `115/115`、Python `79/79` 全部成功。输出只有项目既有 npm mirror 配置弃用警告和 Node module type 性能警告。
+- `SDKROOT=/Library/Developer/CommandLineTools/SDKs/MacOSX26.5.sdk npm run build:apple-speech`：通过，生成 release arm64 helper。SwiftPM 仅报告用户缓存目录不可写警告，没有修改系统环境。
+- `PYINSTALLER_CONFIG_DIR=/private/tmp/auto-caption-pyinstaller-config ./.venv/bin/pyinstaller --clean --noconfirm ./main.spec`：通过，使用 `engine/.venv` 将新的 `engine/translation/` 架构打入 arm64 `engine/dist/main`。输出包含可选 `pycparser.lextab`/`yacctab` 未找到及 numba `@rpath/libomp.dylib` 未解析警告。
+- `npm run build`：通过；Electron main、preload、renderer 分别转换 35、1、3295 个模块。
+- `./dist/main --help`：沙箱内因 `semctl: Operation not permitted` 失败；沙箱外只读重试退出码 0，现有识别、翻译、Fun-ASR、Apple Speech 与 Debug Mode 参数完整显示。
+- `native/apple-speech-helper/dist/apple-speech-helper probe`：通过，返回 `protocolVersion: 1`、`isAvailable: true`、`maximumReservedLocales: 5`。
+- `npx electron-builder --mac`：沙箱内因 `getaddrinfo ENOTFOUND npmmirror.com` 失败；获准联网后只下载锁定 Electron `43.4.0`，成功生成 arm64 `.app`、ZIP、DMG 与初始 blockmap，没有安装或重建依赖。
+- `file`：应用主程序、`Contents/Resources/engine/main`、`Contents/Resources/apple-speech/apple-speech-helper` 均为 `Mach-O 64-bit executable arm64`；helper 权限为 `-rwxr-xr-x`。
+- `/usr/libexec/PlistBuddy`：`CFBundleShortVersionString`、`CFBundleVersion` 均为 `2.27.0`，`NSSpeechRecognitionUsageDescription` 存在。
+- `codesign --force --deep --sign - ...` 后执行 `codesign --verify --deep --strict --verbose=2 ...`：通过；签名为 `adhoc`，`TeamIdentifier=not set`。
+- `ditto -c -k --sequesterRsrc --keepParent ...`：成功使用最终已签名应用重建 ZIP。
+- `hdiutil create ...`：沙箱内因“设备未配置”失败；沙箱外使用相同参数成功以最终已签名应用重建 APFS/UDZO DMG，仅报告旧语法弃用警告。
+- blockmap 重建脚本：成功为最终 ZIP/DMG 重建 gzip blockmap，并同步 `dist/latest-mac.yml` 的 SHA-512、大小和发布时间。
+- `unzip -tq dist/Auto\ Caption-2.27.0-arm64-mac.zip`：通过，无压缩数据错误。
+- `hdiutil verify dist/auto-caption-2.27.0.dmg`：通过，校验和有效。
+- 包内 Apple Speech helper `probe` 及语音用途说明复查：退出码 0。
+- 最终 SHA-256：ZIP `f4d0cc06751e30c109ed5d51e5e4868cb8e9ed4ee1c591b7967d26a2ff84628f`（225139544 bytes）；DMG `e6bca7714016273a13928f7ead36de386d926075a0f19e108706cc5fef5ab76e`（245137002 bytes）。
+- `git diff --check`：本记录追加后执行最终审计，结果见交付前检查。
+
+### 未执行、已知风险与后续事项
+
+- 未执行 Developer ID 签名、公证、Gatekeeper 下载隔离验证、Electron GUI 人工回归、真实麦克风/系统音频、Google/Ollama/Azure 真实请求、Windows/Linux 构建。
+- PyInstaller 可选导入与 numba `libomp` 警告仍需在实际调用相关模块时观察；完整离线测试及打包引擎 `--help` 启动已经通过。
+- Azure 当前仍只是禁用元数据，不应把本次安装包描述为包含可用 Azure 翻译；V7 功能的其他限制继续以此前记录为准。
+- 当前工作区在本批次开始前已有大范围 V7/翻译架构修改；本批次保留并纳入构建，没有提交、格式化或擅自回退这些修改。
+
+### 关键决策来源
+
+- 用户明确要求编译 macOS 版本并更新小版本号，同时此前要求不修改系统环境。
+- 根目录 `AGENTS.md`：要求保护已有修改、使用项目环境、配置迁移与协议兼容、三语同步、真实记录失败与成功验证、构建产物不误加入 Git，并为每批文件修改追加 `change.md`。

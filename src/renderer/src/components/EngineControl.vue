@@ -154,6 +154,7 @@ import {
   getEngineDefinition,
   getEngineFields,
   getEngineOptions,
+  getTranslationFields,
   normalizeEngineConfig,
   validateEngineConfig
 } from '@renderer/engines/catalog.ts'
@@ -205,7 +206,11 @@ const activeBuiltinProvider = computed(() => getActiveBuiltinProvider(draft.valu
 const activeCustomEngine = computed(() => getActiveCustomEngine(draft.value))
 const visibleFields = computed(() => {
   if (!activeBuiltinProvider.value) return []
-  return getEngineFields(activeBuiltinProvider.value)
+  const definition = getEngineDefinition(activeBuiltinProvider.value)
+  return [
+    ...getEngineFields(activeBuiltinProvider.value),
+    ...getTranslationFields(draft.value, definition)
+  ]
     .filter((field) => isEngineFieldVisible(draft.value, field))
     .map((field) => {
       if (activeBuiltinProvider.value !== 'apple_speech' || field.id !== 'source-language') {
@@ -231,7 +236,7 @@ const translationFields = computed(() =>
   visibleFields.value.filter((field) => field.section === 'translation')
 )
 const translationSettingsAvailable = computed(() => {
-  if (!activeBuiltinProvider.value || !draft.value.common.translation.enabled) return false
+  if (!activeBuiltinProvider.value || !draft.value.translation.enabled) return false
   return getEngineDefinition(activeBuiltinProvider.value).capabilities.translation === 'external'
 })
 const hotwordManagerEnabled = computed(() => {

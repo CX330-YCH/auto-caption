@@ -1,6 +1,6 @@
 # Caption Engine Documentation
 
-Corresponding version: v2.26.0
+Corresponding version: v2.27.0
 
 ![](../../assets/media/structure_en.png)
 
@@ -130,7 +130,7 @@ Implement this boundary as a `RecognitionProvider` that only owns recognition li
 - `accept_audio(self, frame: AudioFrame)`: Process one normalized audio frame and emit partial/final/lifecycle events
 - `stop(self)`: Stop the model
 
-A Provider must not consume a global queue, write to stdout, or create its own client-side translation loop. Those responsibilities belong to `RecognitionSession`, the protocol output layer, and `TranslationService`.
+A Provider must not consume a global queue, write to stdout, or create its own client-side translation loop. Those responsibilities belong to `RecognitionSession`, the protocol output layer, and the independent `TranslationSession`.
 
 Complete caption engine examples:
 
@@ -142,16 +142,9 @@ Complete caption engine examples:
 
 ### Caption Translation
 
-Some speech-to-text models do not provide translation. If needed, an additional translation module needs to be added, or built-in translation modules can be used.
+Client-side translation uses a Provider architecture parallel to recognition. A `TranslationProvider` implements only `name`, `start()`, `translate(request)`, and `stop()`. `TranslationSession` owns the bounded queue, lifecycle, stable caption IDs, result dispatch, and redacted failures. `TranslationProviderRegistry` creates a provider from validated configuration. The existing adapters are `engine/translation/providers/google.py` and `ollama.py`.
 
-Example:
-
-```python
-from utils import google_translate, ollama_translate
-text = "This is a translation test."
-google_translate("", "en", text, "time_s")
-ollama_translate("qwen3:0.6b", "en", text, "time_s")
-```
+Add a translation engine under `engine/translation/providers/` and register it in `engine/translation/registry.py`. Do not place its network call in a recognition Provider, `RecognitionSession`, or a stdout utility. Only final captions enter translation, each `caption_id` is submitted once, and the protocol layer converts `TranslationResult` into the compatible `translation` message.
 
 ### Caption Data Transmission
 
@@ -251,7 +244,8 @@ This Provider uses the official DashScope SDK and accepts 16 kHz mono PCM16. It 
 Except for audio-to-text conversion and translation, other components (audio acquisition, audio resampling, and communication with the main process) are recommended to directly reuse the project's code. If this approach is taken, the content that needs to be added includes:
 
 - `engine/providers/`: Add a recognition adapter implementing `RecognitionProvider`.
-- `engine/providers/registry.py`: Register the Provider together with its audio Pipeline and translation-service assembly.
+- `engine/providers/registry.py`: Register the recognition Provider and its audio Pipeline.
+- `engine/translation/providers/` and `registry.py`: Add and register an independent translation Provider only when a new translation engine is needed.
 - `engine/cli.py`: Add arguments only when the model genuinely requires new configuration; do not add another model branch to `main.py`.
 
 See [the current Python engine architecture](architecture.md) for the complete responsibility and dependency rules.

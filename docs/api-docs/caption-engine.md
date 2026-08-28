@@ -123,6 +123,8 @@ Fun-ASR 的预编译热词表 ID 和上下文术语是任务启动参数，不�
 
 异步翻译结果。新引擎应提供 `caption_id`，其值必须与对应 `caption.index` 相同，Electron 会优先通过运行 ID 与该字段关联原句。为兼容旧自定义引擎，`caption_id` 暂时可省略；缺失时 Electron 才回退到 `time_s`，该兼容层的删除条件是公开协议下一个明确废弃旧翻译格式的版本。`time_s`、`text` 和 `translation` 继续为必需字符串字段。
 
+内置实现现在由独立 `TranslationProvider`/Registry/Session 生成该消息；Google 与 Ollama Provider 返回统一 `TranslationResult`，协议层负责序列化。此内部重构没有修改上述公开字段、CLI 参数或旧自定义引擎兼容规则。
+
 ### `print`、`debug`、`info`、`warn`、`error`、`usage`
 
 这些事件共用以下结构：

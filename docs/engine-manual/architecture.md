@@ -4,7 +4,7 @@
 
 ## 当前结构
 
-现有 Gummy、Vosk、SOSV、GLM 和 Fun-ASR 均通过统一架构运行：
+现有 Gummy、Vosk、SOSV、GLM、Fun-ASR 和 Apple Speech 均通过统一识别架构运行，Google 与 Ollama 通过独立翻译架构运行：
 
 ```text
 engine/
@@ -23,9 +23,16 @@ engine/
 │   ├── glm.py
 │   ├── sosv.py
 │   └── vosk.py
+├── translation/
+│   ├── models.py              # TranslationRequest/Result
+│   ├── provider.py            # TranslationProvider 生命周期
+│   ├── registry.py            # 翻译 Provider 注册
+│   ├── session.py             # 有界任务、结果和关闭策略
+│   └── providers/
+│       ├── google.py
+│       └── ollama.py
 ├── services/
-│   ├── hotwords.py            # 运行时热词配置与一次性远端管理服务
-│   └── translation.py         # Provider 无关的有界翻译服务
+│   └── hotwords.py            # 运行时热词配置与一次性远端管理服务
 └── protocol/
     ├── ndjson.py              # NDJSON 解码
     ├── output.py              # 内部事件到旧 command 协议
@@ -42,11 +49,12 @@ engine/
 cli.py ──> typed options
 main.py ──> ProviderRegistry ──> ProviderRuntime
                                ├─ RecognitionProvider
-                               ├─ AudioPipeline
-                               └─ TranslationService
+                               └─ AudioPipeline
+        └─> TranslationProviderRegistry ──> TranslationProvider
 
 AudioCaptureWorker ──> bounded Queue[AudioFrame]
-RecognitionSession ──> Provider ──> internal events
+RecognitionSession ──> RecognitionProvider ──> internal events
+                   └─ final ──> TranslationSession ──> TranslationProvider
 internal events ──> ProtocolEventSink ──> stdout NDJSON
 
 Electron HotwordService ──stdin──> main.py --hotword-service
@@ -94,7 +102,7 @@ Provider 通过容量有限的内部事件队列上报结果。`accept_audio()` 
 - `ProviderError`：经过分类和脱敏的错误；`fatal` 表示 Session 必须停止。
 - `UsageUpdated`：用量变化，不携带凭据。
 
-`CaptionPartial` 和 `CaptionFinal` 可携带 Provider 已产生的翻译。Gummy 使用该字段承载服务端翻译；包括 Fun-ASR 在内的其他 Provider 的最终字幕由统一 TranslationService 异步翻译。
+`CaptionPartial` 和 `CaptionFinal` 可携带 Provider 已产生的翻译。Gummy 使用该字段承载服务端翻译；包括 Fun-ASR 在内的其他 Provider 的最终字幕由统一 `TranslationSession` 异步翻译。
 
 内部 partial/final 目前都由 `ProtocolEventSink` 映射为现有 `command: "caption"`，外部协议没有新增字段。未来若要暴露 final，必须进行带版本的协议设计。
 
@@ -107,7 +115,7 @@ Session 负责：
 3. 发布 Provider 的同步或异步事件。
 4. partial 只更新字幕；final 按 `caption_id` 去重后提交翻译。
 5. fatal Provider 错误请求终止进程任务。
-6. 无论正常或异常，都停止 Provider、冲刷事件、关闭翻译服务和音频设备。
+6. 无论正常或异常，都停止识别 Provider、冲刷事件、关闭翻译 Session 和音频设备。
 
 Session 捕获的异常只输出 Provider 名和异常类型，不直接回显可能包含凭据的异常文本。
 
@@ -117,7 +125,7 @@ Session 捕获的异常只输出 Provider 名和异常类型，不直接回显�
 
 - Provider 实例。
 - 对应音频 Pipeline。
-- 对应 TranslationService。
+- 是否需要外部翻译的能力标记。
 
 API Key 字段在 `CliOptions` 和 `ProviderConfig` 的 `repr` 中隐藏。未知或重复 Provider 名会被明确拒绝。
 
@@ -178,9 +186,9 @@ API Key 字段在 `CliOptions` 和 `ProviderConfig` 的 `repr` 中隐藏。未�
 
 Electron 主进程从已应用配置取得 Workspace、Endpoint、模型和 API Key，重新验证 Renderer 请求后启动一次性 Python worker。API Key 仅写入子进程 stdin，不进入 Renderer、argv 或日志。worker 只返回规范化数据或错误码；输入/输出均有 1 MiB 上限，主进程限制单个在途操作并设置 20 秒超时。创建、更新、删除只能由 UI 用户操作触发，删除前显示目标账号语义、Workspace、地域、模型和资源 ID 并二次确认。因 SDK 不返回账号 ID，界面将目标账号明确表示为“已应用 API Key 的所属账号”，不显示密钥或账号标识。
 
-## 翻译服务与后台任务
+## TranslationProvider 与后台任务
 
-Vosk、SOSV、GLM 和 Fun-ASR 的 final 通过统一翻译服务调用已有 Google/Ollama 实现：
+Vosk、SOSV、GLM、Fun-ASR 和 Apple Speech 的 final 通过独立 `TranslationSession` 调用 Google/Ollama Provider。翻译 Provider 遵循 `start → translate(request)* → stop` 生命周期；request/result 携带稳定 `caption_id`，Provider 不直接写 stdout：
 
 - 固定 2 个 daemon worker。
 - 最多等待 32 条翻译任务。
@@ -189,28 +197,29 @@ Vosk、SOSV、GLM 和 Fun-ASR 的 final 通过统一翻译服务调用已有 Goo
 
 通用 `BoundedWorkerPool` 同时为翻译和 GLM 识别请求提供容量限制。Provider 不得自行创建无界线程或无界任务队列。
 
-现有翻译函数的网络取消、有限结果冲刷和外部稳定 ID 关联仍是后续独立改造事项。
+`TranslationProviderRegistry` 拒绝未知和重复名称，翻译配置与凭据不再进入识别 `ProviderConfig`。网络级取消和停止时有限结果冲刷仍是后续独立改造事项。
 
-## Electron 配置 V6
+## Electron 配置 V7
 
-Electron 持久化、主进程、IPC 和渲染进程共享 `src/shared/config/` 中的 V6 分层模型：
+Electron 持久化、主进程、IPC 和渲染进程共享 `src/shared/config/` 中的 V7 分层模型：
 
 ```text
-ConfigDocumentV6
+ConfigDocumentV7
 ├── application          # 语言、主题、颜色、窗口布局、Debug Mode
 ├── engine
 │   ├── activeEngineId   # 当前内置 Provider 或自定义引擎 ID
-│   ├── common           # 语言、音频、翻译、录音、启动超时
-│   ├── providers        # 五个内置 Provider 的专属配置
+│   ├── common           # 源语言、音频、录音、启动超时
+│   ├── providers        # 内置识别 Provider 的专属配置
+│   ├── translation      # 翻译开关、目标语言、当前 Provider 与专属配置
 │   └── customEngines    # 命名自定义引擎列表
 └── caption              # 字幕样式
 ```
 
-`AllConfig` 是主进程中的配置所有者，只接受 `schemaVersion: 6`。Renderer 通过 application、engine、caption 三个完整层级交换配置，主进程重新校验后才更新内存；运行态 `engineEnabled` 与 PID、端口、日志不进入磁盘配置。
+`AllConfig` 是主进程中的配置所有者，只接受 `schemaVersion: 7`。Renderer 通过 application、engine、caption 三个完整层级交换配置，主进程重新校验后才更新内存；运行态 `engineEnabled` 与 PID、端口、日志不进入磁盘配置。
 
 引擎启动参数由纯函数 `EngineCommandBuilder` 从 `EngineConfig` 构建，`CaptionEngine` 不再读取扁平 controls 或拼装各 Provider 字段。Builder 内部使用 Provider 参数注册表，共用音频、录音、端口和目标语言参数只生成一次。
 
-完整 V2 会依次显式迁移到 V3、V4、V5、V6；V6 为 application 增加默认关闭的 `diagnostics.debugMode`。无版本和其他不支持的版本仍被拒绝并使用默认 V6。完整字段、范围和凭据限制见 [`config-v6.md`](../api-docs/config-v6.md)。
+完整 V2 会依次显式迁移到 V3、V4、V5、V6、V7；V7 把旧 `engine.common.translation` 和目标语言迁移到独立翻译层。无版本和其他不支持的版本仍被拒绝并使用默认 V7。完整字段、范围和凭据限制见 [`config-v7.md`](../api-docs/config-v7.md)。
 
 ## Renderer 字幕文本轨道
 
@@ -234,7 +243,7 @@ CaptionItem[]
 ```text
 src/renderer/src/engines/
 ├── catalog.ts                 # 注册、公共字段合成、默认值和统一校验
-├── form.ts                    # V6 配置路径读写、草稿复制和可见性判断
+├── form.ts                    # V7 配置路径读写、草稿复制和可见性判断
 ├── types.ts                   # capability、字段和校验描述类型
 └── providers/
     ├── gummy.ts
@@ -243,18 +252,21 @@ src/renderer/src/engines/
     ├── sosv.ts
     ├── glm.ts
     └── shared.ts              # 语言描述辅助函数
+src/renderer/src/translations/
+├── catalog.ts                 # 翻译注册、字段、语言、能力和校验
+└── types.ts                   # 翻译 Provider 元数据类型
 ```
 
 每个 Provider 定义以下内容：
 
 - 稳定 Provider ID 和三语名称键。
 - 源语言选择方式、翻译模式、录音和热词能力。
-- 支持的源/目标语言及其角色。
+- 支持的源语言；集成翻译 Provider 还声明目标语言。
 - 仅属于该 Provider 的字段描述、帮助链接、默认值和启动校验。
 
-`catalog.ts` 根据能力补齐语言、音频、翻译、录音和超时字段。`EngineFieldRenderer.vue` 统一渲染普通控件；`EngineSelector.vue` 负责内置 Provider、命名自定义引擎、创建入口和删除确认；`EngineControl.vue` 维护一份草稿并按字段 section 分组。外部翻译配置仅在启用翻译且用户展开“配置翻译引擎”时显示，折叠状态不持久化。Fun-ASR 专属字段和热词能力仍由目录元数据驱动。
+识别目录补齐源语言、音频、录音和超时字段；翻译目录独立声明 Google、Ollama、Azure 的目标语言、可用状态、网络/凭据能力和专属字段。Azure 当前仅为禁用元数据，主进程无实现且不会发起请求。`EngineFieldRenderer.vue` 统一渲染普通控件；`EngineControl.vue` 只合并两套字段并按 section 分组，不维护供应商表单分支。
 
-新增普通 Provider 的前端流程是：先扩展 V6 Provider 类型和主进程校验，再新增一个 `providers/<name>.ts` 定义并在目录注册。常规字段不得在 `EngineControl.vue` 增加 Provider `v-if`。热词远端资源管理器等包含列表编辑、远端创建/删除和确认流程的交互应使用专用组件，并由 capability 明确声明；不得把这类状态压成普通文本字段。
+新增普通识别 Provider 的前端流程是：扩展 V7 识别 Provider 类型和主进程校验，再新增 `engines/providers/<name>.ts` 并注册。新增翻译 Provider 则扩展 `translation.providers` 类型、迁移/校验和 `translations/catalog.ts`，不得把翻译字段塞回识别定义。常规字段不得在 `EngineControl.vue` 增加 Provider `v-if`。
 
 Provider 的启动前要求同样由目录字段校验提供，`EngineStatus.vue` 不再维护本地模型名单。目录和嵌套表单工具均为无 Vue 依赖的纯 TypeScript，可由 Node 单元测试验证。
 
@@ -265,14 +277,14 @@ Provider 的启动前要求同样由目录字段校验提供，`EngineStatus.vue
 - Vosk、SOSV、GLM 和 Fun-ASR 的 final 使用统一客户端翻译；Gummy 继续使用服务端翻译。
 - `-d 1` 现在按参数声明正确启用终端字幕显示；迁移前入口把整数错误地与字符串比较，导致该参数不生效。
 - 直接导入旧 `audio2text.*Recognizer` 的未文档化内部路径不再支持。应用公开扩展点仍是命令行和进程协议。
-- Electron 内部配置 IPC 使用 V6 application/engine/caption 分层对象；该 IPC 不作为第三方公开扩展点。
+- Electron 内部配置 IPC 使用 V7 application/engine/caption 分层对象；该 IPC 不作为第三方公开扩展点。
 
 ## 新 Provider 接入顺序
 
 1. 定义能力和配置，不把供应商字段追加到 Session。
 2. 使用伪造 SDK 客户端固化生命周期、partial/final、错误、停止和 usage。
 3. 实现只接受 `AudioFrame`、只产生统一事件的 Provider。
-4. 在 Registry 注册 Provider/Pipeline/TranslationService builder。
+4. 在识别 Registry 注册 Provider/Pipeline；需要客户端翻译时复用独立 TranslationSession。
 5. 验证外部 command 协议和错误脱敏。
 6. 对需要网络的 Provider 增加有界重试、停止冲刷和显式启用的在线测试。
 

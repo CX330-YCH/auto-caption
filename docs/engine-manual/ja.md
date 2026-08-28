@@ -2,7 +2,7 @@
 
 ## 注意：このドキュメントはメンテナンスが行われていないため、記載されている情報は古くなっています。最新の情報については、[中国語版](./zh.md)または[英語版](./en.md)のドキュメントをご参照ください。
 
-対応バージョン：v2.26.0
+対応バージョン：v2.27.0
 
 この文書は大規模モデルを使用して翻訳されていますので、内容に正確でない部分があるかもしれません。
 
@@ -118,7 +118,7 @@ stream.close_stream()
 - `accept_audio(self, frame: AudioFrame)`：正規化された音声フレームを処理し、partial/final/lifecycle イベントを生成
 - `stop(self)`：モデルを停止
 
-Provider はグローバルキューの読み取り、標準出力への直接書き込み、独自の翻訳ループを行いません。これらは `RecognitionSession`、プロトコル出力層、`TranslationService` の責務です。
+Provider はグローバルキューの読み取り、標準出力への直接書き込み、独自の翻訳ループを行いません。これらは `RecognitionSession`、プロトコル出力層、独立した `TranslationSession` の責務です。
 
 完全な字幕エンジンの実例：
 
@@ -130,7 +130,9 @@ Provider はグローバルキューの読み取り、標準出力への直接�
 
 ### 字幕翻訳
 
-一部の音声文字変換モデルは翻訳を提供していません。必要がある場合、翻訳モジュールを追加する必要があります。
+クライアント翻訳は認識と同様の Provider 構成を使用します。`TranslationProvider` は `name`、`start()`、`translate(request)`、`stop()` のみを実装し、`TranslationSession` が有界キュー、ライフサイクル、安定した字幕 ID、結果配信、エラーのマスキングを担当します。`TranslationProviderRegistry` は検証済み設定から Provider を作成します。既存実装は `engine/translation/providers/google.py` と `ollama.py` です。
+
+新しい翻訳エンジンは `engine/translation/providers/` に追加し、`engine/translation/registry.py` へ登録します。ネットワーク呼び出しを認識 Provider、`RecognitionSession`、stdout ユーティリティへ追加してはいけません。翻訳には final だけを渡し、各 `caption_id` は一度だけ送信します。プロトコル層が `TranslationResult` を互換 `translation` メッセージへ変換します。
 
 ### 字幕データの送信
 
@@ -223,7 +225,8 @@ V6 Debug Mode は `--debug-mode 0|1` で起動し、TCP `debug_mode` command で
 オーディオから文字への変換以外は、このプロジェクトのコードを直接再利用することをお勧めします。その場合、追加する必要がある内容は：
 
 - `engine/providers/`：`RecognitionProvider` を実装する認識アダプターを追加
-- `engine/providers/registry.py`：Provider と音声 Pipeline、翻訳サービスの組み立てを登録
+- `engine/providers/registry.py`：認識 Provider と音声 Pipeline を登録
+- `engine/translation/providers/` と `registry.py`：新しい翻訳エンジンが必要な場合だけ独立翻訳 Provider を追加・登録
 - `engine/cli.py`：モデルに新しい設定が本当に必要な場合だけ引数を追加し、`main.py` にモデル分岐を増やさない
 
 完全な責務と依存ルールは[現在の Python エンジン構成](architecture.md)を参照してください。

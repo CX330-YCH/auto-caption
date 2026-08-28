@@ -18,6 +18,12 @@ import { gummyEngine } from './providers/gummy.ts'
 import { sosvEngine } from './providers/sosv.ts'
 import { voskEngine } from './providers/vosk.ts'
 import { appleSpeechEngine } from './providers/apple_speech.ts'
+import {
+  applyTranslationLanguageDefault,
+  getTranslationFields,
+  normalizeTranslationConfig,
+  validateTranslationConfig
+} from '../translations/catalog.ts'
 import type {
   EngineDefinition,
   EngineFieldDescriptor,
@@ -38,11 +44,6 @@ export const engineDefinitions = [
 const engineDefinitionsById = new Map<KnownProviderName, EngineDefinition>(
   engineDefinitions.map((definition) => [definition.id, definition])
 )
-
-const translationOptions: readonly EngineFieldOption[] = [
-  { value: 'ollama', labelKey: 'engine.options.translation.ollama' },
-  { value: 'google', labelKey: 'engine.options.translation.google' }
-]
 
 const audioOptions: readonly EngineFieldOption[] = [
   { value: 0, labelKey: 'engine.systemOutput' },
@@ -84,7 +85,7 @@ export function getEngineOptions(): readonly EngineFieldOption[] {
 
 function languageOptions(
   definition: EngineDefinition,
-  role: 'source' | 'target'
+  role: 'source'
 ): readonly EngineFieldOption[] {
   return definition.languages
     .filter((language) => language.roles.includes(role))
@@ -104,66 +105,6 @@ function commonPrimaryFields(definition: EngineDefinition): EngineFieldDescripto
     },
   ]
 
-  if (definition.capabilities.translation === 'external') {
-    fields.push(
-      {
-        id: 'translation-provider',
-        path: 'common.translation.provider',
-        control: 'select',
-        section: 'translation',
-        labelKey: 'engine.transModel',
-        options: translationOptions,
-        visibleWhen: [{ path: 'common.translation.enabled', equals: true }]
-      },
-      {
-        id: 'translation-model',
-        path: 'common.translation.model',
-        control: 'text',
-        section: 'translation',
-        labelKey: 'engine.modelName',
-        helpKey: 'engine.modelNameNote',
-        visibleWhen: [
-          { path: 'common.translation.enabled', equals: true },
-          { path: 'common.translation.provider', equals: 'ollama' }
-        ],
-        required: {
-          phase: 'apply',
-          titleKey: 'noti.ollamaNameNull',
-          descriptionKey: 'noti.ollamaNameNullNote',
-          when: [
-            { path: 'common.translation.enabled', equals: true },
-            { path: 'common.translation.provider', equals: 'ollama' }
-          ]
-        }
-      },
-      {
-        id: 'translation-url',
-        path: 'common.translation.url',
-        control: 'text',
-        section: 'translation',
-        labelKey: 'engine.fields.baseUrl',
-        helpKey: 'engine.baseURL',
-        placeholder: 'http://localhost:11434',
-        visibleWhen: [
-          { path: 'common.translation.enabled', equals: true },
-          { path: 'common.translation.provider', equals: 'ollama' }
-        ]
-      },
-      {
-        id: 'translation-api-key',
-        path: 'common.translation.apiKey',
-        control: 'password',
-        section: 'translation',
-        labelKey: 'engine.fields.translationApiKey',
-        helpKey: 'engine.apiKey',
-        visibleWhen: [
-          { path: 'common.translation.enabled', equals: true },
-          { path: 'common.translation.provider', equals: 'ollama' }
-        ]
-      }
-    )
-  }
-
   fields.push(
     ...definition.providerFields.filter((field) => field.section === 'primary'),
     {
@@ -173,22 +114,6 @@ function commonPrimaryFields(definition: EngineDefinition): EngineFieldDescripto
       section: 'primary',
       labelKey: 'engine.audioType',
       options: audioOptions
-    },
-    {
-      id: 'translation-enabled',
-      path: 'common.translation.enabled',
-      control: 'switch',
-      section: 'primary',
-      labelKey: 'engine.enableTranslation'
-    },
-    {
-      id: 'target-language',
-      path: 'common.targetLanguage',
-      control: 'select',
-      section: 'primary',
-      labelKey: 'engine.transLang',
-      options: languageOptions(definition, 'target'),
-      visibleWhen: [{ path: 'common.translation.enabled', equals: true }]
     }
   )
 
@@ -228,6 +153,7 @@ export function normalizeEngineConfig(config: EngineConfig): void {
       setEngineConfigValue(config, field.path, field.defaultWhenEmpty)
     }
   }
+  normalizeTranslationConfig(config, getEngineDefinition(provider))
 }
 
 export function validateEngineConfig(
@@ -267,7 +193,9 @@ export function validateEngineConfig(
       }
     }
   }
-  return getEngineDefinition(provider).validate?.(config, phase) ?? null
+  const definition = getEngineDefinition(provider)
+  return definition.validate?.(config, phase) ??
+    validateTranslationConfig(config, definition, phase)
 }
 
 export function applyEngineLanguageDefaults(
@@ -276,15 +204,8 @@ export function applyEngineLanguageDefaults(
   uiLanguage: UILanguage
 ): void {
   const definition = getEngineDefinition(provider)
-  const targetLanguages = definition.languages.filter((language) => {
-    return language.roles.includes('target')
-  })
-  const preferredTargets = uiLanguage === 'zh' ? ['zh', 'zh-cn'] : [uiLanguage]
-  const target =
-    preferredTargets
-      .map((value) => targetLanguages.find((language) => language.value === value))
-      .find(Boolean) ?? targetLanguages[0]
-
   config.common.sourceLanguage = definition.defaultSourceLanguage
-  if (target) config.common.targetLanguage = target.value
+  applyTranslationLanguageDefault(config, definition, uiLanguage)
 }
+
+export { getTranslationFields }

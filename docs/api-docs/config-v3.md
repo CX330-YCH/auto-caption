@@ -1,6 +1,6 @@
 # 配置文件 V3
 
-> 本文保留用于说明历史格式；当前格式为 [配置文件 V6](./config-v6.md)，应用会把完整 V3 依次显式迁移到 V4、V5 和 V6。
+> 本文保留用于说明历史格式；当前格式为 [配置文件 V7](./config-v7.md)，应用会把完整 V3 依次显式迁移到 V4、V5、V6 和 V7。
 
 Auto Caption 的持久化配置位于 Electron `userData/config.json`。V3 使用 `schemaVersion: 3`，当时磁盘、主进程、IPC 和渲染进程共享同一套分层类型。
 

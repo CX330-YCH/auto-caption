@@ -1,22 +1,58 @@
 import type { Styles, UILanguage, UITheme } from '../types'
 
-export const CONFIG_SCHEMA_VERSION = 6 as const
+export const CONFIG_SCHEMA_VERSION = 7 as const
 
 export type KnownProviderName = 'gummy' | 'vosk' | 'sosv' | 'glm' | 'fun_asr' | 'apple_speech'
 export type AudioSourceType = 0 | 1
+export type KnownTranslationProviderName = 'azure' | 'google' | 'ollama'
 
 export function isKnownProviderName(value: unknown): value is KnownProviderName {
   return value === 'gummy' || value === 'vosk' || value === 'sosv' ||
     value === 'glm' || value === 'fun_asr' || value === 'apple_speech'
 }
 
-export interface TranslationConfig {
+export function isKnownTranslationProviderName(
+  value: unknown
+): value is KnownTranslationProviderName {
+  return value === 'azure' || value === 'google' || value === 'ollama'
+}
+
+export interface TranslationCommonConfig {
   [key: string]: unknown
-  enabled: boolean
-  provider: string
+  targetLanguage: string
+}
+
+export interface AzureTranslationProviderConfig {
+  [key: string]: unknown
+  endpoint: string
+  region: string
+  apiKey: string
+}
+
+export interface GoogleTranslationProviderConfig {
+  [key: string]: unknown
+}
+
+export interface OllamaTranslationProviderConfig {
+  [key: string]: unknown
   model: string
   url: string
   apiKey: string
+}
+
+export interface TranslationProviderConfigs {
+  [key: string]: unknown
+  azure: AzureTranslationProviderConfig
+  google: GoogleTranslationProviderConfig
+  ollama: OllamaTranslationProviderConfig
+}
+
+export interface TranslationConfig {
+  [key: string]: unknown
+  enabled: boolean
+  activeProviderId: KnownTranslationProviderName
+  common: TranslationCommonConfig
+  providers: TranslationProviderConfigs
 }
 
 export interface RecordingConfig {
@@ -28,9 +64,7 @@ export interface RecordingConfig {
 export interface EngineCommonConfig {
   [key: string]: unknown
   sourceLanguage: string
-  targetLanguage: string
   audioSource: AudioSourceType
-  translation: TranslationConfig
   recording: RecordingConfig
   startTimeoutSeconds: number
 }
@@ -98,6 +132,7 @@ export interface EngineConfig {
   activeEngineId: string
   common: EngineCommonConfig
   providers: ProviderConfigs
+  translation: TranslationConfig
   customEngines: CustomEngineConfig[]
 }
 
@@ -134,7 +169,7 @@ export interface CaptionConfig {
   styles: Styles
 }
 
-export interface ConfigDocumentV6 {
+export interface ConfigDocumentV7 {
   [key: string]: unknown
   schemaVersion: typeof CONFIG_SCHEMA_VERSION
   application: ApplicationConfig
@@ -182,7 +217,7 @@ export function createDefaultStyles(): Styles {
   }
 }
 
-export function createDefaultConfig(recordingPath: string): ConfigDocumentV6 {
+export function createDefaultConfig(recordingPath: string): ConfigDocumentV7 {
   return {
     schemaVersion: CONFIG_SCHEMA_VERSION,
     application: {
@@ -201,15 +236,7 @@ export function createDefaultConfig(recordingPath: string): ConfigDocumentV6 {
       activeEngineId: 'gummy',
       common: {
         sourceLanguage: 'en',
-        targetLanguage: 'zh',
         audioSource: 0,
-        translation: {
-          enabled: true,
-          provider: 'ollama',
-          model: 'qwen2.5:0.5b',
-          url: 'http://localhost:11434',
-          apiKey: ''
-        },
         recording: {
           enabled: false,
           path: recordingPath
@@ -237,6 +264,26 @@ export function createDefaultConfig(recordingPath: string): ConfigDocumentV6 {
             vocabularyId: '',
             targetModel: 'fun-asr-realtime',
             contextTerms: []
+          }
+        }
+      },
+      translation: {
+        enabled: true,
+        activeProviderId: 'ollama',
+        common: {
+          targetLanguage: 'zh'
+        },
+        providers: {
+          azure: {
+            endpoint: 'https://api.cognitive.microsofttranslator.com',
+            region: '',
+            apiKey: ''
+          },
+          google: {},
+          ollama: {
+            model: 'qwen2.5:0.5b',
+            url: 'http://localhost:11434',
+            apiKey: ''
           }
         }
       },

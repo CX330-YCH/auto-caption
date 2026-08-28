@@ -40,7 +40,9 @@ export default {
     "customExecutableMissing": "自定义引擎路径为空",
     "customExecutableMissingNote": "启动自定义字幕引擎前必须填写可执行文件路径。",
     "customEngineMissing": "自定义引擎不存在",
-    "customEngineMissingNote": "所选自定义引擎已不存在，请重新选择。"
+    "customEngineMissingNote": "所选自定义引擎已不存在，请重新选择。",
+    "translationUnavailable": "翻译引擎不可用",
+    "translationUnavailableNote": "所选翻译引擎在当前版本中不可用。"
   },
   general: {
     "title": "通用设置",
@@ -101,9 +103,15 @@ export default {
     "modelDownload": "模型下载地址",
     "startTimeoutInfo": "字幕引擎启动超时时间，超过此时间将自动强制停止。建议设置为 10-120 秒之间。",
     "customEngine": "自定义引擎",
+    translation: {
+      "azureUnavailable": "当前版本只预留了 Microsoft Azure Translator 的配置元数据，尚未接入网络请求实现。"
+    },
     fields: {
       "baseUrl": "Base URL",
       "translationApiKey": "翻译 API KEY",
+      "azureTranslationEndpoint": "Azure Translator 终结点",
+      "azureTranslationRegion": "Azure 资源区域",
+      "azureTranslationApiKey": "Azure Translator API KEY",
       "gummyApiKey": "阿里云 API KEY",
       "glmUrl": "GLM API URL",
       "glmModel": "GLM 模型名称",
@@ -144,6 +152,7 @@ export default {
         "jaJP": "日语（日本）"
       },
       translation: {
+        "azure": "Microsoft Azure Translator（暂不可用）",
         "ollama": "Ollama 模型或 OpenAI 兼容模型",
         "google": "Google API 调用"
       },

@@ -12,10 +12,7 @@ export const appleSpeechEngine: EngineDefinition = {
   languages: [
     { value: 'zh-CN', labelKey: 'engine.options.languages.zhCN', roles: ['source'] },
     { value: 'en-US', labelKey: 'engine.options.languages.enUS', roles: ['source'] },
-    { value: 'ja-JP', labelKey: 'engine.options.languages.jaJP', roles: ['source'] },
-    { value: 'zh', labelKey: 'engine.options.languages.zh', roles: ['target'] },
-    { value: 'en', labelKey: 'engine.options.languages.en', roles: ['target'] },
-    { value: 'ja', labelKey: 'engine.options.languages.ja', roles: ['target'] }
+    { value: 'ja-JP', labelKey: 'engine.options.languages.jaJP', roles: ['source'] }
   ],
   providerFields: [],
   defaultSourceLanguage: 'zh-CN'

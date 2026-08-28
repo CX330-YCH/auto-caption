@@ -13,11 +13,11 @@ function valueAfter(args, flag) {
   return args[index + 1]
 }
 
-test('builds common and Provider-specific arguments from V6 config', () => {
+test('builds common and Provider-specific arguments from V7 config', () => {
   const engine = createDefaultConfig('/recordings').engine
   engine.common.audioSource = 1
   engine.common.recording.enabled = true
-  engine.common.translation.apiKey = 'translation-secret'
+  engine.translation.providers.ollama.apiKey = 'translation-secret'
   engine.providers.gummy.apiKey = 'gummy-secret'
   engine.providers.vosk.modelPath = '/models/vosk'
   engine.providers.sosv.modelPath = '/models/sosv'
@@ -115,7 +115,7 @@ test('passes Debug Mode only to bundled engines', () => {
 
 test('uses none target when translation is disabled', () => {
   const engine = createDefaultConfig('').engine
-  engine.common.translation.enabled = false
+  engine.translation.enabled = false
 
   assert.equal(
     valueAfter(buildBundledEngineArguments(engine, 'vosk', 3456), '-t'),
@@ -125,6 +125,25 @@ test('uses none target when translation is disabled', () => {
   for (const flag of ['-tm', '-omn', '-ourl', '-okey']) {
     assert.equal(args.includes(flag), false)
   }
+})
+
+test('keeps legacy translation CLI flags while selecting an independent provider', () => {
+  const engine = createDefaultConfig('').engine
+  engine.activeEngineId = 'vosk'
+  engine.providers.vosk.modelPath = '/models/vosk'
+  engine.translation.activeProviderId = 'google'
+
+  const googleArgs = buildBundledEngineArguments(engine, 'vosk', 3456)
+  assert.equal(valueAfter(googleArgs, '-tm'), 'google')
+  assert.equal(valueAfter(googleArgs, '-omn'), '')
+  assert.equal(googleArgs.includes('-ourl'), false)
+  assert.equal(googleArgs.includes('-okey'), false)
+
+  engine.translation.activeProviderId = 'azure'
+  assert.throws(
+    () => buildBundledEngineArguments(engine, 'vosk', 3456),
+    /Azure translation is not available/
+  )
 })
 
 test('builds custom engine arguments without bundled Provider fields', () => {

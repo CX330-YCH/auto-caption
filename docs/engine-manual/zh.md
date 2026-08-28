@@ -1,6 +1,6 @@
 # 字幕引擎说明文档
 
-对应版本：v2.26.0
+对应版本：v2.27.0
 
 ![](../../assets/media/structure_zh.png)
 
@@ -130,7 +130,7 @@ while True:
 - `accept_audio(self, frame: AudioFrame)`：处理一个规范化音频帧，并产生 partial/final/lifecycle 事件
 - `stop(self)`：停止模型
 
-Provider 不读取全局队列、不直接写标准输出，也不创建自己的客户端翻译循环；这些职责分别属于 `RecognitionSession`、协议输出层和 `TranslationService`。
+Provider 不读取全局队列、不直接写标准输出，也不创建自己的客户端翻译循环；这些职责分别属于 `RecognitionSession`、协议输出层和独立的 `TranslationSession`。
 
 完整的字幕引擎实例如下：
 
@@ -142,16 +142,9 @@ Provider 不读取全局队列、不直接写标准输出，也不创建自己�
 
 ### 字幕翻译
 
-有的语音转文字模型并不提供翻译，如果有需求，需要再添加一个翻译模块，也可以使用自带的翻译模块。
+客户端翻译使用与识别类似的 Provider 架构。`TranslationProvider` 只实现 `name`、`start()`、`translate(request)`、`stop()`；`TranslationSession` 负责有界队列、生命周期、稳定字幕 ID、结果分发和错误脱敏；`TranslationProviderRegistry` 负责按配置创建 Provider。现有实现位于 `engine/translation/providers/google.py` 和 `ollama.py`。
 
-样例：
-
-```python
-from utils import google_translate, ollama_translate
-text = "这是一个翻译测试。"
-google_translate("", "en", text, "time_s")
-ollama_translate("qwen3:0.6b", "en", text, "time_s")
-```
+新增翻译引擎时，应在 `engine/translation/providers/` 添加适配器并在 `engine/translation/registry.py` 注册；不得把网络调用写回识别 Provider、`RecognitionSession` 或 stdout 工具。翻译只接受 final，每个 `caption_id` 只提交一次；Provider 返回 `TranslationResult`，由协议层统一生成兼容的 `translation` 消息。
 
 ### 字幕数据发送
 
@@ -249,7 +242,8 @@ V6 Debug Mode 通过 `--debug-mode 0|1` 启动，并可由 TCP `debug_mode` comm
 除音频转文字和翻译外，其他（音频获取、音频重采样、与主进程通信）建议直接复用本项目代码。如果这样，那么需要添加的内容为：
 
 - `engine/providers/`：添加实现 `RecognitionProvider` 的识别适配器
-- `engine/providers/registry.py`：注册 Provider 及其音频 Pipeline、翻译服务装配
+- `engine/providers/registry.py`：注册识别 Provider 及其音频 Pipeline
+- `engine/translation/providers/` 与 `registry.py`：添加并注册独立翻译 Provider（仅在需要新翻译引擎时）
 - `engine/cli.py`：仅在模型确实需要新配置时添加参数；不要在 `main.py` 增加新的模型分支
 
 完整职责和依赖规则见[当前 Python 引擎架构](architecture.md)。

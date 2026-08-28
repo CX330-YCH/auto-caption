@@ -3,7 +3,7 @@
     <h1 align="center">auto-caption</h1>
     <p>Auto Caption 是一个跨平台的实时字幕显示软件。</p>
     <p>
-      <a href="https://github.com/HiMeditator/auto-caption/releases"><img src="https://img.shields.io/badge/release-2.26.0-blue"></a>
+      <a href="https://github.com/HiMeditator/auto-caption/releases"><img src="https://img.shields.io/badge/release-2.27.0-blue"></a>
       <a href="https://github.com/HiMeditator/auto-caption/issues"><img src="https://img.shields.io/github/issues/HiMeditator/auto-caption?color=orange"></a>
       <img src="https://img.shields.io/github/languages/top/HiMeditator/auto-caption?color=royalblue">
       <img src="https://img.shields.io/github/repo-size/HiMeditator/auto-caption?color=green">
@@ -14,7 +14,7 @@
         | <a href="./README_en.md">English</a>
         | <a href="./README_ja.md">日本語</a> |
     </p>
-    <p><i>v2.26.0 版本已经发布，包含 macOS arm64 构建...</i></p>
+    <p><i>v2.27.0 版本已经发布，包含 macOS arm64 构建...</i></p>
 </div>
 
 ![](./assets/media/main_zh.png)
@@ -53,7 +53,7 @@ https://github.com/user-attachments/assets/9c188d78-9520-4397-bacf-4c8fdcc54874
 
 ## 📖 基本使用
 
-> ⚠️ 注意：当前 v2.26.0 已提供 Windows 和 macOS arm64 构建；Linux 仍需从源码或现有构建链路验证。
+> ⚠️ 注意：当前 v2.27.0 已提供 Windows 和 macOS arm64 构建；Linux 仍需从源码或现有构建链路验证。
 
 软件已经适配了 Windows、macOS 和 Linux 平台。测试过的主流平台信息如下：
 
@@ -79,13 +79,15 @@ macOS 平台和 Linux 平台获取系统音频输出需要进行额外设置，�
 
 如果你选择的不是 Gummy 模型，你还需要配置自己的翻译模型。
 
-关闭“启用翻译”时，应用不会显示或向字幕引擎传递翻译服务配置；开启后可用“配置翻译引擎”展开模型、Base URL 和 API Key。自定义字幕引擎通过引擎下拉菜单中的“添加自定义引擎…”创建，可命名多个条目，并从各条目右侧删除。
+关闭“启用翻译”时，应用不会显示或向字幕引擎传递翻译配置；开启后可在独立的“配置翻译引擎”中选择 Google 或 Ollama，并编辑所选翻译 Provider 的专属字段。识别引擎与翻译引擎的配置分别保存，切换识别引擎不会覆盖翻译设置。Microsoft Azure Translator 目前只预留配置和能力元数据，界面中不可选择，尚不会发起 Azure 请求。自定义字幕引擎通过引擎下拉菜单中的“添加自定义引擎…”创建，可命名多个条目，并从各条目右侧删除。
 
 ### 配置翻译模型
 
 ![](./assets/media/engine_zh.png)
 
 > 注意：翻译不是实时的，翻译模型只会在每句话识别完成后再调用。
+
+Google 与 Ollama 已实现为独立翻译 Provider，共用有界任务队列、稳定字幕 ID、错误脱敏和 `start → translate → stop` 生命周期；识别 Provider 不再创建自己的客户端翻译循环。
 
 #### Ollama 本地模型
 

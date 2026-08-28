@@ -45,15 +45,15 @@ export const funAsrEngine: EngineDefinition = {
   },
   languages: [
     language('auto', ['source']),
-    language('zh', ['source', 'target']),
-    language('en', ['source', 'target']),
-    language('ja', ['source', 'target']),
-    language('ko', ['source', 'target']),
-    language('de', ['source', 'target']),
-    language('fr', ['source', 'target']),
-    language('ru', ['source', 'target']),
-    language('es', ['source', 'target']),
-    language('it', ['source', 'target'])
+    language('zh', ['source']),
+    language('en', ['source']),
+    language('ja', ['source']),
+    language('ko', ['source']),
+    language('de', ['source']),
+    language('fr', ['source']),
+    language('ru', ['source']),
+    language('es', ['source']),
+    language('it', ['source'])
   ],
   providerFields: [
     {

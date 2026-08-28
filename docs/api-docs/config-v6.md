@@ -1,6 +1,8 @@
 # 配置文件 V6
 
-Auto Caption 的持久化配置位于 Electron `userData/config.json`。当前版本接受 `schemaVersion: 6`，磁盘、主进程、IPC 和 Renderer 共享 `ConfigDocumentV6`。
+> 本文保留用于说明历史格式；当前格式为 [配置文件 V7](./config-v7.md)。应用会把完整 V6 显式迁移到 V7，并把翻译配置移到独立层级。
+
+V6 版本接受 `schemaVersion: 6`，磁盘、主进程、IPC 和 Renderer 共享 `ConfigDocumentV6`。
 
 V6 保留原有 `application`、`engine`、`caption` 分层，并在应用配置中增加诊断设置：
 

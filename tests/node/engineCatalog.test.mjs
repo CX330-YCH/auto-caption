@@ -8,6 +8,7 @@ import {
   engineDefinitions,
   getEngineDefinition,
   getEngineFields,
+  getTranslationFields,
   normalizeEngineConfig,
   validateEngineConfig
 } from '../../src/renderer/src/engines/catalog.ts'
@@ -17,6 +18,11 @@ import {
   isEngineFieldVisible,
   setEngineConfigValue
 } from '../../src/renderer/src/engines/form.ts'
+import {
+  getTranslationDefinition,
+  getTranslationOptions,
+  translationDefinitions
+} from '../../src/renderer/src/translations/catalog.ts'
 import en from '../../src/renderer/src/i18n/lang/en.ts'
 import ja from '../../src/renderer/src/i18n/lang/ja.ts'
 import zh from '../../src/renderer/src/i18n/lang/zh.ts'
@@ -25,7 +31,7 @@ function hasMessageKey(messages, key) {
   return key.split('.').reduce((current, segment) => current?.[segment], messages) !== undefined
 }
 
-test('registers each V6 provider once with capability and field metadata', () => {
+test('registers each recognition provider once with capability metadata', () => {
   const providerIds = engineDefinitions.map((definition) => definition.id)
 
   assert.deepEqual(providerIds, [
@@ -39,44 +45,57 @@ test('registers each V6 provider once with capability and field metadata', () =>
     const fieldIds = fields.map((field) => field.id)
 
     assert.ok(definition.languages.some((language) => language.roles.includes('source')))
-    assert.ok(definition.languages.some((language) => language.roles.includes('target')))
     assert.equal(new Set(fieldIds).size, fieldIds.length)
     assert.ok(fields.some((field) => field.path === 'common.audioSource'))
+    assert.equal(fields.some((field) => field.path.startsWith('translation.')), false)
   }
 })
 
-test('uses translation capability to include only relevant generic fields', () => {
-  const gummyFields = getEngineFields('gummy')
-  const voskFields = getEngineFields('vosk')
+test('registers independent translation engines with capabilities and availability', () => {
+  const providerIds = translationDefinitions.map((definition) => definition.id)
 
+  assert.deepEqual(providerIds, ['azure', 'google', 'ollama'])
+  assert.equal(new Set(providerIds).size, providerIds.length)
+  assert.equal(getTranslationDefinition('google').capabilities.credentials, 'none')
+  assert.equal(getTranslationDefinition('ollama').capabilities.customEndpoint, true)
+  assert.equal(getTranslationDefinition('azure').capabilities.availability, 'unavailable')
+  assert.equal(getTranslationOptions().find((option) => option.value === 'azure').disabled, true)
+
+  const config = createDefaultConfig('/recordings').engine
+  const gummyFields = getTranslationFields(config, getEngineDefinition('gummy'))
   assert.equal(
-    gummyFields.some((field) => field.path === 'common.translation.provider'),
+    gummyFields.some((field) => field.path === 'translation.activeProviderId'),
     false
-  )
-  assert.equal(
-    voskFields.some((field) => field.path === 'common.translation.provider'),
-    true
   )
 })
 
 test('reads, writes, clones, and evaluates nested form fields without provider branches', () => {
   const config = createDefaultConfig('/recordings').engine
   const clone = cloneEngineConfig(config)
-  const modelField = getEngineFields('vosk').find((field) => field.id === 'translation-model')
+  const recognition = getEngineDefinition('vosk')
+  const modelField = getTranslationFields(clone, recognition)
+    .find((field) => field.id === 'translation-ollama-model')
 
   assert.ok(modelField)
-  assert.equal(getEngineConfigValue(clone, 'common.translation.model'), 'qwen2.5:0.5b')
-  setEngineConfigValue(clone, 'common.translation.model', 'qwen3:0.6b')
-  assert.equal(clone.common.translation.model, 'qwen3:0.6b')
-  assert.equal(config.common.translation.model, 'qwen2.5:0.5b')
+  assert.equal(
+    getEngineConfigValue(clone, 'translation.providers.ollama.model'),
+    'qwen2.5:0.5b'
+  )
+  setEngineConfigValue(clone, 'translation.providers.ollama.model', 'qwen3:0.6b')
+  assert.equal(clone.translation.providers.ollama.model, 'qwen3:0.6b')
+  assert.equal(config.translation.providers.ollama.model, 'qwen2.5:0.5b')
   assert.equal(isEngineFieldVisible(clone, modelField), true)
 
-  clone.common.translation.enabled = false
+  clone.translation.enabled = false
   assert.equal(isEngineFieldVisible(clone, modelField), false)
-  clone.common.translation.enabled = true
+  clone.translation.enabled = true
 
-  clone.common.translation.provider = 'google'
-  assert.equal(isEngineFieldVisible(clone, modelField), false)
+  clone.translation.activeProviderId = 'google'
+  assert.equal(
+    getTranslationFields(clone, recognition)
+      .some((field) => field.id === 'translation-ollama-model'),
+    false
+  )
 })
 
 test('clones Vue reactive engine config without retaining proxy state', () => {
@@ -84,8 +103,8 @@ test('clones Vue reactive engine config without retaining proxy state', () => {
   const clone = cloneEngineConfig(config)
 
   assert.deepEqual(clone, createDefaultConfig('/recordings').engine)
-  clone.common.translation.model = 'qwen3:0.6b'
-  assert.equal(config.common.translation.model, 'qwen2.5:0.5b')
+  clone.translation.providers.ollama.model = 'qwen3:0.6b'
+  assert.equal(config.translation.providers.ollama.model, 'qwen2.5:0.5b')
 })
 
 test('validates start requirements from the selected provider definition', () => {
@@ -108,11 +127,16 @@ test('validates start requirements from the selected provider definition', () =>
 test('validates external translation and normalizes provider defaults from metadata', () => {
   const config = createDefaultConfig('/recordings').engine
   config.activeEngineId = 'glm'
-  config.common.translation.model = '  '
+  config.translation.providers.ollama.model = '  '
 
-  assert.equal(validateEngineConfig(config, 'apply')?.fieldId, 'translation-model')
-  config.common.translation.enabled = false
+  assert.equal(validateEngineConfig(config, 'apply')?.fieldId, 'translation-ollama-model')
+  config.translation.enabled = false
   assert.equal(validateEngineConfig(config, 'apply'), null)
+
+  config.translation.enabled = true
+  config.translation.activeProviderId = 'azure'
+  assert.equal(validateEngineConfig(config, 'apply')?.fieldId, 'translation-provider')
+  config.translation.activeProviderId = 'ollama'
 
   config.providers.glm.url = ''
   config.providers.glm.model = ''
@@ -134,17 +158,17 @@ test('chooses provider-supported language defaults from the UI language', () => 
 
   applyEngineLanguageDefaults(config, 'vosk', 'zh')
   assert.equal(config.common.sourceLanguage, 'auto')
-  assert.equal(config.common.targetLanguage, 'zh-cn')
+  assert.equal(config.translation.common.targetLanguage, 'zh')
 
   applyEngineLanguageDefaults(config, 'sosv', 'zh')
-  assert.equal(config.common.targetLanguage, 'zh')
+  assert.equal(config.translation.common.targetLanguage, 'zh')
 
   applyEngineLanguageDefaults(config, 'gummy', 'ja')
-  assert.equal(config.common.targetLanguage, 'ja')
+  assert.equal(config.translation.common.targetLanguage, 'ja')
 
   applyEngineLanguageDefaults(config, 'fun_asr', 'en')
   assert.equal(config.common.sourceLanguage, 'auto')
-  assert.equal(config.common.targetLanguage, 'en')
+  assert.equal(config.translation.common.targetLanguage, 'en')
 })
 
 test('describes Fun-ASR connection and segmentation fields through capabilities', () => {
@@ -155,7 +179,13 @@ test('describes Fun-ASR connection and segmentation fields through capabilities'
   assert.ok(fields.some((field) => field.path === 'providers.funAsr.websocketUrl'))
   assert.ok(fields.some((field) => field.path === 'providers.funAsr.workspaceId'))
   assert.ok(fields.some((field) => field.path === 'providers.funAsr.heartbeatEnabled'))
-  assert.ok(fields.some((field) => field.path === 'common.translation.provider'))
+  const translationFields = getTranslationFields(
+    createDefaultConfig('/recordings').engine,
+    definition
+  )
+  assert.ok(
+    translationFields.some((field) => field.path === 'translation.activeProviderId')
+  )
   assert.equal(definition.capabilities.hotwords, 'manager')
 
   const config = createDefaultConfig('/recordings').engine
@@ -193,6 +223,17 @@ test('resolves every catalog label and help key in all supported UI languages', 
       if (field.helpKey) messageKeys.add(field.helpKey)
       if (field.helpLinkLabelKey) messageKeys.add(field.helpLinkLabelKey)
       for (const option of field.options ?? []) messageKeys.add(option.labelKey)
+    }
+  }
+  for (const definition of translationDefinitions) {
+    messageKeys.add(definition.labelKey)
+    if (definition.unavailableReasonKey) {
+      messageKeys.add(definition.unavailableReasonKey)
+    }
+    for (const language of definition.languages) messageKeys.add(language.labelKey)
+    for (const field of definition.providerFields) {
+      messageKeys.add(field.labelKey)
+      if (field.helpKey) messageKeys.add(field.helpKey)
     }
   }
 

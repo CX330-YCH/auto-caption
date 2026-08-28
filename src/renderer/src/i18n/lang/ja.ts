@@ -40,7 +40,9 @@ export default {
     "customExecutableMissing": "カスタムエンジンのパスが未入力です",
     "customExecutableMissingNote": "カスタム字幕エンジンを起動する前に実行ファイルのパスを入力してください。",
     "customEngineMissing": "カスタムエンジンが存在しません",
-    "customEngineMissingNote": "選択したカスタムエンジンは存在しません。別のエンジンを選択してください。"
+    "customEngineMissingNote": "選択したカスタムエンジンは存在しません。別のエンジンを選択してください。",
+    "translationUnavailable": "翻訳エンジンを利用できません",
+    "translationUnavailableNote": "選択した翻訳エンジンはこのバージョンでは利用できません。"
   },
   general: {
     "title": "一般設定",
@@ -101,9 +103,15 @@ export default {
     "modelDownload": "モデルダウンロードリンク",
     "startTimeoutInfo": "字幕エンジンの起動タイムアウト時間です。この時間を超えると自動的に強制停止されます。10-120秒の範囲で設定することを推奨します。",
     "customEngine": "カスタム",
+    translation: {
+      "azureUnavailable": "このバージョンでは Microsoft Azure Translator の設定メタデータのみを予約しており、ネットワークリクエストはまだ実装されていません。"
+    },
     fields: {
       "baseUrl": "Base URL",
       "translationApiKey": "翻訳 API KEY",
+      "azureTranslationEndpoint": "Azure Translator エンドポイント",
+      "azureTranslationRegion": "Azure リソースリージョン",
+      "azureTranslationApiKey": "Azure Translator API KEY",
       "gummyApiKey": "Alibaba Cloud API KEY",
       "glmUrl": "GLM API URL",
       "glmModel": "GLM モデル名",
@@ -144,6 +152,7 @@ export default {
         "jaJP": "日本語（日本）"
       },
       translation: {
+        "azure": "Microsoft Azure Translator（利用不可）",
         "ollama": "Ollama モデルまたは OpenAI 互換モデル",
         "google": "Google API 呼び出し"
       },

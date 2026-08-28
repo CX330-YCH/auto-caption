@@ -3,7 +3,7 @@
     <h1 align="center">auto-caption</h1>
     <p>Auto Caption はクロスプラットフォームのリアルタイム字幕表示ソフトウェアです。</p>
     <p>
-      <a href="https://github.com/HiMeditator/auto-caption/releases"><img src="https://img.shields.io/badge/release-2.26.0-blue"></a>
+      <a href="https://github.com/HiMeditator/auto-caption/releases"><img src="https://img.shields.io/badge/release-2.27.0-blue"></a>
       <a href="https://github.com/HiMeditator/auto-caption/issues"><img src="https://img.shields.io/github/issues/HiMeditator/auto-caption?color=orange"></a>
       <img src="https://img.shields.io/github/languages/top/HiMeditator/auto-caption?color=royalblue">
       <img src="https://img.shields.io/github/repo-size/HiMeditator/auto-caption?color=green">
@@ -14,7 +14,7 @@
         | <a href="./README_en.md">English</a>
         | <b>日本語</b> |
     </p>
-    <p><i>v2.26.0 がリリースされました。macOS arm64 ビルドを含みます...</i></p>
+    <p><i>v2.27.0 がリリースされました。macOS arm64 ビルドを含みます...</i></p>
 </div>
 
 ![](./assets/media/main_ja.png)
@@ -53,7 +53,7 @@ https://github.com/user-attachments/assets/9c188d78-9520-4397-bacf-4c8fdcc54874
 
 ## 📖 基本使い方
 
-> ⚠️ 注意：現在の v2.26.0 は Windows と macOS arm64 ビルドを提供しています。Linux はソースまたは既存のビルド手順での検証が必要です。
+> ⚠️ 注意：現在の v2.27.0 は Windows と macOS arm64 ビルドを提供しています。Linux はソースまたは既存のビルド手順での検証が必要です。
 
 このソフトウェアは Windows、macOS、Linux プラットフォームに対応しています。テスト済みのプラットフォーム情報は以下の通りです：
 
@@ -80,13 +80,15 @@ macOS および Linux プラットフォームでシステムオーディオ出�
 
 Gummyモデル以外を選択した場合、独自の翻訳モデルを設定する必要があります。
 
-翻訳を無効にすると翻訳サービス設定は非表示になり、字幕エンジンにも渡されません。有効にした後、「翻訳エンジンを設定」でモデル、Base URL、API Key を編集できます。エンジンメニューの「カスタムエンジンを追加…」から名前付き項目を複数作成でき、各項目の右側から削除できます。
+翻訳を無効にすると翻訳設定は非表示になり、字幕エンジンにも渡されません。有効にすると、独立した「翻訳エンジンを設定」で Google または Ollama を選択し、その翻訳 Provider 固有の項目を編集できます。認識と翻訳の設定は別々に保存されるため、認識エンジンを切り替えても翻訳設定は上書きされません。Microsoft Azure Translator は現在、設定と機能メタデータだけを予約しており、UI では選択できず Azure へのリクエストも行いません。エンジンメニューの「カスタムエンジンを追加…」から名前付き項目を複数作成でき、各項目の右側から削除できます。
 
 ### 翻訳モデルの設定
 
 ![](./assets/media/engine_ja.png)
 
 > 注意：翻訳はリアルタイムではありません。翻訳モデルは各文の認識が完了した後にのみ呼び出されます。
+
+Google と Ollama は独立した翻訳 Provider として実装され、有界タスクキュー、安定した字幕 ID、マスキング済み診断、`start → translate → stop` ライフサイクルを共有します。認識 Provider はクライアント翻訳ループを作成しません。
 
 #### Ollama ローカルモデル
 

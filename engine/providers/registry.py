@@ -5,12 +5,9 @@ from core import (
     AudioPipeline,
     AudioSource,
     RecognitionProvider,
-    TranslationService,
 )
 from services import (
     HotwordRuntimeConfig,
-    NoTranslationService,
-    build_legacy_translation_service,
 )
 
 from .glm import GlmProvider
@@ -26,10 +23,6 @@ class ProviderConfig:
     name: str
     source_language: str
     target_language: str
-    translation_model: str
-    translation_model_name: str
-    translation_url: str
-    translation_api_key: str = field(repr=False)
     gummy_api_key: str = field(repr=False)
     vosk_model_path: str
     sosv_model_path: str | None
@@ -53,7 +46,7 @@ class ProviderConfig:
 class ProviderRuntime:
     provider: RecognitionProvider
     audio_pipeline: AudioPipeline
-    translation_service: TranslationService
+    external_translation: bool = True
 
 
 ProviderBuilder = Callable[
@@ -135,7 +128,7 @@ def _build_gummy(
             ),
             output_sample_rate=audio_source.RATE,
         ),
-        translation_service=NoTranslationService(),
+        external_translation=False,
     )
 
 
@@ -242,15 +235,6 @@ def _build_apple_speech(
             ),
             output_sample_rate=audio_source.RATE,
         ),
-        translation_service=build_legacy_translation_service(
-            target=_target(config.target_language),
-            trans_model=config.translation_model,
-            model_name=config.translation_model_name,
-            url=config.translation_url,
-            api_key=config.translation_api_key,
-            warning_handler=warning_handler,
-            diagnostic_handler=diagnostic_handler,
-        ),
     )
 
 
@@ -273,15 +257,6 @@ def _build_mono_16k_runtime(
                 16000,
             ),
             output_sample_rate=16000,
-        ),
-        translation_service=build_legacy_translation_service(
-            target=_target(config.target_language),
-            trans_model=config.translation_model,
-            model_name=config.translation_model_name,
-            url=config.translation_url,
-            api_key=config.translation_api_key,
-            warning_handler=warning_handler,
-            diagnostic_handler=diagnostic_handler,
         ),
     )
 

@@ -40,7 +40,9 @@ export default {
     "customExecutableMissing": "Custom Engine Path Missing",
     "customExecutableMissingNote": "Enter an executable path before starting the custom caption engine.",
     "customEngineMissing": "Custom Engine Missing",
-    "customEngineMissingNote": "The selected custom engine no longer exists. Select another engine."
+    "customEngineMissingNote": "The selected custom engine no longer exists. Select another engine.",
+    "translationUnavailable": "Translation Engine Unavailable",
+    "translationUnavailableNote": "The selected translation engine is unavailable in this version."
   },
   general: {
     "title": "General Settings",
@@ -101,9 +103,15 @@ export default {
     "modelDownload": "Model Download Link",
     "startTimeoutInfo": "Caption engine startup timeout duration. Engine will be forcefully stopped if startup exceeds this time. Recommended range: 10-120 seconds.",
     "customEngine": "Custom Eng",
+    translation: {
+      "azureUnavailable": "This version reserves configuration metadata for Microsoft Azure Translator, but does not implement its network requests yet."
+    },
     fields: {
       "baseUrl": "Base URL",
       "translationApiKey": "Translation API KEY",
+      "azureTranslationEndpoint": "Azure Translator Endpoint",
+      "azureTranslationRegion": "Azure Resource Region",
+      "azureTranslationApiKey": "Azure Translator API KEY",
       "gummyApiKey": "Alibaba Cloud API KEY",
       "glmUrl": "GLM API URL",
       "glmModel": "GLM Model Name",
@@ -144,6 +152,7 @@ export default {
         "jaJP": "Japanese (Japan)"
       },
       translation: {
+        "azure": "Microsoft Azure Translator (Unavailable)",
         "ollama": "Ollama Model or OpenAI-compatible Model",
         "google": "Google API Call"
       },

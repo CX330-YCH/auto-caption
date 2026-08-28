@@ -13,7 +13,7 @@ from .events import (
     UsageUpdated,
 )
 from .provider import RecognitionProvider
-from .session import EventSink, RecognitionSession, TranslationService
+from .session import EventSink, RecognitionSession, TranslationSessionProtocol
 from .telemetry import RuntimeTelemetry
 from .runtime_diagnostics import install_runtime_diagnostics
 from .diagnostics import (
@@ -47,6 +47,6 @@ __all__ = [
     'redact_diagnostic_text',
     'safe_diagnostic_value',
     'sdk_diagnostic',
-    'TranslationService',
+    'TranslationSessionProtocol',
     'UsageUpdated',
 ]

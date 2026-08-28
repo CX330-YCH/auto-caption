@@ -18,10 +18,6 @@ def config(name):
         name=name,
         source_language='auto',
         target_language='none',
-        translation_model='ollama',
-        translation_model_name='',
-        translation_url='',
-        translation_api_key='dummy-translation-credential',
         gummy_api_key='dummy-gummy-credential',
         vosk_model_path='model',
         sosv_model_path='model',
@@ -65,7 +61,6 @@ class ProviderRegistryTests(unittest.TestCase):
     def test_provider_config_repr_does_not_expose_credentials(self):
         representation = repr(config('gummy'))
 
-        self.assertNotIn('dummy-translation-credential', representation)
         self.assertNotIn('dummy-gummy-credential', representation)
         self.assertNotIn('dummy-glm-credential', representation)
         self.assertNotIn('dummy-fun-asr-credential', representation)

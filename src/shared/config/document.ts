@@ -8,10 +8,12 @@ import {
   InvalidConfigError,
   UnsupportedConfigVersionError,
   isKnownProviderName,
+  isKnownTranslationProviderName,
   type ApplicationConfig,
-  type ConfigDocumentV6,
+  type ConfigDocumentV7,
   type EngineConfig,
-  type ProviderConfigs
+  type ProviderConfigs,
+  type TranslationConfig
 } from './schema.ts'
 import {
   isRecord,
@@ -31,21 +33,24 @@ import {
   validateFunAsrEndpoint
 } from './validation.ts'
 
-export function parseConfigDocumentV6(value: unknown): ConfigDocumentV6 {
+export function parseConfigDocumentV7(value: unknown): ConfigDocumentV7 {
   if (!isRecord(value)) {
     throw new InvalidConfigError('Config root must be an object')
   }
   if (value.schemaVersion === 2) {
-    return parseConfigDocumentV6(migrateConfigDocumentV2ToV3(value))
+    return parseConfigDocumentV7(migrateConfigDocumentV2ToV3(value))
   }
   if (value.schemaVersion === 3) {
-    return parseConfigDocumentV6(migrateConfigDocumentV3ToV4(value))
+    return parseConfigDocumentV7(migrateConfigDocumentV3ToV4(value))
   }
   if (value.schemaVersion === 4) {
-    return parseConfigDocumentV6(migrateConfigDocumentV4ToV5(value))
+    return parseConfigDocumentV7(migrateConfigDocumentV4ToV5(value))
   }
   if (value.schemaVersion === 5) {
-    return parseConfigDocumentV6(migrateConfigDocumentV5ToV6(value))
+    return parseConfigDocumentV7(migrateConfigDocumentV5ToV6(value))
+  }
+  if (value.schemaVersion === 6) {
+    return parseConfigDocumentV7(migrateConfigDocumentV6ToV7(value))
   }
   if (value.schemaVersion !== CONFIG_SCHEMA_VERSION) {
     if (
@@ -76,12 +81,75 @@ function migrateConfigDocumentV5ToV6(
     : {}
   return {
     ...value,
-    schemaVersion: CONFIG_SCHEMA_VERSION,
+    schemaVersion: 6,
     application: {
       ...application,
       diagnostics: {
         ...existingDiagnostics,
         debugMode: false
+      }
+    }
+  }
+}
+
+function migrateConfigDocumentV6ToV7(
+  value: Record<string, unknown>
+): Record<string, unknown> {
+  const engine = requireRecord(value.engine, 'engine')
+  const common = requireRecord(engine.common, 'engine.common')
+  const legacyTranslation = requireRecord(
+    common.translation,
+    'engine.common.translation'
+  )
+  const provider = requireString(
+    legacyTranslation.provider,
+    'translation.provider',
+    64,
+    false
+  )
+  if (provider !== 'google' && provider !== 'ollama') {
+    throw new InvalidConfigError('Invalid translation.provider')
+  }
+
+  const migratedCommon: Record<string, unknown> = { ...common }
+  delete migratedCommon.targetLanguage
+  delete migratedCommon.translation
+
+  const translationExtensions: Record<string, unknown> = {
+    ...legacyTranslation
+  }
+  delete translationExtensions.provider
+  delete translationExtensions.model
+  delete translationExtensions.url
+  delete translationExtensions.apiKey
+  delete translationExtensions.enabled
+
+  return {
+    ...value,
+    schemaVersion: 7,
+    engine: {
+      ...engine,
+      common: migratedCommon,
+      translation: {
+        ...translationExtensions,
+        enabled: legacyTranslation.enabled,
+        activeProviderId: provider,
+        common: {
+          targetLanguage: common.targetLanguage
+        },
+        providers: {
+          azure: {
+            endpoint: 'https://api.cognitive.microsofttranslator.com',
+            region: '',
+            apiKey: ''
+          },
+          google: {},
+          ollama: {
+            model: legacyTranslation.model,
+            url: legacyTranslation.url,
+            apiKey: legacyTranslation.apiKey
+          }
+        }
       }
     }
   }
@@ -152,7 +220,7 @@ export function parseEngineConfig(value: unknown): EngineConfig {
   if (!isRecord(value.common)) {
     throw new InvalidConfigError('Engine common config must be an object')
   }
-  if (!isRecord(value.common.translation)) {
+  if (!isRecord(value.translation)) {
     throw new InvalidConfigError('Translation config must be an object')
   }
   if (!isRecord(value.common.recording)) {
@@ -189,40 +257,7 @@ export function parseEngineConfig(value: unknown): EngineConfig {
         32,
         false
       ),
-      targetLanguage: requireString(
-        value.common.targetLanguage,
-        'targetLanguage',
-        32,
-        false
-      ),
       audioSource: audioSource as 0 | 1,
-      translation: {
-        ...value.common.translation,
-        enabled: requireBoolean(
-          value.common.translation.enabled,
-          'translation.enabled'
-        ),
-        provider: requireString(
-          value.common.translation.provider,
-          'translation.provider',
-          64,
-          false
-        ),
-        model: requireString(
-          value.common.translation.model,
-          'translation.model',
-          256
-        ),
-        url: requireUrl(
-          value.common.translation.url,
-          'translation.url'
-        ),
-        apiKey: requireString(
-          value.common.translation.apiKey,
-          'translation.apiKey',
-          8192
-        )
-      },
       recording: {
         ...value.common.recording,
         enabled: requireBoolean(
@@ -242,7 +277,78 @@ export function parseEngineConfig(value: unknown): EngineConfig {
       )
     },
     providers: parseProviderConfigs(value.providers),
+    translation: parseTranslationConfig(value.translation),
     customEngines
+  }
+}
+
+function parseTranslationConfig(value: Record<string, unknown>): TranslationConfig {
+  const common = requireRecord(value.common, 'translation.common')
+  const providers = requireRecord(value.providers, 'translation.providers')
+  const azure = requireRecord(providers.azure, 'translation.providers.azure')
+  const google = requireRecord(providers.google, 'translation.providers.google')
+  const ollama = requireRecord(providers.ollama, 'translation.providers.ollama')
+  const activeProviderId = requireString(
+    value.activeProviderId,
+    'translation.activeProviderId',
+    64,
+    false
+  )
+  if (!isKnownTranslationProviderName(activeProviderId)) {
+    throw new InvalidConfigError('Invalid translation.activeProviderId')
+  }
+  return {
+    ...value,
+    enabled: requireBoolean(value.enabled, 'translation.enabled'),
+    activeProviderId,
+    common: {
+      ...common,
+      targetLanguage: requireString(
+        common.targetLanguage,
+        'translation.common.targetLanguage',
+        32,
+        false
+      )
+    },
+    providers: {
+      ...providers,
+      azure: {
+        ...azure,
+        endpoint: requireUrl(
+          azure.endpoint,
+          'translation.providers.azure.endpoint',
+          false
+        ),
+        region: requireString(
+          azure.region,
+          'translation.providers.azure.region',
+          256
+        ),
+        apiKey: requireString(
+          azure.apiKey,
+          'translation.providers.azure.apiKey',
+          8192
+        )
+      },
+      google: { ...google },
+      ollama: {
+        ...ollama,
+        model: requireString(
+          ollama.model,
+          'translation.providers.ollama.model',
+          256
+        ),
+        url: requireUrl(
+          ollama.url,
+          'translation.providers.ollama.url'
+        ),
+        apiKey: requireString(
+          ollama.apiKey,
+          'translation.providers.ollama.apiKey',
+          8192
+        )
+      }
+    }
   }
 }
 
@@ -445,7 +551,7 @@ function parseProviderConfigs(value: Record<string, unknown>): ProviderConfigs {
 
 export function parseCaptionConfig(
   value: unknown
-): ConfigDocumentV6['caption'] {
+): ConfigDocumentV7['caption'] {
   if (!isRecord(value)) {
     throw new InvalidConfigError('Caption config must be an object')
   }

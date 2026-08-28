@@ -18,6 +18,7 @@ from core import (  # noqa: E402
     UsageUpdated,
 )
 from protocol.output import ProtocolEventSink  # noqa: E402
+from translation import TranslationResult  # noqa: E402
 
 
 class ProtocolEventSinkTests(unittest.TestCase):
@@ -112,6 +113,30 @@ class ProtocolEventSinkTests(unittest.TestCase):
         ))
 
         self.assertEqual(objects[0]['translation'], '你好')
+
+    def test_maps_translation_result_to_the_existing_protocol(self):
+        objects = []
+        sink = ProtocolEventSink(
+            command_writer=lambda command, content: None,
+            object_writer=objects.append,
+        )
+
+        sink.publish_translation(TranslationResult(
+            caption_id=12,
+            source_text='hello',
+            translated_text='你好',
+            started_at='start',
+            provider='google',
+            target_language='zh',
+        ))
+
+        self.assertEqual(objects, [{
+            'command': 'translation',
+            'caption_id': 12,
+            'time_s': 'start',
+            'text': 'hello',
+            'translation': '你好',
+        }])
 
     def test_maps_hidden_debug_and_versioned_error_diagnostics(self):
         objects = []

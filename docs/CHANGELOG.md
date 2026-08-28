@@ -1,5 +1,12 @@
 ## 未发布
 
+## v2.27.0 - 2026-08-28
+
+- 将客户端翻译拆分为独立的 TranslationProvider/Registry/Session 架构；Google 与 Ollama 保持现有行为，共用稳定字幕 ID、有界队列、生命周期和错误脱敏。
+- 配置升级到 V7：翻译公共配置和 Provider 专属配置从识别 `common` 中独立出来，V2–V6 可顺序迁移；现有 Python CLI、stdout 翻译协议和 Electron IPC 保持兼容。
+- Renderer 新增独立翻译能力目录。Microsoft Azure Translator 当前只预留配置元数据并禁用，不会发起网络请求。
+- 将应用及中英日文档版本统一更新至 `2.27.0`，并重新生成、验证 macOS arm64 应用、ZIP、DMG、Swift 辅助程序与 Python 引擎。
+
 ## v2.26.0 - 2026-08-27
 
 - 修复字幕窗口异步初始化 Pinia store 时错误调用组件级 `useI18n()` 的问题，避免 vue-i18n 错误码 26 中断初始字幕记录与软件日志加载。

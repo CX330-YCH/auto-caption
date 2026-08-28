@@ -13,7 +13,8 @@ class EventSink(Protocol):
     def publish(self, event: RecognitionEvent) -> None: ...
 
 
-class TranslationService(Protocol):
+class TranslationSessionProtocol(Protocol):
+    def start(self) -> None: ...
     def submit(self, caption: CaptionFinal) -> None: ...
     def close(self) -> None: ...
 
@@ -27,7 +28,7 @@ class RecognitionSession:
         audio_queue: Queue[AudioFrame],
         audio_source: AudioSource,
         event_sink: EventSink,
-        translation_service: TranslationService,
+        translation_service: TranslationSessionProtocol,
         start_audio_capture: Callable[[], None],
         is_running: Callable[[], bool],
         request_stop: Callable[[], None],
@@ -55,6 +56,7 @@ class RecognitionSession:
     def run(self) -> None:
         try:
             self._provider.start()
+            self._translation_service.start()
             self._publish_pending_events()
             if self._is_running():
                 self._start_audio_capture()

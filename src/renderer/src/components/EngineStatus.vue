@@ -101,7 +101,7 @@
       <p class="about-desc">{{ $t('status.about.desc') }}</p>
       <a-divider />
       <div class="about-info">
-        <p><b>{{ $t('status.about.version') }}</b><a-tag color="green">v2.26.0</a-tag></p>
+        <p><b>{{ $t('status.about.version') }}</b><a-tag color="green">v2.27.0</a-tag></p>
         <p>
           <b>{{ $t('status.about.author') }}</b>
           <a

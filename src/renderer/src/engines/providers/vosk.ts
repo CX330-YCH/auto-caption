@@ -12,16 +12,7 @@ export const voskEngine: EngineDefinition = {
   },
   defaultSourceLanguage: 'auto',
   languages: [
-    language('auto', ['source'], 'engine.options.languages.modelDefined'),
-    language('en', ['target']),
-    language('zh-cn', ['target'], 'engine.options.languages.zh'),
-    language('ja', ['target']),
-    language('ko', ['target']),
-    language('de', ['target']),
-    language('fr', ['target']),
-    language('ru', ['target']),
-    language('es', ['target']),
-    language('it', ['target'])
+    language('auto', ['source'], 'engine.options.languages.modelDefined')
   ],
   providerFields: [
     {

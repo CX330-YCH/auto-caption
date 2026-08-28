@@ -1,6 +1,6 @@
 # 配置文件 V4
 
-> 本文保留用于说明历史格式；当前格式为 [配置文件 V6](./config-v6.md)。应用会把完整 V4 依次迁移到 V5、V6，写入 `captionBoundaryMode: "sentence"`，并保持 Debug Mode 默认关闭。
+> 本文保留用于说明历史格式；当前格式为 [配置文件 V7](./config-v7.md)。应用会把完整 V4 依次迁移到 V5、V6、V7。
 
 V4 曾用于在字幕样式中增加 `displayMode`。以下内容描述该历史格式。
 

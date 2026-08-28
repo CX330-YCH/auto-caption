@@ -96,8 +96,8 @@ export function buildBundledEngineArguments(
   args.push('--debug-mode', debugMode ? '1' : '0')
   args.push(
     '-t',
-    config.common.translation.enabled
-      ? config.common.targetLanguage
+    config.translation.enabled
+      ? config.translation.common.targetLanguage
       : 'none'
   )
   args.push(...providerArgumentBuilders[provider](config, appleSpeechHelperPath))
@@ -116,14 +116,22 @@ export function buildCustomEngineArguments(
 }
 
 function translationArguments(config: EngineConfig): string[] {
-  if (!config.common.translation.enabled) return []
-  const translation = config.common.translation
+  const translation = config.translation
+  if (!translation.enabled) return []
+  if (translation.activeProviderId === 'azure') {
+    throw new Error('Azure translation is not available in this version')
+  }
+  const ollama = translation.providers.ollama
   const args = [
-    '-tm', translation.provider,
-    '-omn', translation.model
+    '-tm', translation.activeProviderId,
+    '-omn', translation.activeProviderId === 'ollama' ? ollama.model : ''
   ]
-  if (translation.url) args.push('-ourl', translation.url)
-  if (translation.apiKey) args.push('-okey', translation.apiKey)
+  if (translation.activeProviderId === 'ollama' && ollama.url) {
+    args.push('-ourl', ollama.url)
+  }
+  if (translation.activeProviderId === 'ollama' && ollama.apiKey) {
+    args.push('-okey', ollama.apiKey)
+  }
   return args
 }
 

@@ -3,7 +3,7 @@
     <h1 align="center">auto-caption</h1>
     <p>Auto Caption is a cross-platform real-time caption display software.</p>
     <p>
-      <a href="https://github.com/HiMeditator/auto-caption/releases"><img src="https://img.shields.io/badge/release-2.26.0-blue"></a>
+      <a href="https://github.com/HiMeditator/auto-caption/releases"><img src="https://img.shields.io/badge/release-2.27.0-blue"></a>
       <a href="https://github.com/HiMeditator/auto-caption/issues"><img src="https://img.shields.io/github/issues/HiMeditator/auto-caption?color=orange"></a>
       <img src="https://img.shields.io/github/languages/top/HiMeditator/auto-caption?color=royalblue">
       <img src="https://img.shields.io/github/repo-size/HiMeditator/auto-caption?color=green">
@@ -14,7 +14,7 @@
         | <b>English</b>
         | <a href="./README_ja.md">日本語</a> |
     </p>
-    <p><i>v2.26.0 has been released with a macOS arm64 build...</i></p>
+    <p><i>v2.27.0 has been released with a macOS arm64 build...</i></p>
 </div>
 
 ![](./assets/media/main_en.png)
@@ -53,7 +53,7 @@ https://github.com/user-attachments/assets/9c188d78-9520-4397-bacf-4c8fdcc54874
 
 ## 📖 Basic Usage
 
-> ⚠️ Note: v2.26.0 currently provides Windows and macOS arm64 builds; Linux still needs verification from source or the existing build pipeline.
+> ⚠️ Note: v2.27.0 currently provides Windows and macOS arm64 builds; Linux still needs verification from source or the existing build pipeline.
 
 The software has been adapted for Windows, macOS, and Linux platforms. The tested platform information is as follows:
 
@@ -79,13 +79,15 @@ After downloading the software, you need to select the corresponding model accor
 
 If you choose a model other than Gummy, you also need to configure your own translation model.
 
-When translation is disabled, translation-service fields are hidden and are not passed to the caption engine. Enable translation and expand “Configure Translation Engine” to edit the model, Base URL, and API key. Named custom engines can be created from “Add Custom Engine…” in the engine menu, and each custom entry has a delete action.
+When translation is disabled, translation fields are hidden and are not passed to the caption engine. Enable it and use the independent “Configure Translation Engine” panel to choose Google or Ollama and edit that translation provider's fields. Recognition and translation settings are stored separately, so switching recognition engines does not overwrite translation settings. Microsoft Azure Translator currently has reserved configuration and capability metadata only; it is disabled in the UI and no Azure request is made. Named custom engines can be created from “Add Custom Engine…” in the engine menu, and each custom entry has a delete action.
 
 ### Configuring Translation Models
 
 ![](./assets/media/engine_en.png)
 
 > Note: Translation is not real-time. The translation model is only called after each sentence recognition is completed.
+
+Google and Ollama are independent translation providers sharing a bounded task queue, stable caption IDs, redacted diagnostics, and a `start → translate → stop` lifecycle. Recognition providers no longer create client-side translation loops.
 
 #### Ollama Local Model
 

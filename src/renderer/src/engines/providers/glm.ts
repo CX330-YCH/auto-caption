@@ -13,10 +13,10 @@ export const glmEngine: EngineDefinition = {
   defaultSourceLanguage: 'auto',
   languages: [
     language('auto', ['source']),
-    language('en', ['source', 'target']),
-    language('zh', ['source', 'target']),
-    language('ja', ['source', 'target']),
-    language('ko', ['source', 'target'])
+    language('en', ['source']),
+    language('zh', ['source']),
+    language('ja', ['source']),
+    language('ko', ['source'])
   ],
   providerFields: [
     {

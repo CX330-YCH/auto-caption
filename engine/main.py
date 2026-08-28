@@ -23,6 +23,12 @@ from providers import ProviderConfig, build_provider_registry
 from utils import change_caption_display, shared_data, stdout, stdout_cmd
 from sysaudio import AudioStream
 from services import run_hotword_worker
+from translation import (
+    NoTranslationSession,
+    TranslationProviderConfig,
+    TranslationSession,
+    build_translation_provider_registry,
+)
 
 
 def run(options: CliOptions) -> None:
@@ -70,6 +76,11 @@ def run(options: CliOptions) -> None:
     )
     runtime.provider.set_metric_handler(emit_metric)
     runtime.provider.set_debug_enabled(lambda: shared_data.debug_mode)
+    translation_service = _translation_service(
+        options,
+        runtime.external_translation,
+        output,
+    )
     audio_queue = Queue(maxsize=max(10, options.chunk_rate * 5))
     # Provider failures are reported through the event sink, then use the
     # normal cleanup path instead of asking Electron to kill the process.
@@ -100,7 +111,7 @@ def run(options: CliOptions) -> None:
         audio_queue=audio_queue,
         audio_source=audio_source,
         event_sink=output,
-        translation_service=runtime.translation_service,
+        translation_service=translation_service,
         start_audio_capture=capture_thread.start,
         is_running=is_running,
         request_stop=request_stop,
@@ -109,7 +120,7 @@ def run(options: CliOptions) -> None:
     telemetry = RuntimeTelemetry(
         audio_queue=audio_queue,
         provider=runtime.provider,
-        translation_service=runtime.translation_service,
+        translation_service=translation_service,
         emit=emit_metric,
         is_running=is_running,
         is_enabled=lambda: shared_data.debug_mode,
@@ -130,10 +141,6 @@ def _provider_config(options: CliOptions) -> ProviderConfig:
         name=options.caption_engine,
         source_language=options.source_language,
         target_language=options.target_language,
-        translation_model=options.translation_model,
-        translation_model_name=options.ollama_name,
-        translation_url=options.ollama_url,
-        translation_api_key=options.ollama_api_key,
         gummy_api_key=options.api_key,
         vosk_model_path=options.vosk_model,
         sosv_model_path=options.sosv_model,
@@ -155,6 +162,37 @@ def _provider_config(options: CliOptions) -> ProviderConfig:
         fun_asr_vocabulary_model=options.fun_asr_vocabulary_model,
         fun_asr_context_terms=options.fun_asr_context_terms,
         apple_speech_helper=options.apple_speech_helper,
+    )
+
+
+def _translation_service(
+    options: CliOptions,
+    external_translation: bool,
+    output: ProtocolEventSink,
+):
+    if not external_translation or options.target_language == 'none':
+        return NoTranslationSession()
+    provider = build_translation_provider_registry().create(
+        TranslationProviderConfig(
+            name=options.translation_model,
+            model=options.ollama_name,
+            url=options.ollama_url,
+            api_key=options.ollama_api_key,
+        )
+    )
+    return TranslationSession(
+        provider=provider,
+        source_language=options.source_language,
+        target_language=options.target_language,
+        result_handler=output.publish_translation,
+        warning_handler=output.warning,
+        diagnostic_handler=lambda message, details: output.publish(
+            ProviderDebug(
+                provider='translation',
+                message=message,
+                details=details,
+            )
+        ),
     )
 
 

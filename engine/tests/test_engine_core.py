@@ -156,7 +156,11 @@ class FakeEventSink:
 class FakeTranslationService:
     def __init__(self):
         self.captions = []
+        self.started = False
         self.closed = False
+
+    def start(self):
+        self.started = True
 
     def submit(self, caption):
         self.captions.append(caption)
@@ -289,6 +293,7 @@ class RecognitionSessionTests(unittest.TestCase):
         self.assertEqual(capture_starts, [])
         self.assertTrue(provider.stopped)
         self.assertTrue(audio_source.closed)
+        self.assertTrue(translation.started)
         self.assertTrue(translation.closed)
         self.assertEqual(
             sum(
@@ -329,6 +334,7 @@ class RecognitionSessionTests(unittest.TestCase):
         self.assertEqual(provider.accepted, 1)
         self.assertTrue(provider.stopped)
         self.assertTrue(audio_source.closed)
+        self.assertTrue(translation.started)
         self.assertTrue(translation.closed)
         self.assertEqual(
             sum(
@@ -370,6 +376,7 @@ class RecognitionSessionTests(unittest.TestCase):
         self.assertEqual(provider.accepted, 2)
         self.assertTrue(provider.stopped)
         self.assertTrue(audio_source.closed)
+        self.assertTrue(translation.started)
         self.assertTrue(translation.closed)
         self.assertEqual(len(translation.captions), 1)
         self.assertEqual(translation.captions[0].text, 'hello')

@@ -18,6 +18,7 @@ from core import (
     RecognitionEvent,
     UsageUpdated,
 )
+from translation import TranslationResult
 
 
 MAX_DIAGNOSTIC_BYTES = 32 * 1024 * 1024
@@ -87,6 +88,15 @@ class ProtocolEventSink:
 
     def warning(self, message: str) -> None:
         self._command_writer('warn', message)
+
+    def publish_translation(self, result: TranslationResult) -> None:
+        self._object_writer({
+            'command': 'translation',
+            'caption_id': result.caption_id,
+            'time_s': result.started_at,
+            'text': result.source_text,
+            'translation': result.translated_text,
+        })
 
     def _write_error_diagnostic(self, event: ProviderError) -> None:
         diagnostic = {

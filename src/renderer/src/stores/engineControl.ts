@@ -174,9 +174,9 @@ export const useEngineControlStore = defineStore('engineControl', () => {
     const provider = getActiveBuiltinProvider(config)
     const customEngine = getActiveCustomEngine(config)
     const str0 =
-      `${translate('noti.sLang')}${common.sourceLanguage}${translate('noti.trans')}${common.translation.enabled?'yes':'no'}` +
+      `${translate('noti.sLang')}${common.sourceLanguage}${translate('noti.trans')}${config.translation.enabled?'yes':'no'}` +
       `${translate('noti.engine')}${provider}${translate('noti.audio')}${common.audioSource?translate('noti.sysin'):translate('noti.sysout')}` +
-      (common.translation.enabled ? `${translate('noti.tLang')}${common.targetLanguage}` : '')
+      (config.translation.enabled ? `${translate('noti.tLang')}${config.translation.common.targetLanguage}` : '')
     const str1 = customEngine
       ? `${translate('noti.custom')}${customEngine.name} (${customEngine.executable})${translate('noti.args')}${customEngine.command}`
       : ''

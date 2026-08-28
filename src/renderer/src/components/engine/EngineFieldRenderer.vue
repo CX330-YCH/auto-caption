@@ -94,7 +94,9 @@ const localizedOptions = computed(
   () =>
     props.field.options?.map((option) => ({
       value: option.value,
-      label: option.label ?? t(option.labelKey)
+      label: option.label ?? t(option.labelKey),
+      disabled: option.disabled,
+      title: option.disabledReasonKey ? t(option.disabledReasonKey) : undefined
     })) ?? []
 )
 </script>
