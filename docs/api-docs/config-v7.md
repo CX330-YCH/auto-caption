@@ -1,6 +1,8 @@
 # 配置文件 V7
 
-Auto Caption 的持久化配置位于 Electron `userData/config.json`。当前版本接受 `schemaVersion: 7`，磁盘、主进程、IPC 和 Renderer 共享 `ConfigDocumentV7`。
+> 本页记录历史 V7 结构。当前版本为 [配置文件 V8](config-v8.md)。
+
+V7 使用 `schemaVersion: 7`，磁盘、主进程、IPC 和 Renderer 当时共享 `ConfigDocumentV7`。
 
 V7 把翻译从识别引擎的 `engine.common` 中拆出，形成独立的公共配置、当前 Provider 和 Provider 专属配置。以下片段只展示相关层级，省略的 application、caption 和识别 Provider 字段仍是完整配置的必需部分：
 

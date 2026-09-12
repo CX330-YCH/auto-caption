@@ -26,6 +26,9 @@ export type EngineConfigPath =
   | 'providers.funAsr.hotwords.vocabularyId'
   | 'providers.funAsr.hotwords.targetModel'
   | 'providers.funAsr.hotwords.contextTerms'
+  | 'providers.tencentSpeech.model'
+  | 'providers.tencentSpeech.vadSilenceMs'
+  | 'providers.tencentSpeech.maxSpeakTimeMs'
   | 'translation.enabled'
   | 'translation.activeProviderId'
   | 'translation.common.targetLanguage'
@@ -80,6 +83,7 @@ export interface EngineFieldDescriptor {
   visibleWhen?: readonly EngineFieldCondition[]
   required?: EngineFieldValidation
   defaultWhenEmpty?: string
+  sourceLanguages?: readonly string[]
 }
 
 export type LanguageRole = 'source' | 'target'
@@ -95,6 +99,7 @@ export interface EngineCapabilities {
   translation: 'integrated' | 'external'
   recording: boolean
   hotwords: 'unsupported' | 'manager'
+  translationRequired?: boolean
 }
 
 export interface EngineDefinition {
@@ -104,6 +109,7 @@ export interface EngineDefinition {
   languages: readonly EngineLanguage[]
   providerFields: readonly EngineFieldDescriptor[]
   defaultSourceLanguage: string
+  targetLanguagesBySource?: Readonly<Record<string, readonly string[]>>
   validate?: (
     config: EngineConfig,
     phase: EngineValidationPhase

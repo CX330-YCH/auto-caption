@@ -2,7 +2,7 @@
 
 ## 注意：このドキュメントはメンテナンスが行われていないため、記載されている情報は古くなっています。最新の情報については、[中国語版](./zh.md)または[英語版](./en.md)のドキュメントをご参照ください。
 
-対応バージョン：v2.27.0
+対応バージョン：v2.28.0
 
 この文書は大規模モデルを使用して翻訳されていますので、内容に正確でない部分があるかもしれません。
 
@@ -163,7 +163,7 @@ export interface CaptionItem {
 
 カスタム字幕エンジンの設定はコマンドラインパラメータで指定するため、字幕エンジンのパラメータを設定する必要があります。このプロジェクトで現在使用されているパラメータは以下のとおりです：
 
-> 完全な引数の正本は `engine/cli.py` と `python main.py --help` です。Fun-ASR は `-e fun_asr` を選び、`-fmodel`、`-furl`、`-fworkspace`、`-fkey`、`-fsemantic`、`-fsilence`、`-fheartbeat`、`-fvocabulary`、`-fvmodel`、反復可能な `-fcontext` を使用します。`main.py` に Provider 分岐を複製しないでください。
+> 完全な引数の正本は `engine/cli.py` と `python main.py --help` です。Fun-ASR は `-e fun_asr` と `-f*` 引数を使用します。Tencent リアルタイム音声翻訳は `-e tencent_speech_translate`、`-tcmodel`、`-tcvad`、`-tcmax` を使用し、資格情報は `TENCENTCLOUD_APP_ID`、`TENCENTCLOUD_SECRET_ID`、`TENCENTCLOUD_SECRET_KEY` 環境変数からだけ読み取ります。`main.py` に Provider 組み立て分岐を複製しないでください。
 
 ```python
 import argparse
@@ -200,9 +200,21 @@ python main.py -e fun_asr -s ja -t zh -a 0 -c 10 \
 
 この Provider は公式 DashScope SDK を使用し、16 kHz モノラル PCM16 を受け取ります。partial/final、サーバー時刻、usage、ライフサイクルを統一イベントへ変換し、翻訳、stdout、終了処理は Session/プロトコル層が担当します。`HotwordRuntimeConfig` は語彙の対象モデルと認識モデルの一致を検証し、再接続を含む各タスク開始時に事前コンパイル語彙 ID と合計400文字以内の重みなしコンテキストを渡します。リモート CRUD は `services/hotwords.py` の独立したワンショット worker が担当し、Provider と公開字幕プロトコルには含まれません。
 
+Tencent リアルタイム音声翻訳の例：
+
+```bash
+TENCENTCLOUD_APP_ID=<appid> \
+TENCENTCLOUD_SECRET_ID=<secret-id> \
+TENCENTCLOUD_SECRET_KEY=<secret-key> \
+python main.py -e tencent_speech_translate -s ja -t zh -a 0 -c 10 \
+  -tcmodel hunyuan-translation-lite -tcvad 1000 -tcmax 10000
+```
+
+この Provider は 16 kHz モノラル PCM16 を受け取り、約100 ms の入力フレームを約200 ms のネットワークパケットにまとめます。サーバーの `sentence_id`、`sentence_end`、`source_text`、`target_text`、ミリ秒オフセットを、安定 ID、partial/final、原文、翻訳文、字幕時刻へ変換します。`-tcvad` は 500～2000 ms の無音後に文を区切り、`-tcmax` は 5000～90000 ms の連続発話後に強制区切りします。両方とも `zh`、`en`、`zh_en` の場合だけ送信します。停止時は最終結果を最大5秒待ち、Electron の期限は8秒です。既存エンジンは4秒のままです。TTS、自動再接続、利用可能なホットワードは未実装で、ホットワードのエンコードと空設定境界だけを将来用に予約しています。
+
 Fun-ASR は接続 generation ごとに冪等な状態を保持し、同一タスクの `on_error → on_close → stop` は最大1回の再接続または1回の fatal だけを発生させます。恒久的なサービスエラーは即時停止し、一時的なエラーだけを最大3回のバックオフ付きで再試行します。task-failed 後に SDK `stop()` は呼びません。ライフサイクル診断は非表示の `debug` プロトコルイベントとして完全 Debug ログだけに保存され、既存のログ記録画面には表示されません。fatal 時は Session が通常終了を試み、タイムアウトなどの異常経路だけで Electron がパッケージ済みプロセスツリー全体を強制終了します。
 
-すべての内蔵字幕エンジン（Gummy、Fun-ASR、GLM、Vosk、SOSV）と、音声、翻訳、ホットワード SDK のエラーは、サニタイズ済み SDK コールバック項目、例外型とメッセージ、独自属性、完全な traceback、cause/context を現在の Debug JSONL に保存します。Python/SDK の stderr も収集します。API Key、Token、Password、Authorization/Cookie、バイナリ音声本文は記録せず、過大なリモート診断には明示的な上限制御マーカーを付けます。
+すべての内蔵字幕エンジン（Gummy、Fun-ASR、Tencent Speech Translate、GLM、Vosk、SOSV、Apple Speech）と、音声、翻訳、ホットワード SDK のエラーは、サニタイズ済み SDK コールバック項目、例外型とメッセージ、独自属性、完全な traceback、cause/context を現在の Debug JSONL に保存します。Python/SDK の stderr も収集します。API Key、Token、Password、Authorization/Cookie、バイナリ音声本文は記録せず、過大なリモート診断には明示的な上限制御マーカーを付けます。
 
 V6 Debug Mode は `--debug-mode 0|1` で起動し、TCP `debug_mode` command で実行中に切り替えられます。有効時は `ProviderMetric` が音声の読み取り/変換/投入時間、キュー深度とフレーム経過時間、Provider event キュー、Fun-ASR 再接続バッファ、GLM/翻訳 Worker、Apple Speech helper 状態を出力します。Provider 固有項目は `diagnostic_snapshot()` で拡張し、Session に Provider 分岐を追加しません。512 KiB を超える診断は長さと SHA-256 を検証する `diagnostic_chunk` に分割します。
 

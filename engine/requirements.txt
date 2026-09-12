@@ -1,5 +1,6 @@
 dashscope==1.26.7
 truststore==0.10.4
+websocket-client==1.9.0
 numpy
 resampy
 vosk

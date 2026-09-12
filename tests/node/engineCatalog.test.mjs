@@ -35,7 +35,8 @@ test('registers each recognition provider once with capability metadata', () => 
   const providerIds = engineDefinitions.map((definition) => definition.id)
 
   assert.deepEqual(providerIds, [
-    'gummy', 'vosk', 'sosv', 'glm', 'fun_asr', 'apple_speech'
+    'gummy', 'vosk', 'sosv', 'glm', 'fun_asr', 'apple_speech',
+    'tencent_speech_translate'
   ])
   assert.equal(new Set(providerIds).size, providerIds.length)
 
@@ -193,6 +194,36 @@ test('describes Fun-ASR connection and segmentation fields through capabilities'
   config.providers.funAsr.hotwords.vocabularyId = 'vocab-project-1'
   config.providers.funAsr.model = 'fun-asr-realtime-2025-11-07'
   assert.equal(validateEngineConfig(config, 'apply')?.fieldId, 'fun-asr-hotwords')
+})
+
+test('filters Tencent targets by source and keeps integrated translation enabled', () => {
+  const config = createDefaultConfig('/recordings').engine
+  const definition = getEngineDefinition('tencent_speech_translate')
+  config.activeEngineId = definition.id
+  config.translation.enabled = false
+  config.common.sourceLanguage = 'ja'
+  config.translation.common.targetLanguage = 'th'
+
+  normalizeEngineConfig(config)
+
+  assert.equal(config.translation.enabled, true)
+  assert.equal(config.translation.common.targetLanguage, 'zh')
+  const targetField = getTranslationFields(config, definition)
+    .find((field) => field.id === 'translation-target-language')
+  assert.deepEqual(
+    targetField.options.map((option) => option.value),
+    ['zh', 'en', 'ja', 'ko', 'yue']
+  )
+  assert.equal(
+    getTranslationFields(config, definition)
+      .find((field) => field.id === 'translation-enabled').disabled,
+    true
+  )
+  const vadField = getEngineFields(definition.id)
+    .find((field) => field.id === 'tencent-speech-vad-silence')
+  assert.equal(isEngineFieldVisible(config, vadField), false)
+  config.common.sourceLanguage = 'zh_en'
+  assert.equal(isEngineFieldVisible(config, vadField), true)
 })
 
 test('validates only the selected custom engine and skips builtin requirements', () => {

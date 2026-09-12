@@ -16,6 +16,10 @@ from .fun_asr import FunAsrClientOptions, FunAsrProvider
 from .sosv import SosvProvider
 from .vosk import VoskProvider
 from .apple_speech import AppleSpeechProvider
+from .tencent_speech_translate import (
+    TencentSpeechOptions,
+    TencentSpeechTranslateProvider,
+)
 
 
 @dataclass(frozen=True)
@@ -40,6 +44,12 @@ class ProviderConfig:
     fun_asr_vocabulary_model: str
     fun_asr_context_terms: tuple[str, ...]
     apple_speech_helper: str = ''
+    tencent_app_id: str = field(default='', repr=False)
+    tencent_secret_id: str = field(default='', repr=False)
+    tencent_secret_key: str = field(default='', repr=False)
+    tencent_model: str = 'hunyuan-translation-lite'
+    tencent_vad_silence_ms: int = 1000
+    tencent_max_speak_time_ms: int = 10000
 
 
 @dataclass(frozen=True)
@@ -102,6 +112,7 @@ def build_provider_registry() -> ProviderRegistry:
     registry.register('glm', _build_glm)
     registry.register('fun_asr', _build_fun_asr)
     registry.register('apple_speech', _build_apple_speech)
+    registry.register('tencent_speech_translate', _build_tencent_speech)
     return registry
 
 
@@ -238,12 +249,38 @@ def _build_apple_speech(
     )
 
 
+def _build_tencent_speech(
+    config: ProviderConfig,
+    audio_source: AudioSource,
+    warning_handler: Callable[[str], None],
+    diagnostic_handler: Callable[[str, dict[str, object]], None],
+) -> ProviderRuntime:
+    return _build_mono_16k_runtime(
+        TencentSpeechTranslateProvider(TencentSpeechOptions(
+            app_id=config.tencent_app_id,
+            secret_id=config.tencent_secret_id,
+            secret_key=config.tencent_secret_key,
+            source_language=config.source_language,
+            target_language=config.target_language,
+            model=config.tencent_model,
+            vad_silence_ms=config.tencent_vad_silence_ms,
+            max_speak_time_ms=config.tencent_max_speak_time_ms,
+        )),
+        config,
+        audio_source,
+        warning_handler,
+        diagnostic_handler,
+        external_translation=False,
+    )
+
+
 def _build_mono_16k_runtime(
     provider: RecognitionProvider,
     config: ProviderConfig,
     audio_source: AudioSource,
     warning_handler: Callable[[str], None],
     diagnostic_handler: Callable[[str, dict[str, object]], None],
+    external_translation: bool = True,
 ) -> ProviderRuntime:
     from utils.audioprcs import resample_chunk_mono
 
@@ -258,6 +295,7 @@ def _build_mono_16k_runtime(
             ),
             output_sample_rate=16000,
         ),
+        external_translation=external_translation,
     )
 
 

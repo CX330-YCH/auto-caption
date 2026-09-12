@@ -24,6 +24,12 @@ class CliTests(unittest.TestCase):
         self.assertTrue(options.fun_asr_heartbeat)
         self.assertEqual(options.fun_asr_vocabulary_id, '')
         self.assertEqual(options.fun_asr_context_terms, ())
+        self.assertEqual(
+            options.tencent_speech_model,
+            'hunyuan-translation-lite',
+        )
+        self.assertEqual(options.tencent_speech_vad_silence_ms, 1000)
+        self.assertEqual(options.tencent_speech_max_speak_time_ms, 10000)
         self.assertFalse(options.debug_mode)
 
     def test_parses_debug_mode(self):
@@ -89,6 +95,18 @@ class CliTests(unittest.TestCase):
             options.apple_speech_helper,
             '/Applications/Auto Caption.app/helper',
         )
+
+    def test_parses_tencent_speech_arguments(self):
+        options = parse_args([
+            '-e', 'tencent_speech_translate',
+            '-tcmodel', 'hunyuan-translation',
+            '-tcvad', '700',
+            '-tcmax', '30000',
+        ])
+
+        self.assertEqual(options.tencent_speech_model, 'hunyuan-translation')
+        self.assertEqual(options.tencent_speech_vad_silence_ms, 700)
+        self.assertEqual(options.tencent_speech_max_speak_time_ms, 30000)
 
 
 if __name__ == '__main__':

@@ -31,7 +31,7 @@
 - 发送：无数据
 - 接收：`FullConfig`
 
-`FullConfig.config` 是完整 `ConfigDocumentV7`，`FullConfig.engineEnabled` 是不持久化的运行状态。配置结构见 [配置文件 V7](config-v7.md)。
+`FullConfig.config` 是完整 `ConfigDocumentV8`，`FullConfig.engineEnabled` 是不持久化的运行状态。配置结构见 [配置文件 V8](config-v8.md)。
 
 ### `control.nativeTheme.get`
 

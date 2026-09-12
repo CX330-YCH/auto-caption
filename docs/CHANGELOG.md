@@ -1,5 +1,12 @@
 ## 未发布
 
+## v2.28.0 - 2026-09-11
+
+- 新增 Tencent Speech Translate 内置引擎：同一 WebSocket 会话实时输出原文和译文，支持 Hunyuan Translation Lite/Standard、动态语言组合和可配置断句参数。
+- 配置升级到 V8，并显式迁移 V7；腾讯凭据只通过进程环境传递，热词配置和编码接口仅预留、当前不可启用。
+- 引擎启动上下文新增 Provider 级停止期限：腾讯停止时最多等待5秒最终结果并使用8秒进程期限，旧引擎继续使用4秒。
+- 将应用及中英日文档版本统一更新至 `2.28.0`，并重新生成、验证 macOS arm64 应用、ZIP、DMG、Swift 辅助程序与 Python 引擎。
+
 ## v2.27.0 - 2026-08-28
 
 - 将客户端翻译拆分为独立的 TranslationProvider/Registry/Session 架构；Google 与 Ollama 保持现有行为，共用稳定字幕 ID、有界队列、生命周期和错误脱敏。

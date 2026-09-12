@@ -66,6 +66,7 @@
     <a-switch
       v-else-if="field.control === 'switch'"
       :checked="modelValue"
+      :disabled="field.disabled"
       @update:checked="$emit('update:modelValue', $event)"
     />
   </SettingsField>

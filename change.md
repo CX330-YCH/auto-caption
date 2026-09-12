@@ -5688,3 +5688,138 @@
 
 - 用户明确要求编译 macOS 版本并更新小版本号，同时此前要求不修改系统环境。
 - 根目录 `AGENTS.md`：要求保护已有修改、使用项目环境、配置迁移与协议兼容、三语同步、真实记录失败与成功验证、构建产物不误加入 Git，并为每批文件修改追加 `change.md`。
+
+## 2026-09-11：腾讯实时语音翻译基础接入
+
+### 用户授权、目标与范围
+
+- 用户明确要求实施三项内容：最小前置适配，包括动态语言组合、凭据传递和停止超时契约，并保持旧引擎行为不变；基础接入，包括实时原文/译文、两个翻译模型、配置迁移、断句参数及中英日界面与文档；为腾讯请求级热词保留以后接入的接口。
+- 变更类型：功能、配置、测试、文档、依赖声明。按“通用能力适配 → 腾讯 Provider 纵向接入 → 配置与界面 → 测试与文档”拆分，可分别撤回。
+- 非目标：不接入腾讯 TTS，不实现可用热词 UI/CLI 或远端热词资源管理，不调用真实或付费 API，不安装或升级依赖，不构建安装包，不发布、不提交、不推送。
+- 修改前已阅读根目录 `AGENTS.md`，仓库内没有更具体的子目录规则；`git status --short --branch` 为干净的 `main...origin/main`。
+
+### 修改文件与原因
+
+- `src/shared/tencentSpeech.ts`：集中定义腾讯两个模型、官方源语言/目标语言矩阵、凭据环境变量名和语言对校验，作为主进程与 Renderer 的单一事实来源。
+- `src/shared/config/schema.ts`、`src/shared/config/document.ts`、`src/shared/types.ts`：配置升级为 V8，新增分层 `providers.tencentSpeech` 类型、默认值、严格范围校验、必须翻译/语言对边界及 V7→V8 显式迁移；保留未知扩展字段。
+- `src/main/utils/AllConfig.ts`：切换到 V8 配置解析和类型。
+- `src/renderer/src/engines/types.ts`、`src/renderer/src/engines/form.ts`、`src/renderer/src/translations/catalog.ts`：为 Provider 元数据增加动态目标语言矩阵、集成翻译必选能力和按源语言显示字段的通用支持；没有声明这些能力的旧 Provider 继续使用原逻辑。
+- `src/renderer/src/engines/providers/tencent_speech_translate.ts`、`src/renderer/src/engines/catalog.ts`：注册腾讯实时语音翻译 Provider、两个混元翻译模型、语言矩阵、断句字段和帮助链接，不在控制组件中堆叠腾讯专属分支。
+- `src/renderer/src/components/EngineControl.vue`、`src/renderer/src/components/engine/EngineFieldRenderer.vue`：源语言变化后按 Provider 元数据归一化目标语言；通用开关支持禁用，腾讯集成翻译不能被关闭。
+- `src/renderer/src/i18n/lang/zh.ts`、`src/renderer/src/i18n/lang/en.ts`、`src/renderer/src/i18n/lang/ja.ts`：补齐 Provider、模型、断句字段、帮助文本及语言对校验的中英日界面文案。
+- `src/main/engine/config/EngineLaunchContext.ts`：建立按 Provider 选择子进程环境、日志脱敏值和停止时限的策略边界；腾讯为 8000 ms，其他内置和自定义引擎仍为 4000 ms。
+- `src/main/engine/config/EngineCommandBuilder.ts`：仅腾讯生成 `-tcmodel`、`-tcvad`、`-tcmax` 参数，并把必需目标语言传给现有 `-t` 参数；旧 Provider 参数保持不变。
+- `src/main/utils/CaptionEngine.ts`：启动腾讯前校验三个环境变量，将凭据仅随子进程环境传递，把 SecretID/SecretKey 加入 stderr 精确脱敏，并采用启动时固定的 Provider 停止期限。
+- `src/main/i18n/lang/zh.ts`、`src/main/i18n/lang/en.ts`、`src/main/i18n/lang/ja.ts`：补齐腾讯凭据缺失的主进程三语错误消息。
+- `engine/cli.py`、`engine/main.py`：增加腾讯模型和两个断句 CLI 参数，从 `TENCENTCLOUD_APP_ID`、`TENCENTCLOUD_SECRET_ID`、`TENCENTCLOUD_SECRET_KEY` 读取凭据并组装 ProviderConfig；密钥不进入命令行。
+- `engine/providers/tencent_speech_translate.py`：实现官方实时翻译 WebSocket 签名、10 秒握手期限、16 kHz 单声道 PCM16 校验、约 200 ms/6400 字节分包、原文和译文 partial/final 映射、服务端时间戳、稳定字幕 ID、重复 final 去重、停止尾包冲刷及 5 秒 final 等待；实现尚未启用的请求级热词编码边界。
+- `engine/providers/registry.py`、`engine/providers/__init__.py`：通过既有 ProviderRegistry 注册腾讯，并复用单声道 16 kHz AudioPipeline；标记为自带翻译，禁止再次进入 Google/Ollama TranslationSession。
+- `engine/requirements.txt`：显式锁定直接使用的 `websocket-client==1.9.0`。该 Apache-2.0 依赖此前已由 DashScope 间接安装；本次没有下载或改变本地环境。直接 WebSocket 便于按项目生命周期实现明确的握手、final 和关闭期限，替代方案是官方 Python Speech SDK。
+- `tests/node/configDocument.test.mjs`、`tests/node/engineCatalog.test.mjs`、`tests/node/engineCommandBuilder.test.mjs`、`tests/node/engineLaunchContext.test.mjs`：覆盖 V8 默认值与迁移、非法配置、动态语言组合、必选翻译、腾讯/旧引擎参数、凭据环境和 4/8 秒停止契约。
+- `engine/tests/test_cli.py`、`engine/tests/test_provider_registry.py`、`engine/tests/test_tencent_speech_provider.py`：覆盖 CLI、注册表与凭据 repr 脱敏、签名参数、语言对、热词编码、音频分包/尾包、partial/final、稳定 ID、服务端时间和失败去重。
+- `README.md`、`README_en.md`、`README_ja.md`：增加中英日腾讯使用说明，并澄清腾讯译文与旧 Google/Ollama 最终句翻译的时序差异。
+- `docs/user-manual/zh.md`、`docs/user-manual/en.md`、`docs/user-manual/ja.md`：说明 V8、凭据、模型、语言组合、断句、实时字幕与当前热词限制。
+- `docs/engine-manual/zh.md`、`docs/engine-manual/en.md`、`docs/engine-manual/ja.md`、`docs/engine-manual/architecture.md`：记录 CLI、音频/协议映射、Provider 生命周期、停止期限、结构边界和已知限制。
+- `docs/api-docs/config-v8.md`：新增 V8 结构、校验、迁移、凭据与回滚文档。
+- `docs/api-docs/config-v3.md`、`docs/api-docs/config-v4.md`、`docs/api-docs/config-v5.md`、`docs/api-docs/config-v6.md`、`docs/api-docs/config-v7.md`：将历史配置页指向当前 V8，并补全迁移链。
+- `docs/api-docs/caption-engine.md`、`docs/api-docs/electron-ipc.md`：记录腾讯结果到现有字幕协议的映射；确认 IPC 通道和公开 command envelope 不变。
+- `docs/testing.md`、`docs/CHANGELOG.md`：更新离线测试覆盖与未发布变更摘要。
+- `change.md`：追加本批次授权、文件、行为、协议、验证、风险和来源流水；没有重写此前历史。
+
+### 修改前后行为
+
+- 修改前：识别 Provider 只声明静态语言列表；主进程统一使用 4000 ms 强制停止期限；配置为 V7；项目没有腾讯实时翻译 Provider。
+- 修改后：Provider 可声明“源语言 → 目标语言”矩阵和必须启用的集成翻译，腾讯源语言变化时目标语言自动落到合法值，主进程仍进行不可信输入复验。旧 Provider 未声明新能力，因此界面、参数和 4000 ms 停止行为不变。
+- 腾讯引擎在一个 WebSocket 会话内接收服务端累计更新的 `source_text` 与 `target_text`，以同一稳定字幕 ID 输出 partial 并用 final 固化；不会在 final 后再次调用外部翻译。可选模型为 `hunyuan-translation-lite` 和 `hunyuan-translation`。
+- `vad_silence_time` 范围 500–2000 ms、默认 1000 ms，表示静音达到阈值即断句；`max_speak_time` 范围 5000–90000 ms、默认 10000 ms，表示无停顿连续说话达到时限即强制断句。两项只对 `zh`、`en`、`zh_en` 发送，其他源语言不显示并使用服务端默认行为。
+- 热词只有 V8 空数组、Provider option 和编码器边界。当前解析器拒绝非空腾讯热词，Renderer 不显示编辑入口，主进程/Python CLI 不传递，确保“预留”不会被误认为已可用。
+
+### 配置、IPC、协议、命令行与安全
+
+- 持久化配置由 V7 升级到 V8。V7→V8 只增加腾讯默认配置，保留当前识别引擎、Google/Ollama 翻译选择、其他 Provider 数据和未知兼容字段；V2–V6 继续按既有链路逐级迁移后再迁移到 V8。
+- Electron IPC 名称、参数和返回结构不变。Python stdout NDJSON/TCP `command` envelope 不变；腾讯复用现有 caption 的 `text`、`translation`、`index`、`phase` 字段。
+- Python CLI 新增 `-tcmodel/--tencent_speech_model`、`-tcvad/--tencent_speech_vad_silence_ms`、`-tcmax/--tencent_speech_max_speak_time_ms`；旧 CLI 参数及默认值未删除或改名。
+- 凭据只从 Electron 进程环境复制到 Python 子进程，不写入 V8、Renderer 状态或命令行。启动/服务/传输错误只暴露分类和服务错误码，不回显远端消息、签名 URL、SecretID 或 SecretKey；两项 secret 同时进入主进程 stderr 脱敏集合和 Python 诊断脱敏集合。
+- 腾讯 stop 先发送尾部 PCM 和 `{"type":"end"}`，最多等待服务端 `final: 1` 5 秒；Electron 留出 8 秒总期限后才强杀。旧引擎与自定义引擎仍保持 4 秒期限。
+
+### 兼容性、迁移与回滚
+
+- 新能力均为 Provider 元数据或启动策略的可选扩展；不改变旧识别/翻译 Provider 的默认配置、音频管线、参数与协议行为。实际构建平台为 macOS arm64，代码保留 Electron/Python 原有跨平台路径，Windows/Linux 未实测。
+- 新应用首次读取合法 V7 时写入/使用 V8 腾讯默认配置。旧应用不能读取 V8；降级前必须恢复升级前的 V7 `config.json` 备份，不能仅把 `schemaVersion` 手工改回 7。
+- 代码回滚应成组撤销本条列出的腾讯 Provider、V8 迁移、通用能力字段、启动策略、测试与文档；不得回退此前 V7 架构或其他历史变更。
+
+### 实际验证与结果
+
+- `npm run verify`：通过。Node/Web TypeScript、Vue typecheck、ESLint、Node `118/118`、Python `84/84` 全部成功；只有项目既有 npm mirror 配置弃用警告与 Node `MODULE_TYPELESS_PACKAGE_JSON` 性能警告。
+- `npm run build`：通过。Electron main、preload、renderer 分别转换 37、1、3297 个模块并生成 `out/`；该忽略目录未加入 Git。
+- `PYTHONPATH=engine engine/.venv/bin/python3 engine/main.py --help`：通过，显示腾讯 Provider、两个模型和三个新增参数。
+- `engine/.venv/bin/python3 -m pip show websocket-client`：通过，确认现有版本 1.9.0、Apache-2.0，且由 DashScope 使用；仅有本机 pip 缓存目录不可写警告。
+- 首次 CLI 探测误用了不存在的 `engine/.test-env/bin/python`，退出码 127；改用项目测试脚本实际选择的 `engine/.venv/bin/python3` 后通过。该失败不属于产品代码或测试失败。
+- `git diff --check`：变更记录追加前通过；交付前再次执行最终检查。
+- 官方文档人工核对：确认同一 WebSocket 同步返回识别与翻译、16 kHz/16-bit/mono、建议 200 ms/6400 字节、两种模型、完整语言矩阵、`sentence_id`/时间戳/`sentence_end`、`vad_silence_time` 与 `max_speak_time` 范围和源语言限制。
+
+### 未执行验证、风险与后续事项
+
+- 未使用真实腾讯 AppID/SecretID/SecretKey，未访问付费 API，未验证账号开通、计费、默认 5 路并发、网络抖动、真实设备音频质量和服务端错误码。没有执行 Electron GUI 人工回归、PyInstaller 打包、安装包构建、Windows/Linux 实机构建。
+- 当前基础接入不会自动重连。握手、发送、异常关闭和 final 超时都会给出明确失败并结束本次 Session；生产在线验收后如需重试，必须设计有界次数、指数退避和是否安全重放音频，不能直接无限重连或复用已作废的 `voice_id`。
+- 腾讯接口要求近实时发送；当前约 200 ms 聚包符合官方建议，但系统调度暂停超过服务端限制时仍会失败。实时字幕延迟、断句效果和标准版费用需要真实账号验收。
+- 热词正式启用前仍需补充 capability、严格词条/权重类型、三语 UI、CLI/配置迁移、模型/语言能力校验、脱敏测试和真实接口验收；当前不得宣传为可用功能。
+
+### 关键外部文档与技术决策来源
+
+- 腾讯云《实时语音翻译（WebSocket）》：https://cloud.tencent.com/document/product/1093/127565 ，页面核对时间 2026-09-11，页面标注最近更新时间 2026-05-27。
+- 腾讯云官方 Python Speech SDK：https://github.com/TencentCloud/tencentcloud-speech-sdk-python ，作为客户端实现替代方案参考。
+- `websocket-client` 项目：https://github.com/websocket-client/websocket-client ，用于隔离实现带明确生命周期期限的二进制 WebSocket 客户端。
+- 根目录 `AGENTS.md`：配置显式迁移、Provider Registry、partial/final、稳定字幕 ID、凭据脱敏、停止冲刷、三语界面/文档、测试和完整变更流水要求。
+
+## 2026-09-12：发布版本更新至 2.28.0 并生成 macOS arm64 安装包
+
+### 用户授权、目标与范围
+
+- 用户明确要求“编译一下 Mac 版本并更新小版本号”，本批次将应用版本从 `2.27.0` 更新到 `2.28.0`，并基于当前工作区生成 macOS arm64 应用、ZIP 和 DMG。
+- 变更类型：构建、配置、文档。
+- 本批次不修改系统环境，不安装或升级依赖，不修改 Tencent Speech Translate 功能实现，不发布 Release，不提交或推送 Git。
+- 构建前已阅读根目录 `AGENTS.md`，确认仓库内无更具体的子目录规则，并通过 `git status --short --branch` 识别和保留当前工作区既有 Tencent Speech Translate/V8 配置相关修改。
+
+### 修改文件与原因
+
+- `package.json`、`package-lock.json`：将应用及锁文件根包版本从 `2.27.0` 更新到 `2.28.0`；锁文件只改动根包的两处版本字段，未改变依赖解析结果。
+- `src/renderer/index.html`、`src/renderer/src/components/EngineStatus.vue`：将窗口标题和关于界面的显示版本更新为 `v2.28.0`。
+- `README.md`、`README_en.md`、`README_ja.md`：将中英日 README 的当前版本标识更新为 `2.28.0`。
+- `docs/user-manual/zh.md`、`docs/user-manual/en.md`、`docs/user-manual/ja.md`：将中英日用户手册版本更新为 `2.28.0`。
+- `docs/engine-manual/zh.md`、`docs/engine-manual/en.md`、`docs/engine-manual/ja.md`：将中英日引擎手册版本更新为 `2.28.0`。
+- `docs/CHANGELOG.md`：新增 `v2.28.0 - 2026-09-11` 发布条目，记录本包包含的 Tencent Speech Translate/V8 变更与 macOS 产物验证。
+- `change.md`：追加本次版本、构建、验证、风险和回滚流水，不覆盖历史记录。
+- 忽略目录 `dist/`：生成 `mac-arm64/Auto Caption.app`、`Auto Caption-2.28.0-arm64-mac.zip`、`auto-caption-2.28.0.dmg`、相应 blockmap 和 `latest-mac.yml`；这些构建产物未加入 Git。
+
+### 修改前后行为、配置与兼容性
+
+- 修改前：应用和文档版本为 `2.27.0`，没有当前工作区对应的 2.28.0 macOS 安装包。
+- 修改后：应用、包元数据、界面和中英日文档统一显示 `2.28.0`；macOS arm64 应用内 `CFBundleShortVersionString` 与 `CFBundleVersion` 均为 `2.28.0`。
+- 本批次没有新增或修改配置结构、IPC、Python/Electron 进程协议、命令行参数或数据结构；安装包包含当前工作区已经实现并单独记录的 V8 配置和 Tencent Speech Translate 功能。
+- 依赖检查确认 `engine/.venv` 已有直接声明的 `websocket-client 1.9.0`（Apache-2.0，亦由 DashScope 使用），因此没有下载或改变 Python 环境。构建日志提示 npm CLI 可由 11.11.1 更新到 11.19.1，本批次未更新。
+- 回滚版本时应成组恢复上述版本文件和文档，并删除或替换忽略目录中的 2.28.0 产物；不得回退当前工作区既有的功能修改。
+
+### 实际验证与真实结果
+
+- `npm run verify`：通过。TypeScript、Vue typecheck、ESLint、Node 测试 `118/118`、Python 测试 `84/84` 全部成功；仅出现 npm mirror 配置弃用和 Node `MODULE_TYPELESS_PACKAGE_JSON` 性能警告。
+- `SDKROOT=/Library/Developer/CommandLineTools/SDKs/MacOSX26.5.sdk npm run build:apple-speech`：通过。生成 arm64 Swift 辅助程序；仅出现 SwiftPM 用户缓存不可写和 CommandLineTools 链接搜索路径警告。
+- `PYINSTALLER_CONFIG_DIR=/private/tmp/auto-caption-pyinstaller-config ./.venv/bin/pyinstaller --clean --noconfirm ./main.spec`（在 `engine/` 执行）：通过，生成 arm64 Python 引擎。警告为 `pycparser.lextab/yacctab` 隐式导入未找到以及 numba 的 `@rpath/libomp.dylib` 未解析。
+- `npm run build`：通过。Electron main、preload、renderer 分别转换 37、1、3297 个模块。
+- `engine/dist/main --help`：沙箱内首次因 macOS `semctl: Operation not permitted` 退出；以只读提升权限重试后通过，并显示 `tencent_speech_translate`、两个混元模型及腾讯断句参数。
+- `npx electron-builder --mac`：沙箱内首次因 `npmmirror.com` DNS 受限失败；获准仅下载锁定的 Electron `43.4.0` 后通过，未升级任何依赖。构建机没有可用 Apple Developer 证书，因此 electron-builder 跳过正式签名。
+- 对应用执行 `codesign --force --deep --sign -` 后，`codesign --verify --deep --strict --verbose=2` 通过；`codesign -dv --verbose=4` 确认 `Signature=adhoc`、`TeamIdentifier=not set`。
+- `unzip -tq 'dist/Auto Caption-2.28.0-arm64-mac.zip'`：通过，无压缩数据错误。
+- `hdiutil verify 'dist/auto-caption-2.28.0.dmg'`：通过，DMG 校验和有效。DMG 在沙箱内首次创建时因“设备未配置”失败，以提升权限调用系统 `hdiutil` 后成功；仅有旧命令语法提示。
+- 应用主程序、`Contents/Resources/engine/main` 和 `Contents/Resources/apple-speech/apple-speech-helper` 均经 `file` 确认为 Mach-O arm64；辅助程序权限为 `-rwxr-xr-x`、大小 285440 字节。
+- 包内 Apple Speech 辅助程序执行 `probe` 成功，返回协议版本 1、`isAvailable: true`、`maximumReservedLocales: 5`；本机没有已安装或可列出的 locale。
+- `Info.plist` 校验通过：短版本和构建版本均为 `2.28.0`，包含 `NSSpeechRecognitionUsageDescription`。
+- `latest-mac.yml` 与最终临时签名后重新生成的 ZIP/DMG 的 SHA-512 和字节数逐项匹配；blockmap 已基于最终文件重新生成。
+- 最终 SHA-256：ZIP `6fb5f95116e04e569f137327dbdbec240a85a786fa4d11b029b5e54188c24ed3`，DMG `0b04cdc4beaf04bce55ed9315fb95840efe2195395196462ecb3dd46196e558c`。
+
+### 未执行验证、风险与后续事项
+
+- 未使用 Apple Developer ID 正式签名，未公证（notarization），未发布；外部分发时 Gatekeeper 可能提示来源不受信任。正式分发前应使用发布证书重新签名、公证，并再次生成 ZIP、DMG、blockmap 与更新元数据。
+- 未执行真实 Tencent 凭据/API/音频测试，也未执行完整 Electron GUI 人工回归；相关功能的离线单元测试已通过，但在线服务行为仍需真实账号验收。
+- 只在当前 macOS arm64 构建机验证；Windows、Linux 和 Intel macOS 未构建，不声明这些平台已验证。
+- PyInstaller 的 `libomp.dylib` 警告可能影响实际调用依赖 OpenMP 的 numba 路径；本次 CLI 启动和全部离线测试通过，但发布前仍建议进行目标机器上的相关引擎实测。

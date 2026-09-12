@@ -37,6 +37,8 @@ export default {
     "funAsrEndpointInvalidNote": "WebSocket 地址必须是华北2（北京）或新加坡的官方专属地址，并且地址中的 WorkspaceId 必须与配置完全一致。",
     "funAsrHotwordModelMismatch": "热词表模型不匹配",
     "funAsrHotwordModelMismatchNote": "预编译热词表的目标模型必须与当前 Fun-ASR 识别模型完全一致，否则热词不会生效。",
+    "tencentSpeechLanguagePairInvalid": "腾讯云语言组合不受支持",
+    "tencentSpeechLanguagePairInvalidNote": "请选择腾讯实时语音翻译支持的源语言和目标语言组合。",
     "customExecutableMissing": "自定义引擎路径为空",
     "customExecutableMissingNote": "启动自定义字幕引擎前必须填写可执行文件路径。",
     "customEngineMissing": "自定义引擎不存在",
@@ -123,7 +125,11 @@ export default {
       "funAsrSemanticPunctuation": "语义断句",
       "funAsrSentenceSilence": "断句静音阈值",
       "funAsrHeartbeat": "连接心跳",
-      "openProviderConsole": "打开服务商控制台"
+      "tencentSpeechModel": "混元翻译模型",
+      "tencentSpeechVadSilence": "断句静音阈值",
+      "tencentSpeechMaxSpeakTime": "最长连续说话时间",
+      "openProviderConsole": "打开服务商控制台",
+      "openProviderDocs": "打开服务商文档"
     },
     options: {
       providers: {
@@ -132,7 +138,8 @@ export default {
         "sosv": "本地 / SOSV",
         "glm": "云端 / 智谱 AI / GLM-ASR",
         "funAsr": "云端 / 阿里云 / Fun-ASR 实时",
-        "appleSpeech": "本地 / macOS 系统语音识别"
+        "appleSpeech": "本地 / macOS 系统语音识别",
+        "tencentSpeechTranslate": "云端 / 腾讯云 / 实时语音翻译"
       },
       languages: {
         "auto": "自动检测",
@@ -147,6 +154,9 @@ export default {
         "es": "西班牙语",
         "it": "意大利语",
         "yue": "粤语",
+        "zh_en": "中英混合",
+        "id": "印尼语",
+        "th": "泰语",
         "zhCN": "简体中文（中国大陆）",
         "enUS": "英语（美国）",
         "jaJP": "日语（日本）"
@@ -159,7 +169,16 @@ export default {
       funAsrModels: {
         "current": "Fun-ASR Realtime（滚动版本）",
         "snapshot": "Fun-ASR Realtime 2025-11-07（快照版本）"
+      },
+      tencentSpeechModels: {
+        "lite": "混元翻译轻量版",
+        "standard": "混元翻译标准版"
       }
+    },
+    tencentSpeech: {
+      "credentialsInfo": "凭据仅从 TENCENTCLOUD_APP_ID、TENCENTCLOUD_SECRET_ID、TENCENTCLOUD_SECRET_KEY 环境变量读取，不写入应用配置。",
+      "vadSilenceInfo": "静音达到该时长后结束当前句，仅对中文、英语和中英混合源语言生效。范围 500-2000 毫秒。",
+      "maxSpeakTimeInfo": "连续说话达到该时长后强制结束当前句，仅对中文、英语和中英混合源语言生效。范围 5000-90000 毫秒。"
     },
     funAsr: {
       "workspaceInfo": "阿里云百炼业务空间 ID。API Key、业务空间和 WebSocket 地域必须属于同一套资源。",

@@ -1,14 +1,17 @@
 import type { Styles, UILanguage, UITheme } from '../types'
+import type { TencentSpeechModel } from '../tencentSpeech.ts'
 
-export const CONFIG_SCHEMA_VERSION = 7 as const
+export const CONFIG_SCHEMA_VERSION = 8 as const
 
-export type KnownProviderName = 'gummy' | 'vosk' | 'sosv' | 'glm' | 'fun_asr' | 'apple_speech'
+export type KnownProviderName = 'gummy' | 'vosk' | 'sosv' | 'glm' | 'fun_asr' |
+  'apple_speech' | 'tencent_speech_translate'
 export type AudioSourceType = 0 | 1
 export type KnownTranslationProviderName = 'azure' | 'google' | 'ollama'
 
 export function isKnownProviderName(value: unknown): value is KnownProviderName {
   return value === 'gummy' || value === 'vosk' || value === 'sosv' ||
-    value === 'glm' || value === 'fun_asr' || value === 'apple_speech'
+    value === 'glm' || value === 'fun_asr' || value === 'apple_speech' ||
+    value === 'tencent_speech_translate'
 }
 
 export function isKnownTranslationProviderName(
@@ -110,6 +113,19 @@ export interface FunAsrHotwordConfig {
   contextTerms: string[]
 }
 
+export interface TencentSpeechHotwordConfig {
+  [key: string]: unknown
+  entries: string[]
+}
+
+export interface TencentSpeechProviderConfig {
+  [key: string]: unknown
+  model: TencentSpeechModel
+  vadSilenceMs: number
+  maxSpeakTimeMs: number
+  hotwords: TencentSpeechHotwordConfig
+}
+
 export interface ProviderConfigs {
   [key: string]: unknown
   gummy: GummyProviderConfig
@@ -117,6 +133,7 @@ export interface ProviderConfigs {
   sosv: SosvProviderConfig
   glm: GlmProviderConfig
   funAsr: FunAsrProviderConfig
+  tencentSpeech: TencentSpeechProviderConfig
 }
 
 export interface CustomEngineConfig {
@@ -169,7 +186,7 @@ export interface CaptionConfig {
   styles: Styles
 }
 
-export interface ConfigDocumentV7 {
+export interface ConfigDocumentV8 {
   [key: string]: unknown
   schemaVersion: typeof CONFIG_SCHEMA_VERSION
   application: ApplicationConfig
@@ -217,7 +234,7 @@ export function createDefaultStyles(): Styles {
   }
 }
 
-export function createDefaultConfig(recordingPath: string): ConfigDocumentV7 {
+export function createDefaultConfig(recordingPath: string): ConfigDocumentV8 {
   return {
     schemaVersion: CONFIG_SCHEMA_VERSION,
     application: {
@@ -264,6 +281,14 @@ export function createDefaultConfig(recordingPath: string): ConfigDocumentV7 {
             vocabularyId: '',
             targetModel: 'fun-asr-realtime',
             contextTerms: []
+          }
+        },
+        tencentSpeech: {
+          model: 'hunyuan-translation-lite',
+          vadSilenceMs: 1000,
+          maxSpeakTimeMs: 10000,
+          hotwords: {
+            entries: []
           }
         }
       },

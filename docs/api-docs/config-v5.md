@@ -1,6 +1,6 @@
 # 配置文件 V5
 
-> 本文保留用于说明历史格式；当前格式为 [配置文件 V7](./config-v7.md)。应用会把完整 V5 依次迁移到 V6、V7。
+> 本文保留用于说明历史格式；当前格式为 [配置文件 V8](./config-v8.md)。应用会把完整 V5 依次迁移到 V6、V7、V8。
 
 Auto Caption 的持久化配置位于 Electron `userData/config.json`。V5 使用 `schemaVersion: 5`，当时磁盘、主进程、IPC 和渲染进程共享 `ConfigDocumentV5`。
 

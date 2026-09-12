@@ -1,6 +1,6 @@
 # 字幕引擎说明文档
 
-对应版本：v2.27.0
+对应版本：v2.28.0
 
 ![](../../assets/media/structure_zh.png)
 
@@ -173,7 +173,7 @@ export interface CaptionItem {
 
 自定义字幕引擎的设置提供命令行参数指定，因此需要设置好字幕引擎的参数，本项目目前用到的参数如下：
 
-> `engine/cli.py` 和 `python main.py --help` 是完整参数的唯一权威来源。Fun-ASR 使用 `-e fun_asr`，并通过 `-fmodel`、`-furl`、`-fworkspace`、`-fkey`、`-fsemantic`、`-fsilence`、`-fheartbeat`、`-fvocabulary`、`-fvmodel` 和可重复的 `-fcontext` 配置；不得在 `main.py` 再复制一条装配分支。
+> `engine/cli.py` 和 `python main.py --help` 是完整参数的唯一权威来源。Fun-ASR 使用 `-e fun_asr` 和 `-f*` 参数；腾讯实时语音翻译使用 `-e tencent_speech_translate`、`-tcmodel`、`-tcvad`、`-tcmax`，凭据只从 `TENCENTCLOUD_APP_ID`、`TENCENTCLOUD_SECRET_ID`、`TENCENTCLOUD_SECRET_KEY` 环境变量读取；不得在 `main.py` 再复制 Provider 装配分支。
 
 ```python
 if __name__ == "__main__":
@@ -217,9 +217,21 @@ python main.py -e fun_asr -s ja -t zh -a 0 -c 10 \
 
 该 Provider 使用官方 DashScope SDK，输入必须为 16 kHz 单声道 PCM16。partial/final、服务端时间戳、用量和生命周期只转换为统一事件；final 翻译、stdout 和关闭流程仍由 Session/协议层负责。`HotwordRuntimeConfig` 校验热词表目标模型与识别模型一致，并在每次新任务启动时传入预编译热词 ID 和最多 400 字符的无权重上下文。远端 CRUD 由 `services/hotwords.py` 的独立一次性 worker 承担，不进入 Provider 或公开字幕协议。
 
+腾讯实时语音翻译示例：
+
+```bash
+TENCENTCLOUD_APP_ID=<appid> \
+TENCENTCLOUD_SECRET_ID=<secret-id> \
+TENCENTCLOUD_SECRET_KEY=<secret-key> \
+python main.py -e tencent_speech_translate -s zh -t en -a 0 -c 10 \
+  -tcmodel hunyuan-translation-lite -tcvad 1000 -tcmax 10000
+```
+
+该 Provider 使用 16 kHz 单声道 PCM16，将约 100 ms 音频帧组合成约 200 ms 网络包。服务端 `sentence_id`、`sentence_end`、`source_text`、`target_text` 和毫秒偏移分别映射为稳定 ID、partial/final、原文、译文和字幕时间。`-tcvad` 表示静音多久后断句，范围 500–2000 ms；`-tcmax` 表示连续说话时强制断句的最长时长，范围 5000–90000 ms。两项仅对 `zh`、`en`、`zh_en` 发送。停止时等待最终结果最多5秒，Electron 总停止期限为8秒；旧引擎仍为4秒。当前不支持 TTS、自动重连或可用热词；热词编码和空配置仅作为后续接入边界。
+
 Fun-ASR 为每个连接 generation 维护幂等状态：同一次任务的 `on_error → on_close → stop` 最多触发一次重连或一次 fatal。永久服务错误立即终止，暂时错误才进行三次有界退避重连；task-failed 后不会再次调用 SDK `stop()`。生命周期细节通过隐藏的 `debug` 协议事件写入完整 Debug 日志，原有日志记录页不显示 DEBUG。fatal 会请求 Session 正常关闭资源；只有超时等异常路径才由 Electron 强杀整个打包进程树。
 
-所有内置字幕引擎（Gummy、Fun-ASR、GLM、Vosk、SOSV、Apple Speech）及音频、翻译、热词 SDK 的错误都会把脱敏后的 SDK 回调字段、异常类型、消息、自定义属性、完整 traceback 和 cause/context 写入本次 Debug JSONL。Python/SDK stderr 同样完整收集。API Key、Token、密码、Authorization、Cookie 和二进制音频正文始终不记录；过大的远端响应采用明确的有界截断标记。
+所有内置字幕引擎（Gummy、Fun-ASR、Tencent Speech Translate、GLM、Vosk、SOSV、Apple Speech）及音频、翻译、热词 SDK 的错误都会把脱敏后的 SDK 回调字段、异常类型、消息、自定义属性、完整 traceback 和 cause/context 写入本次 Debug JSONL。Python/SDK stderr 同样完整收集。API Key、Token、密码、Authorization、Cookie 和二进制音频正文始终不记录；过大的远端响应采用明确的有界截断标记。
 
 V6 Debug Mode 通过 `--debug-mode 0|1` 启动，并可由 TCP `debug_mode` command 即时切换。开启后 `ProviderMetric` 统一输出音频帧读取/转换/入队、队列深度与帧龄、Provider event 队列、Fun-ASR 重连缓冲、GLM/翻译 Worker 和 Apple Speech helper 状态。Provider 专属指标通过 `diagnostic_snapshot()` 扩展，Session 不增加 Provider 条件分支。超过 512 KiB 的错误诊断使用带长度和 SHA-256 的 `diagnostic_chunk` 分块，避免 Electron 的单行限制丢失根因。
 

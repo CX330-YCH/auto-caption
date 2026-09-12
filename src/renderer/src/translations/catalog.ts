@@ -159,7 +159,10 @@ function targetOptions(
   const languages = recognition.capabilities.translation === 'integrated'
     ? recognition.languages.filter((item) => item.roles.includes('target'))
     : getTranslationDefinition(config.translation.activeProviderId).languages
-  return languages.map(({ value, labelKey }) => ({ value, labelKey }))
+  const allowed = recognition.targetLanguagesBySource?.[config.common.sourceLanguage]
+  return languages
+    .filter(({ value }) => !recognition.targetLanguagesBySource || allowed?.includes(value))
+    .map(({ value, labelKey }) => ({ value, labelKey }))
 }
 
 export function getTranslationFields(
@@ -171,6 +174,7 @@ export function getTranslationFields(
       id: 'translation-enabled',
       path: 'translation.enabled',
       control: 'switch',
+      disabled: recognition.capabilities.translationRequired,
       section: 'primary',
       labelKey: 'engine.enableTranslation'
     },
@@ -207,6 +211,13 @@ export function normalizeTranslationConfig(
   config: EngineConfig,
   recognition: EngineDefinition
 ): void {
+  if (recognition.capabilities.translationRequired) config.translation.enabled = true
+  if (recognition.targetLanguagesBySource) {
+    const options = targetOptions(config, recognition)
+    if (!options.some(({ value }) => value === config.translation.common.targetLanguage) && options[0]) {
+      config.translation.common.targetLanguage = String(options[0].value)
+    }
+  }
   for (const field of getTranslationFields(config, recognition)) {
     if (
       field.defaultWhenEmpty &&
@@ -261,4 +272,5 @@ export function applyTranslationLanguageDefault(
     .map((value) => options.find((option) => option.value === value))
     .find(Boolean) ?? options[0]
   if (target) config.translation.common.targetLanguage = String(target.value)
+  if (recognition.capabilities.translationRequired) config.translation.enabled = true
 }

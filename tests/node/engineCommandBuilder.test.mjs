@@ -13,7 +13,7 @@ function valueAfter(args, flag) {
   return args[index + 1]
 }
 
-test('builds common and Provider-specific arguments from V7 config', () => {
+test('builds common and Provider-specific arguments from V8 config', () => {
   const engine = createDefaultConfig('/recordings').engine
   engine.common.audioSource = 1
   engine.common.recording.enabled = true
@@ -28,7 +28,10 @@ test('builds common and Provider-specific arguments from V7 config', () => {
   engine.providers.funAsr.hotwords.vocabularyId = 'vocab-project-1'
   engine.providers.funAsr.hotwords.contextTerms = ['Auto Caption', '阿里云百炼']
 
-  for (const provider of ['gummy', 'vosk', 'sosv', 'glm', 'fun_asr']) {
+  for (const provider of [
+    'gummy', 'vosk', 'sosv', 'glm', 'fun_asr',
+    'tencent_speech_translate'
+  ]) {
     const args = buildBundledEngineArguments(engine, provider, 2345)
 
     assert.equal(valueAfter(args, '-a'), '1')
@@ -82,6 +85,19 @@ test('builds common and Provider-specific arguments from V7 config', () => {
     '/Applications/Auto Caption.app/Contents/Resources/apple-speech/apple-speech-helper'
   )
   assert.equal(valueAfter(appleSpeechArgs, '-tm'), 'ollama')
+
+  engine.translation.enabled = false
+  engine.translation.common.targetLanguage = 'en'
+  const tencentArgs = buildBundledEngineArguments(
+    engine,
+    'tencent_speech_translate',
+    2345
+  )
+  assert.equal(valueAfter(tencentArgs, '-t'), 'en')
+  assert.equal(valueAfter(tencentArgs, '-tcmodel'), 'hunyuan-translation-lite')
+  assert.equal(valueAfter(tencentArgs, '-tcvad'), '1000')
+  assert.equal(valueAfter(tencentArgs, '-tcmax'), '10000')
+  assert.equal(tencentArgs.includes('-tm'), false)
 })
 
 test('requires the native helper path for Apple Speech', () => {

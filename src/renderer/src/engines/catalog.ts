@@ -18,6 +18,7 @@ import { gummyEngine } from './providers/gummy.ts'
 import { sosvEngine } from './providers/sosv.ts'
 import { voskEngine } from './providers/vosk.ts'
 import { appleSpeechEngine } from './providers/apple_speech.ts'
+import { tencentSpeechTranslateEngine } from './providers/tencent_speech_translate.ts'
 import {
   applyTranslationLanguageDefault,
   getTranslationFields,
@@ -38,7 +39,8 @@ export const engineDefinitions = [
   sosvEngine,
   glmEngine,
   funAsrEngine,
-  appleSpeechEngine
+  appleSpeechEngine,
+  tencentSpeechTranslateEngine
 ] as const satisfies readonly EngineDefinition[]
 
 const engineDefinitionsById = new Map<KnownProviderName, EngineDefinition>(

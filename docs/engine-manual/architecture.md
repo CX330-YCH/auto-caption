@@ -4,7 +4,7 @@
 
 ## 当前结构
 
-现有 Gummy、Vosk、SOSV、GLM、Fun-ASR 和 Apple Speech 均通过统一识别架构运行，Google 与 Ollama 通过独立翻译架构运行：
+现有 Gummy、Vosk、SOSV、GLM、Fun-ASR、Tencent Speech Translate 和 Apple Speech 均通过统一识别架构运行，Google 与 Ollama 通过独立翻译架构运行：
 
 ```text
 engine/
@@ -102,7 +102,7 @@ Provider 通过容量有限的内部事件队列上报结果。`accept_audio()` 
 - `ProviderError`：经过分类和脱敏的错误；`fatal` 表示 Session 必须停止。
 - `UsageUpdated`：用量变化，不携带凭据。
 
-`CaptionPartial` 和 `CaptionFinal` 可携带 Provider 已产生的翻译。Gummy 使用该字段承载服务端翻译；包括 Fun-ASR 在内的其他 Provider 的最终字幕由统一 `TranslationSession` 异步翻译。
+`CaptionPartial` 和 `CaptionFinal` 可携带 Provider 已产生的翻译。Gummy 和 Tencent Speech Translate 使用该字段承载服务端翻译；包括 Fun-ASR 在内的其他 Provider 的最终字幕由统一 `TranslationSession` 异步翻译。
 
 内部 partial/final 目前都由 `ProtocolEventSink` 映射为现有 `command: "caption"`，外部协议没有新增字段。未来若要暴露 final，必须进行带版本的协议设计。
 
@@ -177,6 +177,16 @@ API Key 字段在 `CliOptions` 和 `ProviderConfig` 的 `repr` 中隐藏。未�
 - `HotwordRuntimeConfig` 在每个新 SDK client 的 `Recognition(...)` 构造参数中传入预编译 `vocabulary_id`，并在 `start()` 传入 `raw_input.context`；重连任务重复构造和传入。不能把新版预编译词表误传给 SDK 的旧 `phrase_id` 接口。热词表目标模型必须与识别模型一致，上下文合计最多 400 字符且没有权重。
 - Fun-ASR 不提供集成翻译，final 由统一翻译服务提交一次。
 
+### Tencent Speech Translate
+
+- 使用腾讯实时语音翻译 WebSocket 接口，同一响应携带 `source_text` 与 `target_text`，并按服务端 `sentence_id` 保持字幕 ID 稳定；`sentence_end` 映射为 partial/final。
+- 输入由共享 Pipeline 规范化为 16 kHz、单声道、PCM16。Provider 将约 100 ms 输入帧组合成 6400 字节、约 200 ms 的网络包，停止前发送不足一包的尾帧。
+- AppID、SecretID、SecretKey 仅由 Electron 进程环境传入 Python，既不持久化也不进入 argv。签名 URL 和传输错误不会写入普通错误文本，SecretID/SecretKey 进入统一脱敏集合。
+- 支持 `hunyuan-translation-lite` 与 `hunyuan-translation` 两种模型。源语言和目标语言由共享动态矩阵校验；Renderer 负责过滤选项，主进程和 Python Provider 分别执行防御性复验。
+- `vad_silence_time` 和 `max_speak_time` 仅对 `zh`、`en`、`zh_en` 发送，范围分别为 500–2000 ms 与 5000–90000 ms。热词编码器和不可激活的 V8 空配置已预留，当前不展示或发送热词。
+- `stop()` 发送 `{"type":"end"}` 并最多等待5秒接收最终结果；Electron 为该 Provider 使用8秒停止期限，其他内置和自定义引擎继续使用4秒。
+- 当前基础版本不提供 TTS 和自动重连。非主动断线形成 fatal 并结束本次 Session；用户需重新启动字幕。在线重试策略必须作为后续独立变更加入，不能变成无限重连。
+
 ## 独立热词服务
 
 热词实现分为两级：
@@ -188,7 +198,7 @@ Electron 主进程从已应用配置取得 Workspace、Endpoint、模型和 API 
 
 ## TranslationProvider 与后台任务
 
-Vosk、SOSV、GLM、Fun-ASR 和 Apple Speech 的 final 通过独立 `TranslationSession` 调用 Google/Ollama Provider。翻译 Provider 遵循 `start → translate(request)* → stop` 生命周期；request/result 携带稳定 `caption_id`，Provider 不直接写 stdout：
+Vosk、SOSV、GLM、Fun-ASR 和 Apple Speech 的 final 通过独立 `TranslationSession` 调用 Google/Ollama Provider。Gummy 和 Tencent Speech Translate 使用服务端集成翻译，不创建客户端翻译任务。翻译 Provider 遵循 `start → translate(request)* → stop` 生命周期；request/result 携带稳定 `caption_id`，Provider 不直接写 stdout：
 
 - 固定 2 个 daemon worker。
 - 最多等待 32 条翻译任务。
@@ -199,12 +209,12 @@ Vosk、SOSV、GLM、Fun-ASR 和 Apple Speech 的 final 通过独立 `Translation
 
 `TranslationProviderRegistry` 拒绝未知和重复名称，翻译配置与凭据不再进入识别 `ProviderConfig`。网络级取消和停止时有限结果冲刷仍是后续独立改造事项。
 
-## Electron 配置 V7
+## Electron 配置 V8
 
-Electron 持久化、主进程、IPC 和渲染进程共享 `src/shared/config/` 中的 V7 分层模型：
+Electron 持久化、主进程、IPC 和渲染进程共享 `src/shared/config/` 中的 V8 分层模型：
 
 ```text
-ConfigDocumentV7
+ConfigDocumentV8
 ├── application          # 语言、主题、颜色、窗口布局、Debug Mode
 ├── engine
 │   ├── activeEngineId   # 当前内置 Provider 或自定义引擎 ID
@@ -215,11 +225,11 @@ ConfigDocumentV7
 └── caption              # 字幕样式
 ```
 
-`AllConfig` 是主进程中的配置所有者，只接受 `schemaVersion: 7`。Renderer 通过 application、engine、caption 三个完整层级交换配置，主进程重新校验后才更新内存；运行态 `engineEnabled` 与 PID、端口、日志不进入磁盘配置。
+`AllConfig` 是主进程中的配置所有者，只接受 `schemaVersion: 8`。Renderer 通过 application、engine、caption 三个完整层级交换配置，主进程重新校验后才更新内存；运行态 `engineEnabled` 与 PID、端口、日志不进入磁盘配置。
 
 引擎启动参数由纯函数 `EngineCommandBuilder` 从 `EngineConfig` 构建，`CaptionEngine` 不再读取扁平 controls 或拼装各 Provider 字段。Builder 内部使用 Provider 参数注册表，共用音频、录音、端口和目标语言参数只生成一次。
 
-完整 V2 会依次显式迁移到 V3、V4、V5、V6、V7；V7 把旧 `engine.common.translation` 和目标语言迁移到独立翻译层。无版本和其他不支持的版本仍被拒绝并使用默认 V7。完整字段、范围和凭据限制见 [`config-v7.md`](../api-docs/config-v7.md)。
+完整 V2 会依次显式迁移到 V3、V4、V5、V6、V7、V8；V7 把旧 `engine.common.translation` 和目标语言迁移到独立翻译层，V8 增加腾讯 Provider 默认配置。无版本和其他不支持的版本仍被拒绝并使用默认 V8。完整字段、范围和凭据限制见 [`config-v8.md`](../api-docs/config-v8.md)。
 
 ## Renderer 字幕文本轨道
 
@@ -243,11 +253,12 @@ CaptionItem[]
 ```text
 src/renderer/src/engines/
 ├── catalog.ts                 # 注册、公共字段合成、默认值和统一校验
-├── form.ts                    # V7 配置路径读写、草稿复制和可见性判断
+├── form.ts                    # V8 配置路径读写、草稿复制和可见性判断
 ├── types.ts                   # capability、字段和校验描述类型
 └── providers/
     ├── gummy.ts
     ├── fun_asr.ts
+    ├── tencent_speech_translate.ts
     ├── vosk.ts
     ├── sosv.ts
     ├── glm.ts
@@ -266,7 +277,7 @@ src/renderer/src/translations/
 
 识别目录补齐源语言、音频、录音和超时字段；翻译目录独立声明 Google、Ollama、Azure 的目标语言、可用状态、网络/凭据能力和专属字段。Azure 当前仅为禁用元数据，主进程无实现且不会发起请求。`EngineFieldRenderer.vue` 统一渲染普通控件；`EngineControl.vue` 只合并两套字段并按 section 分组，不维护供应商表单分支。
 
-新增普通识别 Provider 的前端流程是：扩展 V7 识别 Provider 类型和主进程校验，再新增 `engines/providers/<name>.ts` 并注册。新增翻译 Provider 则扩展 `translation.providers` 类型、迁移/校验和 `translations/catalog.ts`，不得把翻译字段塞回识别定义。常规字段不得在 `EngineControl.vue` 增加 Provider `v-if`。
+新增普通识别 Provider 的前端流程是：扩展 V8 识别 Provider 类型和主进程校验，再新增 `engines/providers/<name>.ts` 并注册。新增翻译 Provider 则扩展 `translation.providers` 类型、迁移/校验和 `translations/catalog.ts`，不得把翻译字段塞回识别定义。常规字段不得在 `EngineControl.vue` 增加 Provider `v-if`。
 
 Provider 的启动前要求同样由目录字段校验提供，`EngineStatus.vue` 不再维护本地模型名单。目录和嵌套表单工具均为无 Vue 依赖的纯 TypeScript，可由 Node 单元测试验证。
 
@@ -274,10 +285,10 @@ Provider 的启动前要求同样由目录字段校验提供，`EngineStatus.vue
 
 - `main.py` 路径、全部 CLI 参数、默认值和 Provider 名称保持不变。
 - Electron/Python 的 `caption`、`translation`、`info`、`warn`、`error`、`usage` 和 `kill` command 结构不变。
-- Vosk、SOSV、GLM 和 Fun-ASR 的 final 使用统一客户端翻译；Gummy 继续使用服务端翻译。
+- Vosk、SOSV、GLM 和 Fun-ASR 的 final 使用统一客户端翻译；Gummy 和 Tencent Speech Translate 使用服务端翻译。
 - `-d 1` 现在按参数声明正确启用终端字幕显示；迁移前入口把整数错误地与字符串比较，导致该参数不生效。
 - 直接导入旧 `audio2text.*Recognizer` 的未文档化内部路径不再支持。应用公开扩展点仍是命令行和进程协议。
-- Electron 内部配置 IPC 使用 V7 application/engine/caption 分层对象；该 IPC 不作为第三方公开扩展点。
+- Electron 内部配置 IPC 使用 V8 application/engine/caption 分层对象；该 IPC 不作为第三方公开扩展点。
 
 ## 新 Provider 接入顺序
 
@@ -288,4 +299,4 @@ Provider 的启动前要求同样由目录字段校验提供，`EngineStatus.vue
 5. 验证外部 command 协议和错误脱敏。
 6. 对需要网络的 Provider 增加有界重试、停止冲刷和显式启用的在线测试。
 
-Fun-ASR 与两级热词已按上述顺序完成离线可验证纵向接入；真实账号、地域、设备、计费和远端 CRUD 链路仍需在有凭据时由用户显式执行在线验收。后续 Provider 的热词能力应继续复用独立服务边界，不能通过复制识别循环、在 `main.py` 增加 Provider 条件分支或向通用表单塞入临时资源状态接入。
+Fun-ASR 与两级热词、Tencent Speech Translate 基础链路已按上述顺序完成离线可验证纵向接入；真实账号、地域、设备、计费和远端 CRUD 链路仍需在有凭据时由用户显式执行在线验收。腾讯热词当前只有请求级编码和 V8 空配置边界，启用前必须增加能力校验、UI 和真实接口验收。后续 Provider 的热词能力应继续复用独立服务边界，不能通过复制识别循环、在 `main.py` 增加 Provider 条件分支或向通用表单塞入临时资源状态接入。

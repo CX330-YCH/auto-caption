@@ -47,7 +47,8 @@ export function conditionsMatch(
 }
 
 export function isEngineFieldVisible(config: EngineConfig, field: EngineFieldDescriptor): boolean {
-  return conditionsMatch(config, field.visibleWhen)
+  return conditionsMatch(config, field.visibleWhen) &&
+    (!field.sourceLanguages || field.sourceLanguages.includes(config.common.sourceLanguage))
 }
 
 export function isEmptyEngineFieldValue(value: unknown): boolean {

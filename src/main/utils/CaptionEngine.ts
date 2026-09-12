@@ -36,6 +36,8 @@ import {
 } from '../engine/EngineProcessControl.ts'
 import { resolveAppleSpeechHelperPath } from '../engine/AppleSpeechHelperPath.ts'
 import { EngineDiagnosticAssembler } from '../engine/protocol/EngineDiagnosticAssembler.ts'
+import { buildEngineLaunchContext } from '../engine/config/EngineLaunchContext.ts'
+import { hasTencentSpeechCredentials } from '../../shared/tencentSpeech.ts'
 
 export class CaptionEngine {
   appPath: string = ''
@@ -53,6 +55,7 @@ export class CaptionEngine {
   private stdoutDebugDecoder = new StringDecoder('utf8')
   private stderrDecoder = new StringDecoder('utf8')
   private stderrSecrets: string[] = []
+  private stopTimeoutMs = 4000
 
   private getApp(): boolean {
     const engineConfig = allConfig.engine
@@ -75,6 +78,13 @@ export class CaptionEngine {
         !engineConfig.providers.funAsr.apiKey && !process.env.DASHSCOPE_API_KEY
       ) {
         controlWindow.sendErrorMessage(i18n('fun_asr.key.missing'))
+        return false
+      }
+      if (
+        provider === 'tencent_speech_translate' &&
+        !hasTencentSpeechCredentials(process.env)
+      ) {
+        controlWindow.sendErrorMessage(i18n('tencent_speech.credentials.missing'))
         return false
       }
       const engineCommand = resolveBundledEngineCommand()
@@ -148,6 +158,10 @@ export class CaptionEngine {
       return
     }
     if(!this.getApp()){ return }
+    const launchContext = buildEngineLaunchContext(
+      getActiveBuiltinProvider(allConfig.engine), process.env
+    )
+    this.stopTimeoutMs = launchContext.stopTimeoutMs
 
     this.protocol.reset()
     this.diagnosticAssembler.reset()
@@ -155,11 +169,13 @@ export class CaptionEngine {
     this.stderrDecoder = new StringDecoder('utf8')
     this.stderrSecrets = [
       ...sensitiveArgumentValues(this.command),
+      ...launchContext.secrets,
       process.env.DASHSCOPE_API_KEY || ''
     ].filter(Boolean)
     this.engineRunSequence += 1
     this.activeEngineRunId = this.engineRunSequence
     this.process = spawn(this.appPath, this.command, {
+      env: launchContext.environment,
       detached: shouldCreateProcessGroup(process.platform)
     })
     this.process.once('error', (error: Error) => {
@@ -228,7 +244,7 @@ export class CaptionEngine {
       if(this.status !== 'stopping') return
       Log.warn('Engine process still not stopped, trying to kill...')
       this.kill()
-    }, 4000);
+    }, this.stopTimeoutMs);
   }
 
   public kill(): void {

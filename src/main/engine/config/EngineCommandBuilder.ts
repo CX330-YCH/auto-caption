@@ -75,6 +75,16 @@ const providerArgumentBuilders: Record<
       '-ash', helperPath,
       ...translationArguments(config)
     ]
+  },
+  tencent_speech_translate: (config) => {
+    const tencent = config.providers.tencentSpeech
+    return [
+      '-e', 'tencent_speech_translate',
+      '-s', config.common.sourceLanguage,
+      '-tcmodel', tencent.model,
+      '-tcvad', tencent.vadSilenceMs.toString(),
+      '-tcmax', tencent.maxSpeakTimeMs.toString()
+    ]
   }
 }
 
@@ -96,7 +106,9 @@ export function buildBundledEngineArguments(
   args.push('--debug-mode', debugMode ? '1' : '0')
   args.push(
     '-t',
-    config.translation.enabled
+    provider === 'tencent_speech_translate'
+      ? config.translation.common.targetLanguage
+      : config.translation.enabled
       ? config.translation.common.targetLanguage
       : 'none'
   )

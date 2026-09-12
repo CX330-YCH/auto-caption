@@ -10,7 +10,7 @@ import {
   isKnownProviderName,
   isKnownTranslationProviderName,
   type ApplicationConfig,
-  type ConfigDocumentV7,
+  type ConfigDocumentV8,
   type EngineConfig,
   type ProviderConfigs,
   type TranslationConfig
@@ -32,25 +32,32 @@ import {
   requireWorkspaceId,
   validateFunAsrEndpoint
 } from './validation.ts'
+import {
+  TENCENT_SPEECH_MODELS,
+  isTencentSpeechLanguagePair
+} from '../tencentSpeech.ts'
 
-export function parseConfigDocumentV7(value: unknown): ConfigDocumentV7 {
+export function parseConfigDocumentV8(value: unknown): ConfigDocumentV8 {
   if (!isRecord(value)) {
     throw new InvalidConfigError('Config root must be an object')
   }
   if (value.schemaVersion === 2) {
-    return parseConfigDocumentV7(migrateConfigDocumentV2ToV3(value))
+    return parseConfigDocumentV8(migrateConfigDocumentV2ToV3(value))
   }
   if (value.schemaVersion === 3) {
-    return parseConfigDocumentV7(migrateConfigDocumentV3ToV4(value))
+    return parseConfigDocumentV8(migrateConfigDocumentV3ToV4(value))
   }
   if (value.schemaVersion === 4) {
-    return parseConfigDocumentV7(migrateConfigDocumentV4ToV5(value))
+    return parseConfigDocumentV8(migrateConfigDocumentV4ToV5(value))
   }
   if (value.schemaVersion === 5) {
-    return parseConfigDocumentV7(migrateConfigDocumentV5ToV6(value))
+    return parseConfigDocumentV8(migrateConfigDocumentV5ToV6(value))
   }
   if (value.schemaVersion === 6) {
-    return parseConfigDocumentV7(migrateConfigDocumentV6ToV7(value))
+    return parseConfigDocumentV8(migrateConfigDocumentV6ToV7(value))
+  }
+  if (value.schemaVersion === 7) {
+    return parseConfigDocumentV8(migrateConfigDocumentV7ToV8(value))
   }
   if (value.schemaVersion !== CONFIG_SCHEMA_VERSION) {
     if (
@@ -69,6 +76,29 @@ export function parseConfigDocumentV7(value: unknown): ConfigDocumentV7 {
     application: parseApplicationConfig(value.application),
     engine: parseEngineConfig(value.engine),
     caption: parseCaptionConfig(value.caption)
+  }
+}
+
+function migrateConfigDocumentV7ToV8(
+  value: Record<string, unknown>
+): Record<string, unknown> {
+  const engine = requireRecord(value.engine, 'engine')
+  const providers = requireRecord(engine.providers, 'engine.providers')
+  return {
+    ...value,
+    schemaVersion: 8,
+    engine: {
+      ...engine,
+      providers: {
+        ...providers,
+        tencentSpeech: {
+          model: 'hunyuan-translation-lite',
+          vadSilenceMs: 1000,
+          maxSpeakTimeMs: 10000,
+          hotwords: { entries: [] }
+        }
+      }
+    }
   }
 }
 
@@ -246,17 +276,37 @@ export function parseEngineConfig(value: unknown): EngineConfig {
   ) {
     throw new InvalidConfigError('Active engine does not exist')
   }
+  const sourceLanguage = requireString(
+    value.common.sourceLanguage,
+    'sourceLanguage',
+    32,
+    false
+  )
+  const providers = parseProviderConfigs(value.providers)
+  const translation = parseTranslationConfig(value.translation)
+  if (activeEngineId === 'tencent_speech_translate') {
+    if (!translation.enabled) {
+      throw new InvalidConfigError(
+        'Tencent speech translation requires translation.enabled'
+      )
+    }
+    if (
+      !isTencentSpeechLanguagePair(
+        sourceLanguage,
+        translation.common.targetLanguage
+      )
+    ) {
+      throw new InvalidConfigError(
+        'Unsupported Tencent speech translation language pair'
+      )
+    }
+  }
   return {
     ...value,
     activeEngineId,
     common: {
       ...value.common,
-      sourceLanguage: requireString(
-        value.common.sourceLanguage,
-        'sourceLanguage',
-        32,
-        false
-      ),
+      sourceLanguage,
       audioSource: audioSource as 0 | 1,
       recording: {
         ...value.common.recording,
@@ -276,8 +326,8 @@ export function parseEngineConfig(value: unknown): EngineConfig {
         120
       )
     },
-    providers: parseProviderConfigs(value.providers),
-    translation: parseTranslationConfig(value.translation),
+    providers,
+    translation,
     customEngines
   }
 }
@@ -483,6 +533,14 @@ function parseProviderConfigs(value: Record<string, unknown>): ProviderConfigs {
   const sosv = requireRecord(value.sosv, 'providers.sosv')
   const glm = requireRecord(value.glm, 'providers.glm')
   const funAsr = requireRecord(value.funAsr, 'providers.funAsr')
+  const tencentSpeech = requireRecord(
+    value.tencentSpeech,
+    'providers.tencentSpeech'
+  )
+  const tencentHotwords = requireRecord(
+    tencentSpeech.hotwords,
+    'providers.tencentSpeech.hotwords'
+  )
   const funAsrHotwords = requireRecord(
     funAsr.hotwords,
     'providers.funAsr.hotwords'
@@ -498,6 +556,19 @@ function parseProviderConfigs(value: Record<string, unknown>): ProviderConfigs {
   const vocabularyTargetModel = requireFunAsrModel(funAsrHotwords.targetModel)
   if (vocabularyId && vocabularyTargetModel !== funAsrModel) {
     throw new InvalidConfigError('Fun-ASR hotword target model mismatch')
+  }
+  const tencentModel = requireString(
+    tencentSpeech.model,
+    'tencentSpeech.model',
+    64,
+    false
+  )
+  if (!TENCENT_SPEECH_MODELS.includes(tencentModel as never)) {
+    throw new InvalidConfigError('Invalid tencentSpeech.model')
+  }
+  const tencentHotwordEntries = requireContextTerms(tencentHotwords.entries)
+  if (tencentHotwordEntries.length > 0) {
+    throw new InvalidConfigError('Tencent Speech hotwords are reserved and must be empty')
   }
   return {
     ...value,
@@ -545,13 +616,33 @@ function parseProviderConfigs(value: Record<string, unknown>): ProviderConfigs {
         targetModel: vocabularyTargetModel,
         contextTerms: requireContextTerms(funAsrHotwords.contextTerms)
       }
+    },
+    tencentSpeech: {
+      ...tencentSpeech,
+      model: tencentModel as (typeof TENCENT_SPEECH_MODELS)[number],
+      vadSilenceMs: requireNumber(
+        tencentSpeech.vadSilenceMs,
+        'tencentSpeech.vadSilenceMs',
+        500,
+        2000
+      ),
+      maxSpeakTimeMs: requireNumber(
+        tencentSpeech.maxSpeakTimeMs,
+        'tencentSpeech.maxSpeakTimeMs',
+        5000,
+        90000
+      ),
+      hotwords: {
+        ...tencentHotwords,
+        entries: tencentHotwordEntries
+      }
     }
   }
 }
 
 export function parseCaptionConfig(
   value: unknown
-): ConfigDocumentV7['caption'] {
+): ConfigDocumentV8['caption'] {
   if (!isRecord(value)) {
     throw new InvalidConfigError('Caption config must be an object')
   }

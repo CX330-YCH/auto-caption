@@ -60,11 +60,11 @@ npm run build
 Node.js 测试覆盖：
 
 - 中英日界面文案的递归键结构一致性，防止新增用户可见文本时遗漏任一语言。
-- V7 分层配置默认值、V2/V3/V4/V5/V6 显式迁移、独立翻译 common/Provider 配置校验、Debug Mode 布尔校验、严格版本拒绝、命名自定义引擎校验、Fun-ASR 热词约束和未知扩展字段保留。
-- 从 V7 `EngineConfig` 为 Gummy、Vosk、SOSV、GLM、Fun-ASR 及自定义引擎生成启动参数，并验证旧翻译 CLI 参数兼容、Azure 未实现门禁、Debug Mode 仅传给内置引擎、关闭翻译后不传翻译 Provider 参数。
+- V8 分层配置默认值、V2/V3/V4/V5/V6/V7 显式迁移、独立翻译 common/Provider 配置校验、Debug Mode 布尔校验、严格版本拒绝、命名自定义引擎校验、Fun-ASR 热词约束、腾讯语言组合/断句/空热词约束和未知扩展字段保留。
+- 从 V8 `EngineConfig` 为 Gummy、Vosk、SOSV、GLM、Fun-ASR、Tencent Speech Translate 及自定义引擎生成启动参数，并验证旧翻译 CLI 参数兼容、Azure 未实现门禁、Debug Mode 仅传给内置引擎、关闭翻译后不传翻译 Provider 参数。
 - 公共字幕轨道的原文/译文 segment、逐句/连续组合、中英文连接符、视觉行字符范围、稳定行锚点、尾部增长/重写/生命周期/追加/历史变化分类、有界测量窗口和独立行额度。
 - 逐行字幕展示下界在 partial“增长 → 缩短/重写 → 再增长”期间只前进不后退；已滚出的历史不回填，原文/译文下界相互独立，显式布局重排可重新选行，partial→final 不移动或动画。
-- Renderer 引擎目录的 Provider 唯一注册、能力驱动字段组合、嵌套草稿路径读写、条件可见性、Provider 启动要求、默认值归一化和语言默认值。
+- Renderer 引擎目录的 Provider 唯一注册、能力驱动字段组合、嵌套草稿路径读写、条件可见性、Provider 启动要求、默认值归一化、腾讯动态目标语言和必选集成翻译。
 - 字幕时间字符串解析、毫秒换算和当前跨日行为。
 - 命令行与配置对象中的 API Key 日志脱敏。
 - 现有 Python/Electron NDJSON 协议夹具的基本结构。
@@ -101,6 +101,7 @@ Python 测试覆盖：
 - GLM VAD 分段、异步 final、WAV 请求内容、URL 校验和错误正文脱敏。
 - Gummy SDK callback 的 partial/final、服务端翻译、usage 和累计发送失败策略。
 - Fun-ASR SDK callback 的 partial/final/heartbeat/usage 映射、服务端时间戳、final 去重、有界重连、永久/暂时错误分类、错误脱敏、停止冲刷和 16 kHz 单声道 PCM16 输入约束；同 generation 重复 `on_error` 及随后 `on_close → stop` 只处理一次，task-failed 后不再调用 SDK `stop()`。SDK 1.26.7 适配器会直接验证失败任务 timer 被取消。任务启动与重连会重复传入热词表 ID 和上下文。测试使用伪造 SDK 客户端，不建立网络连接。
+- Tencent Speech Translate 的签名参数、两种模型和语言对校验、16 kHz 单声道 PCM16 输入、约 200 ms 组包、尾帧冲刷、原文/译文 partial/final、服务端时间戳、final 去重、错误脱敏、停止事件和预留热词编码。测试使用伪造 WebSocket 客户端，不建立网络连接。
 - 系统 CA 初始化测试在隔离子进程中验证重复调用幂等，并验证导入真实 `main` 入口后、任何网络客户端工作前，标准库 `ssl.SSLContext` 已切换为 `truststore.SSLContext`。该测试不建立网络连接；发布验收另以不带凭据的 WSS 握手确认 TLS 已通过、服务端返回预期 HTTP 鉴权错误。
 - `HotwordRuntimeConfig` 的模型/上下文限制、基于伪造 `VocabularyClient` 的完整 CRUD、修改前模型检查，以及一次性 worker 的错误脱敏。测试不创建、更新或删除真实云资源。
 
@@ -109,10 +110,10 @@ Python 测试覆盖：
 - 真实音频设备和平台驱动。
 - Electron 窗口、热词管理 IPC/子进程超时和浏览器交互集成。
 - Ant Design Vue 通用引擎字段控件的浏览器交互、视觉布局和键盘可访问性。
-- Electron `userData/config.json` 的真实磁盘读写、V2→V3→V4→V5→V6→V7 迁移、Debug Mode 即时切换和无版本配置回退的桌面端流程。
+- Electron `userData/config.json` 的真实磁盘读写、V2→V3→V4→V5→V6→V7→V8 迁移、Debug Mode 即时切换和无版本配置回退的桌面端流程。
 - 真实 Python/PyInstaller 子进程启动、超时和正常停止；POSIX 进程组强杀已用临时 Node 父子进程集成验证，但尚未使用 PyInstaller 包和 Windows/Linux 实机验证。
 - Electron 与真实 Python 子进程之间的端到端 Socket/stdio 集成。
-- 真实 Vosk/SOSV 模型文件以及实际 Gummy、GLM、Fun-ASR 或其他在线 Provider；阿里云远端热词表的 list/create/update/delete 也未执行。
+- 真实 Vosk/SOSV 模型文件以及实际 Gummy、GLM、Fun-ASR、Tencent Speech Translate 或其他在线 Provider；阿里云远端热词表的 list/create/update/delete 也未执行。
 - Ollama、OpenAI、Google 或阿里云付费 API。
 - Windows、macOS、Linux 打包安装程序。
 

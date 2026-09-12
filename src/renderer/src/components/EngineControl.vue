@@ -169,6 +169,7 @@ import { getActiveBuiltinProvider, getActiveCustomEngine } from '../../../shared
 import { useGeneralSettingStore } from '@renderer/stores/generalSetting'
 import { useEngineControlStore } from '@renderer/stores/engineControl'
 import { appleSpeechLocaleDisplayName } from '@renderer/engines/appleSpeechLocale.ts'
+import { normalizeTranslationConfig } from '@renderer/translations/catalog.ts'
 import {
   appleSpeechLocalesEqual,
   normalizeAppleSpeechLocale
@@ -252,6 +253,10 @@ function fieldValue(field: EngineFieldDescriptor): unknown {
 
 function updateField(field: EngineFieldDescriptor, value: unknown): void {
   setEngineConfigValue(draft.value, field.path, value)
+  const provider = activeBuiltinProvider.value
+  if (provider && field.path === 'common.sourceLanguage') {
+    normalizeTranslationConfig(draft.value, getEngineDefinition(provider))
+  }
 }
 
 function applyChange(): void {

@@ -37,6 +37,8 @@ export default {
     "funAsrEndpointInvalidNote": "中国（北京）またはシンガポールの公式専用 URL を使用し、ホスト名の WorkspaceId を設定値と完全に一致させてください。",
     "funAsrHotwordModelMismatch": "ホットワードのモデルが一致しません",
     "funAsrHotwordModelMismatchNote": "事前コンパイル済み語彙のターゲットモデルは、現在の Fun-ASR 認識モデルと完全に一致する必要があります。",
+    "tencentSpeechLanguagePairInvalid": "Tencent Cloud が対応していない言語ペアです",
+    "tencentSpeechLanguagePairInvalidNote": "Tencent Cloud リアルタイム音声翻訳が対応するソース言語と翻訳言語の組み合わせを選択してください。",
     "customExecutableMissing": "カスタムエンジンのパスが未入力です",
     "customExecutableMissingNote": "カスタム字幕エンジンを起動する前に実行ファイルのパスを入力してください。",
     "customEngineMissing": "カスタムエンジンが存在しません",
@@ -123,7 +125,11 @@ export default {
       "funAsrSemanticPunctuation": "セマンティック文分割",
       "funAsrSentenceSilence": "文分割の無音時間",
       "funAsrHeartbeat": "接続ハートビート",
-      "openProviderConsole": "プロバイダーコンソールを開く"
+      "tencentSpeechModel": "Hunyuan 翻訳モデル",
+      "tencentSpeechVadSilence": "文分割の無音時間",
+      "tencentSpeechMaxSpeakTime": "連続発話の最大時間",
+      "openProviderConsole": "プロバイダーコンソールを開く",
+      "openProviderDocs": "プロバイダー文書を開く"
     },
     options: {
       providers: {
@@ -132,7 +138,8 @@ export default {
         "sosv": "ローカル / SOSV",
         "glm": "クラウド / 智譜 AI / GLM-ASR",
         "funAsr": "クラウド / Alibaba Cloud / Fun-ASR Realtime",
-        "appleSpeech": "ローカル / macOS システム音声認識"
+        "appleSpeech": "ローカル / macOS システム音声認識",
+        "tencentSpeechTranslate": "クラウド / Tencent Cloud / リアルタイム音声翻訳"
       },
       languages: {
         "auto": "自動検出",
@@ -147,6 +154,9 @@ export default {
         "es": "スペイン語",
         "it": "イタリア語",
         "yue": "広東語",
+        "zh_en": "中国語・英語混在",
+        "id": "インドネシア語",
+        "th": "タイ語",
         "zhCN": "簡体字中国語（中国本土）",
         "enUS": "英語（米国）",
         "jaJP": "日本語（日本）"
@@ -159,7 +169,16 @@ export default {
       funAsrModels: {
         "current": "Fun-ASR Realtime（ローリング版）",
         "snapshot": "Fun-ASR Realtime 2025-11-07（スナップショット版）"
+      },
+      tencentSpeechModels: {
+        "lite": "Hunyuan 翻訳ライト版",
+        "standard": "Hunyuan 翻訳標準版"
       }
+    },
+    tencentSpeech: {
+      "credentialsInfo": "認証情報は TENCENTCLOUD_APP_ID、TENCENTCLOUD_SECRET_ID、TENCENTCLOUD_SECRET_KEY 環境変数からのみ読み取り、アプリ設定には保存しません。",
+      "vadSilenceInfo": "指定時間の無音で現在の文を終了します。中国語、英語、中国語・英語混在のソースのみ対応し、範囲は 500～2000 ミリ秒です。",
+      "maxSpeakTimeInfo": "連続発話が指定時間に達すると強制的に文を終了します。中国語、英語、中国語・英語混在のソースのみ対応し、範囲は 5000～90000 ミリ秒です。"
     },
     funAsr: {
       "workspaceInfo": "Alibaba Cloud Model Studio のワークスペース ID です。API キー、ワークスペース、WebSocket リージョンは同じリソースに属している必要があります。",

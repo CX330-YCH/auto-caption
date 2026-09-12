@@ -37,6 +37,8 @@ export default {
     "funAsrEndpointInvalidNote": "Use an official China (Beijing) or Singapore workspace endpoint whose hostname WorkspaceId exactly matches the configuration.",
     "funAsrHotwordModelMismatch": "Hotword Model Mismatch",
     "funAsrHotwordModelMismatchNote": "The precompiled vocabulary target model must exactly match the active Fun-ASR recognition model or it will have no effect.",
+    "tencentSpeechLanguagePairInvalid": "Unsupported Tencent Cloud Language Pair",
+    "tencentSpeechLanguagePairInvalidNote": "Select a source and target language pair supported by Tencent realtime speech translation.",
     "customExecutableMissing": "Custom Engine Path Missing",
     "customExecutableMissingNote": "Enter an executable path before starting the custom caption engine.",
     "customEngineMissing": "Custom Engine Missing",
@@ -123,7 +125,11 @@ export default {
       "funAsrSemanticPunctuation": "Semantic Segmentation",
       "funAsrSentenceSilence": "Sentence Silence",
       "funAsrHeartbeat": "Connection Heartbeat",
-      "openProviderConsole": "Open provider console"
+      "tencentSpeechModel": "Hunyuan Translation Model",
+      "tencentSpeechVadSilence": "Sentence Silence",
+      "tencentSpeechMaxSpeakTime": "Maximum Continuous Speech",
+      "openProviderConsole": "Open provider console",
+      "openProviderDocs": "Open provider documentation"
     },
     options: {
       providers: {
@@ -132,7 +138,8 @@ export default {
         "sosv": "Local / SOSV",
         "glm": "Cloud / Zhipu AI / GLM-ASR",
         "funAsr": "Cloud / Alibaba Cloud / Fun-ASR Realtime",
-        "appleSpeech": "Local / macOS System Speech"
+        "appleSpeech": "Local / macOS System Speech",
+        "tencentSpeechTranslate": "Cloud / Tencent Cloud / Realtime Speech Translation"
       },
       languages: {
         "auto": "Auto Detect",
@@ -147,6 +154,9 @@ export default {
         "es": "Spanish",
         "it": "Italian",
         "yue": "Cantonese",
+        "zh_en": "Chinese-English Mixed",
+        "id": "Indonesian",
+        "th": "Thai",
         "zhCN": "Simplified Chinese (Mainland China)",
         "enUS": "English (United States)",
         "jaJP": "Japanese (Japan)"
@@ -159,7 +169,16 @@ export default {
       funAsrModels: {
         "current": "Fun-ASR Realtime (rolling alias)",
         "snapshot": "Fun-ASR Realtime 2025-11-07 (snapshot)"
+      },
+      tencentSpeechModels: {
+        "lite": "Hunyuan Translation Lite",
+        "standard": "Hunyuan Translation Standard"
       }
+    },
+    tencentSpeech: {
+      "credentialsInfo": "Credentials are read only from TENCENTCLOUD_APP_ID, TENCENTCLOUD_SECRET_ID, and TENCENTCLOUD_SECRET_KEY and are not stored in application configuration.",
+      "vadSilenceInfo": "Ends the current sentence after this much silence. Available only for Chinese, English, and mixed Chinese-English sources. Range: 500-2000 ms.",
+      "maxSpeakTimeInfo": "Forces a sentence boundary after this much continuous speech. Available only for Chinese, English, and mixed Chinese-English sources. Range: 5000-90000 ms."
     },
     funAsr: {
       "workspaceInfo": "Alibaba Cloud Model Studio Workspace ID. The API key, workspace, and WebSocket region must belong to the same resources.",

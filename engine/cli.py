@@ -34,6 +34,9 @@ class CliOptions:
     fun_asr_vocabulary_model: str = 'fun-asr-realtime'
     fun_asr_context_terms: tuple[str, ...] = ()
     apple_speech_helper: str = ''
+    tencent_speech_model: str = 'hunyuan-translation-lite'
+    tencent_speech_vad_silence_ms: int = 1000
+    tencent_speech_max_speak_time_ms: int = 10000
     debug_mode: bool = False
 
 
@@ -43,7 +46,10 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         '-e', '--caption_engine', default='gummy',
-        help='Caption engine: gummy, glm, vosk, sosv, fun_asr or apple_speech'
+        help=(
+            'Caption engine: gummy, glm, vosk, sosv, fun_asr, '
+            'apple_speech or tencent_speech_translate'
+        )
     )
     parser.add_argument(
         '-a', '--audio_type', type=int, default=0,
@@ -162,6 +168,22 @@ def build_parser() -> argparse.ArgumentParser:
         help='Path to the macOS Apple Speech helper executable'
     )
     parser.add_argument(
+        '-tcmodel', '--tencent_speech_model',
+        choices=('hunyuan-translation-lite', 'hunyuan-translation'),
+        default='hunyuan-translation-lite',
+        help='Tencent realtime speech translation model'
+    )
+    parser.add_argument(
+        '-tcvad', '--tencent_speech_vad_silence_ms',
+        type=int, default=1000,
+        help='Tencent sentence-ending silence in milliseconds'
+    )
+    parser.add_argument(
+        '-tcmax', '--tencent_speech_max_speak_time_ms',
+        type=int, default=10000,
+        help='Tencent forced sentence duration in milliseconds'
+    )
+    parser.add_argument(
         '--debug-mode', type=int, choices=(0, 1), default=0,
         help='Enable complete diagnostic events and runtime metrics'
     )
@@ -203,5 +225,12 @@ def parse_args(arguments: list[str] | None = None) -> CliOptions:
         fun_asr_vocabulary_model=args.fun_asr_vocabulary_model,
         fun_asr_context_terms=tuple(args.fun_asr_context_term),
         apple_speech_helper=args.apple_speech_helper,
+        tencent_speech_model=args.tencent_speech_model,
+        tencent_speech_vad_silence_ms=(
+            args.tencent_speech_vad_silence_ms
+        ),
+        tencent_speech_max_speak_time_ms=(
+            args.tencent_speech_max_speak_time_ms
+        ),
         debug_mode=bool(args.debug_mode),
     )

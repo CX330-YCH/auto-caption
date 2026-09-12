@@ -3,7 +3,7 @@
     <h1 align="center">auto-caption</h1>
     <p>Auto Caption 是一个跨平台的实时字幕显示软件。</p>
     <p>
-      <a href="https://github.com/HiMeditator/auto-caption/releases"><img src="https://img.shields.io/badge/release-2.27.0-blue"></a>
+      <a href="https://github.com/HiMeditator/auto-caption/releases"><img src="https://img.shields.io/badge/release-2.28.0-blue"></a>
       <a href="https://github.com/HiMeditator/auto-caption/issues"><img src="https://img.shields.io/github/issues/HiMeditator/auto-caption?color=orange"></a>
       <img src="https://img.shields.io/github/languages/top/HiMeditator/auto-caption?color=royalblue">
       <img src="https://img.shields.io/github/repo-size/HiMeditator/auto-caption?color=green">
@@ -14,7 +14,7 @@
         | <a href="./README_en.md">English</a>
         | <a href="./README_ja.md">日本語</a> |
     </p>
-    <p><i>v2.27.0 版本已经发布，包含 macOS arm64 构建...</i></p>
+    <p><i>v2.28.0 版本已经发布，包含 macOS arm64 构建...</i></p>
 </div>
 
 ![](./assets/media/main_zh.png)
@@ -46,14 +46,14 @@ https://github.com/user-attachments/assets/9c188d78-9520-4397-bacf-4c8fdcc54874
 - 跨平台（Windows、macOS、Linux）、多界面语言（中文、英语、日语）支持
 - 丰富的字幕样式设置（可搜索本机字体并保留 CSS 字体栈手动输入、字体大小、字体粗细、字体颜色、背景颜色等）
 - 支持保留原有整句显示，或切换为带对称安全边距的精确逐行滚动字幕；滚动模式可选择跟随断句换行或连续排版，并仅对自动折出的完整行进行两端对齐
-- 灵活的字幕引擎选择（阿里云 Gummy 云端模型、GLM-ASR 云端模型、本地 Vosk 模型、本地 SOSV 模型、还可以自己开发模型）
+- 灵活的字幕引擎选择（阿里云 Gummy/Fun-ASR、腾讯实时语音翻译、GLM-ASR、Apple Speech、Vosk、SOSV 或自定义模型）
 - 多语言识别与翻译（见下文“⚙️ 自带字幕引擎说明”）
 - 字幕记录展示与导出（支持导出 `.srt` 和 `.json` 格式）
 - 新增可即时切换的 Debug Mode：统一保存 Electron、Renderer、Python、SDK/native helper 完整脱敏错误，以及逐帧音频元数据、队列延迟/积压、Provider/翻译状态和进程指标，并可导出启动级 `.jsonl`
 
 ## 📖 基本使用
 
-> ⚠️ 注意：当前 v2.27.0 已提供 Windows 和 macOS arm64 构建；Linux 仍需从源码或现有构建链路验证。
+> ⚠️ 注意：当前 v2.28.0 已提供 Windows 和 macOS arm64 构建；Linux 仍需从源码或现有构建链路验证。
 
 软件已经适配了 Windows、macOS 和 Linux 平台。测试过的主流平台信息如下：
 
@@ -71,13 +71,14 @@ macOS 平台和 Linux 平台获取系统音频输出需要进行额外设置，�
 | ------------------------------------------------------------ | -------- | ------------- | ---------- | ---------- | ---------------------------------------------------------- | ---------------------------------------------------------- |
 | [Gummy](https://help.aliyun.com/zh/model-studio/gummy-speech-recognition-translation) | 很好😊    | 很好😊 | 云端 / 阿里云 | 10 种      | 自带翻译   | 收费，识别0.54CNY / 小时，识别+翻译1.08CNY/小时           |
 | [Fun-ASR Realtime](https://help.aliyun.com/zh/model-studio/fun-asr-realtime-websocket-api) | 很好😊 | 很好😊 | 云端 / 阿里云 | 多语言 | 需额外配置 | 按阿里云百炼当前计费规则收费；本项目使用 16 kHz 单声道 PCM16 实时流 |
+| [腾讯实时语音翻译](https://cloud.tencent.com/document/product/1093/127565) | 待在线验证 | 很好😊 | 云端 / 腾讯云 | 9 种源语言 | 自带实时翻译 | 需开通腾讯云语音识别服务并按当前计费规则付费；不包含 TTS |
 | [SpeechAnalyzer / SpeechTranscriber](https://developer.apple.com/documentation/speech/speechanalyzer) | 很好😊 | 很好😊 | 本地 / macOS 系统 | 系统动态返回 | 需额外配置 | 仅 macOS 26+；语言资源由 macOS 准备、保留和更新，启动前必须显示为已就绪 |
 | [glm-asr-2512](https://docs.bigmodel.cn/cn/guide/models/sound-and-video/glm-asr-2512) | 很好😊 | 较差😞 | 云端 / 智谱 AI | 4 种 | 需额外配置 | 收费，约 0.72CNY / 小时 |
 | [Vosk](https://alphacephei.com/vosk)                         | 较差😞    | 很好😊 | 本地 / CPU    | 超过 30 种 | 需额外配置 | 支持的语言非常多                                           |
 | [SOSV](https://k2-fsa.github.io/sherpa/onnx/sense-voice/index.html) | 一般😐    | 一般😐 | 本地 / CPU    | 5 种       | 需额外配置 | 仅有一个模型                                               |
 | 自己开发                                                     | 🤔        | 🤔      | 自定义        | 自定义     | 自定义     | 根据[文档](./docs/engine-manual/zh.md)使用 Python 自己开发 |
 
-如果你选择的不是 Gummy 模型，你还需要配置自己的翻译模型。
+Gummy 和腾讯实时语音翻译自带翻译；其他识别引擎需要按需配置独立翻译模型。
 
 关闭“启用翻译”时，应用不会显示或向字幕引擎传递翻译配置；开启后可在独立的“配置翻译引擎”中选择 Google 或 Ollama，并编辑所选翻译 Provider 的专属字段。识别引擎与翻译引擎的配置分别保存，切换识别引擎不会覆盖翻译设置。Microsoft Azure Translator 目前只预留配置和能力元数据，界面中不可选择，尚不会发起 Azure 请求。自定义字幕引擎通过引擎下拉菜单中的“添加自定义引擎…”创建，可命名多个条目，并从各条目右侧删除。
 
@@ -85,7 +86,7 @@ macOS 平台和 Linux 平台获取系统音频输出需要进行额外设置，�
 
 ![](./assets/media/engine_zh.png)
 
-> 注意：翻译不是实时的，翻译模型只会在每句话识别完成后再调用。
+> 注意：下面的 Google/Ollama 外部翻译不是实时的，只会在每句话识别完成后调用。腾讯实时语音翻译在识别过程中同步返回译文。
 
 Google 与 Ollama 已实现为独立翻译 Provider，共用有界任务队列、稳定字幕 ID、错误脱敏和 `start → translate → stop` 生命周期；识别 Provider 不再创建自己的客户端翻译循环。
 
@@ -126,6 +127,12 @@ API Key 需要在对应的模型提供商处获取。
 使用前需要获取智谱 AI 平台的 API KEY，并添加到软件设置中。
 
 API KEY 获取相关链接：[快速开始](https://docs.bigmodel.cn/cn/guide/start/quick-start)。
+
+### 使用腾讯实时语音翻译
+
+该引擎在同一个 WebSocket 会话中持续返回识别原文和译文。启动应用前设置 `TENCENTCLOUD_APP_ID`、`TENCENTCLOUD_SECRET_ID`、`TENCENTCLOUD_SECRET_KEY`；凭据不会保存到应用配置或命令行。界面可选择混元翻译轻量版或标准版，并只显示当前源语言支持的目标语言。中文、英语和中英混合源语言可设置 500–2000 ms 静音断句及 5000–90000 ms 强制断句；其他语言使用服务端默认断句。
+
+音频固定转换为 16 kHz、单声道 PCM16，并按约 200 ms 发送。停止时最多等待 5 秒冲刷最终字幕，Electron 为该引擎保留 8 秒退出窗口。语音合成未接入；热词只有内部预留接口，当前设置页不会展示或发送热词。
 
 ### 使用 Fun-ASR Realtime 模型
 

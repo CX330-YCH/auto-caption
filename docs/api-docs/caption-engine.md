@@ -85,7 +85,7 @@ JSON object + "\n" + JSON object + "\n" + ...
 
 字幕引擎产生的字幕数据。`index` 必须是有限数值，并且在一次引擎进程运行期间稳定标识同一句字幕；其余内容字段必须是字符串。同一句的中间结果和最终结果必须复用 `index`，不同句不得复用。
 
-`event_version: 1` 与 `phase` 是一组版本化的生命周期字段，必须同时出现：`partial` 表示同一句仍可继续更新，`final` 表示该句已经固化。内置引擎始终发送这两个字段。服务端可以校正 `time_s`/`time_t`，时间字段不得用作字幕身份；延迟到达的 `partial` 也不得把已经 `final` 的句子重新打开或覆盖。Provider 自带的翻译（当前为 Gummy）会直接写入 `translation`；包括 Fun-ASR 在内的其他 Provider 只在 final 后通过独立 `translation` 消息补充一次翻译。
+`event_version: 1` 与 `phase` 是一组版本化的生命周期字段，必须同时出现：`partial` 表示同一句仍可继续更新，`final` 表示该句已经固化。内置引擎始终发送这两个字段。服务端可以校正 `time_s`/`time_t`，时间字段不得用作字幕身份；延迟到达的 `partial` 也不得把已经 `final` 的句子重新打开或覆盖。Provider 自带的翻译（当前为 Gummy 和腾讯实时语音翻译）会直接写入 `translation`；包括 Fun-ASR 在内的其他 Provider 只在 final 后通过独立 `translation` 消息补充一次翻译。
 
 为兼容旧自定义引擎，`event_version` 和 `phase` 可以整组省略。Electron 会把这种事件标记为 `unknown`，仍按稳定 `index` 更新；当另一个新 `index` 首次出现时，上一条尚未固化的 `unknown` 字幕会被隐式转为 `final`。只提供其中一个字段、使用未知版本或未知 phase 的消息会被拒绝。兼容层的删除条件是公开协议未来发布带明确迁移期的新主版本。
 
@@ -108,6 +108,10 @@ Fun-ASR 的 `sentence_end: false/true` 分别映射为内部 partial/final。服
 每个 Fun-ASR 连接 generation 都维护独立生命周期状态。同一 generation 的 `on_error`、随后到达的 `on_close` 以及 Session 最后的 `stop()` 只允许触发一次重连或一次最终失败。收到服务端 task-failed 后不会再向已失效 SDK task 发送 `stop()`；SDK 因该竞态产生的预期 `InvalidParameter` 只进入隐藏的 `debug` 诊断，不形成用户错误。鉴权、权限、参数和模型不可用等永久失败立即终止；限流、超时、网络和 5xx 等暂时失败才进入最多三次的指数退避重连。未知 SDK/传输错误仍受相同重试上限约束。
 
 Fun-ASR 的预编译热词表 ID 和上下文术语是任务启动参数，不新增 stdout/TCP command。每次有界重连产生新任务时都会重新传入；上下文按一条 `user/input_text` 消息发送，最多 400 字符。
+
+腾讯实时语音翻译将服务端同一结果中的 `source_text` 和 `target_text` 映射为一条 `caption` 的 `text` 与 `translation`。服务端 `sentence_id` 在本次 Session 中映射为稳定 `index`，`sentence_end: false/true` 映射为 partial/final，`start_time`/`end_time` 毫秒偏移映射到 Session 起点时间。重复 final 被忽略，腾讯 Provider 不再生成独立 `translation` command。
+
+腾讯 Provider 收到停止请求后先发送 WebSocket `{"type":"end"}`，最多等待5秒接收最终结果并关闭连接；Electron 为该 Provider 提供8秒进程停止期限。其他内置及自定义引擎继续使用原有4秒期限，因此这个契约不改变旧引擎行为。当前腾讯基础版本不自动重连，意外断线会产生 fatal 并结束本次 Session。
 
 ### `translation`
 

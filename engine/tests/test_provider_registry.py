@@ -37,6 +37,12 @@ def config(name):
         fun_asr_vocabulary_id='',
         fun_asr_vocabulary_model='fun-asr-realtime',
         fun_asr_context_terms=(),
+        tencent_app_id='123456',
+        tencent_secret_id='dummy-tencent-secret-id',
+        tencent_secret_key='dummy-tencent-secret-key',
+        tencent_model='hunyuan-translation-lite',
+        tencent_vad_silence_ms=1000,
+        tencent_max_speak_time_ms=10000,
     )
 
 
@@ -46,7 +52,10 @@ class ProviderRegistryTests(unittest.TestCase):
 
         self.assertEqual(
             registry.names,
-            ('gummy', 'vosk', 'sosv', 'glm', 'fun_asr', 'apple_speech'),
+            (
+                'gummy', 'vosk', 'sosv', 'glm', 'fun_asr',
+                'apple_speech', 'tencent_speech_translate',
+            ),
         )
 
     def test_rejects_unknown_and_duplicate_provider_names(self):
@@ -64,6 +73,8 @@ class ProviderRegistryTests(unittest.TestCase):
         self.assertNotIn('dummy-gummy-credential', representation)
         self.assertNotIn('dummy-glm-credential', representation)
         self.assertNotIn('dummy-fun-asr-credential', representation)
+        self.assertNotIn('dummy-tencent-secret-id', representation)
+        self.assertNotIn('dummy-tencent-secret-key', representation)
 
 
 if __name__ == '__main__':
