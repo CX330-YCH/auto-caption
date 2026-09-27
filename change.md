@@ -6024,3 +6024,65 @@
 - LLVM OpenMP 项目：https://openmp.llvm.org/ 。
 - PyInstaller 6.22.3 spec 文档：https://pyinstaller.org/en/stable/spec-files.html ，其 binary 收集说明用于把未自动解析的动态库加入 `Analysis.binaries`；one-file 会把附加文件解到运行时临时目录。
 - 根目录 `AGENTS.md`：依赖必要性/许可/平台说明、PyInstaller 隐式依赖验证、三语文档、真实失败记录、生成目录和逐批追加 `change.md` 要求。
+
+## 2026-09-27：发布版本更新至 2.29.0 并生成 macOS arm64 安装包
+
+### 用户授权、目标与范围
+
+- 用户明确要求“编译一下 Mac 版本并更新小版本号”。本批次把应用版本从 `2.28.0` 更新为 `2.29.0`，使用项目内 Python 3.14 虚拟环境重建字幕引擎、Apple Speech 辅助程序、Electron 应用、ZIP 和 DMG。
+- 变更类型：构建、配置、文档、测试。
+- 修改前已阅读根目录 `AGENTS.md`、执行 `git status --short --branch` 并检查版本文件、构建配置、测试入口和已有变更。工作区原有 V9 腾讯凭据、Python 3.14 兼容及 macOS libomp 自包含修改均予以保留，本批次没有改写这些功能实现。
+- 本批次不升级或安装项目依赖，不修改系统 Python 或系统环境，不修改配置 schema、IPC、Python stdout/TCP 协议、识别/翻译逻辑，不提交、推送或发布远端 Release。
+
+### 修改文件与原因
+
+- `package.json`、`package-lock.json`：把应用及锁文件根包版本从 `2.28.0` 同步为 `2.29.0`。
+- `src/renderer/index.html`、`src/renderer/src/components/EngineStatus.vue`：同步窗口标题与关于界面显示版本。
+- `README.md`、`README_en.md`、`README_ja.md`：同步中英日发布徽章、当前发布说明和 macOS 下载版本。
+- `docs/user-manual/zh.md`、`docs/user-manual/en.md`、`docs/user-manual/ja.md`：同步三语用户手册版本。
+- `docs/engine-manual/zh.md`、`docs/engine-manual/en.md`、`docs/engine-manual/ja.md`：同步三语引擎手册版本。
+- `docs/CHANGELOG.md`：建立 `v2.29.0 - 2026-09-27` 发布段落，归档本版腾讯凭据、Python 3.14、libomp 自包含和 macOS 构建说明。
+- `change.md`：追加本批次真实构建、验证、兼容性、回滚与风险记录；既有历史未覆盖。
+- Git 忽略目录 `native/apple-speech-helper/.build`、`native/apple-speech-helper/dist`、`engine/build`、`engine/dist`、`out`、`dist`：生成 Swift、Python、Electron 中间产物及最终 macOS 发布产物；没有加入版本控制。
+
+### 修改前后行为、配置与兼容性
+
+- 修改前：源码和用户界面版本为 `2.28.0`，旧发布包文件名也使用 `2.28.0`。
+- 修改后：源码、锁文件、界面及中英日文档统一显示 `2.29.0`；macOS arm64 应用 `Info.plist` 的 `CFBundleShortVersionString` 和 `CFBundleVersion` 均为 `2.29.0`。
+- 本次版本发布自身没有改变持久化配置、schemaVersion、IPC、子进程协议、命令行、数据结构或迁移行为；安装包包含工作区已经完成并验证的 V9 腾讯凭据参数、Python 3.14 兼容和 libomp 自包含修复。
+- 构建使用项目虚拟环境 `engine/.venv` 的 Python 3.14.7、PyInstaller 6.22.3，以及当前锁文件中的 Node 依赖。没有执行 `npm install`、`pip install` 或 Homebrew 安装/升级，也没有修改系统默认解释器、PATH 或全局动态库搜索路径。
+- macOS 构建目标是 Apple Silicon arm64。Windows、Linux 和 Intel macOS 源码分支没有因本批次改变，但未在本批次构建验证。
+
+### 实际执行的验证命令与结果
+
+- `npm run verify`：通过；TypeScript/Vue typecheck、ESLint、Node `119/119`、Python `87/87` 全部成功。输出仅有现有 npm mirror 配置弃用警告和 Node module type 性能警告。
+- `SDKROOT=/Library/Developer/CommandLineTools/SDKs/MacOSX26.5.sdk npm run build:apple-speech`：通过；Swift production build 完成。SwiftPM 用户缓存因沙箱不可写而被禁用，不影响项目目录内产物。
+- `PYINSTALLER_CONFIG_DIR=/private/tmp/auto-caption-pyinstaller-229 .venv/bin/pyinstaller --clean --noconfirm main.spec`（在 `engine/` 执行）：通过；Python 3.14.7/PyInstaller 6.22.3 生成 arm64 one-file 引擎。仅有既有可选 `pycparser.lextab`/`yacctab` 缺失警告，没有未解析 libomp 警告。
+- `engine/.venv/bin/pyi-archive_viewer -l engine/dist/main | rg 'libomp|omppool'`：通过；确认引擎内含 `libomp.dylib` 和 `numba/np/ufunc/omppool.cpython-314-darwin.so`。
+- `engine/dist/main --help`：沙箱内首次因 macOS `semctl: Operation not permitted` 无法初始化 PyInstaller 同步信号量；经批准在沙箱外只读重试后成功输出完整 CLI 帮助。
+- `npm run build`：通过；Electron main、preload、renderer 分别转换 37、1、3297 个模块。
+- `npx electron-builder --mac`：沙箱内首次因 `npmmirror.com` DNS 被限制而失败；经批准联网重试后通过，生成 arm64 `.app`、ZIP、DMG、blockmap 和 `latest-mac.yml`。打包器因本机没有有效 Developer ID 明确跳过正式签名。
+- `plutil -p dist/mac-arm64/Auto\ Caption.app/Contents/Info.plist`：确认短版本、构建版本均为 `2.29.0`，并保留语音识别权限说明。
+- `file`：应用主程序、应用内 Python 引擎和 Apple Speech helper 均为 Mach-O arm64。
+- 应用内 `apple-speech-helper probe`：通过，返回 protocolVersion 1 capability 事件且 `isAvailable` 为 true。
+- 对应用内 Python 引擎执行 `pyi-archive_viewer`：确认最终复制到 `.app` 的引擎仍包含 libomp 与 omppool。
+- `codesign --force --deep --sign - dist/mac-arm64/Auto\ Caption.app` 及 `codesign --verify --deep --strict --verbose=2 ...`：通过；最终应用为 ad-hoc 签名，`TeamIdentifier=not set`。
+- `ditto -c -k --sequesterRsrc --keepParent ...`：从最终 ad-hoc 签名应用重建 ZIP；`unzip -tq` 通过，无压缩数据错误。
+- `hdiutil create ...`：沙箱内首次因“设备未配置”失败；经批准在沙箱外从最终签名应用重建 DMG。工具提示旧式 `hdiutil create` 语法已弃用，但本次创建成功。
+- `hdiutil verify dist/auto-caption-2.29.0.dmg`：通过，磁盘映像校验和有效。
+- 重新生成 ZIP/DMG blockmap，并把忽略目录 `dist/latest-mac.yml` 的 SHA-512、字节数和发布日期同步到最终签名产物。
+- 最终产物：`dist/Auto Caption-2.29.0-arm64-mac.zip` 为 228,547,151 bytes，SHA-256 `9854f20d5b18f371f05a1550675da34372551161b206bb28761f82687e6353d3`；`dist/auto-caption-2.29.0.dmg` 为 248,616,768 bytes，SHA-256 `3766d439a12891d4d8cf94e05c4f302676d7bce2d799302d8c91a80441b49072`。
+- `git diff --check`、版本残留搜索和最终 `git status --short --branch`：在追加本记录后于交付前执行，结果如最终交付说明所述。
+
+### 回滚、未执行验证与风险
+
+- 源码回滚应成组恢复上述版本文件、三语文档和 `docs/CHANGELOG.md` 的本版段落；本记录按追加制度保留并另行追加更正。生成物回滚只需停止分发 `dist` 中的 `2.29.0` 文件并重新构建目标版本，无需修改系统环境。
+- 未执行 Developer ID 正式签名、Apple 公证、Gatekeeper 外部下载场景、GUI 人工回归、真实麦克风/系统音频、模型或付费 API 测试；不能把 ad-hoc 签名包视为已公证发行包。
+- 未执行 Windows、Linux 或 Intel macOS 构建。当前产物仅适用于 Apple Silicon macOS。
+- 依赖检查以现有锁文件、项目虚拟环境和完整测试为依据；本批次未获依赖升级授权，因此没有查询、安装或升级新版本依赖。
+
+### 关键技术决策来源
+
+- 根目录 `AGENTS.md`：版本文档同步、构建与测试、生成目录、依赖授权、跨平台说明及 `change.md` 逐批追加要求。
+- Apple `codesign`、`hdiutil`、`ditto` 本机工具输出：用于签名状态、磁盘映像和 ZIP 完整性验证。
+- PyInstaller 6.22.3 与 electron-builder 26.15.3 构建日志：用于确认 Python 3.14 one-file 引擎、Electron 43.4.0 arm64 应用及发布产物构成。
