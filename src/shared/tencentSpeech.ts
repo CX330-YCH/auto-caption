@@ -14,15 +14,17 @@ export const TENCENT_SPEECH_TARGETS_BY_SOURCE = {
   ru: ['zh', 'en', 'ru']
 } as const satisfies Readonly<Record<string, readonly string[]>>
 
-export const TENCENT_SPEECH_CREDENTIAL_ENV = {
-  appId: 'TENCENTCLOUD_APP_ID',
-  secretId: 'TENCENTCLOUD_SECRET_ID',
-  secretKey: 'TENCENTCLOUD_SECRET_KEY'
-} as const
+export interface TencentSpeechCredentials {
+  appId: string
+  secretId: string
+  secretKey: string
+}
 
-export function hasTencentSpeechCredentials(environment: NodeJS.ProcessEnv): boolean {
-  return Object.values(TENCENT_SPEECH_CREDENTIAL_ENV).every((name) =>
-    Boolean(environment[name]?.trim())
+export function hasTencentSpeechCredentials(credentials: TencentSpeechCredentials): boolean {
+  return Boolean(
+    credentials.appId.trim() &&
+    credentials.secretId.trim() &&
+    credentials.secretKey.trim()
   )
 }
 

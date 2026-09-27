@@ -1,6 +1,6 @@
 # 配置文件 V7
 
-> 本页记录历史 V7 结构。当前版本为 [配置文件 V8](config-v8.md)。
+> 本页记录历史 V7 结构。当前版本为 [配置文件 V9](config-v9.md)。
 
 V7 使用 `schemaVersion: 7`，磁盘、主进程、IPC 和 Renderer 当时共享 `ConfigDocumentV7`。
 

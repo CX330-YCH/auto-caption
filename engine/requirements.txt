@@ -1,6 +1,7 @@
 dashscope==1.26.7
 truststore==0.10.4
-websocket-client==1.9.0
+websocket-client==1.9.2
+audioop-lts==0.2.2; python_version >= '3.13'
 numpy
 resampy
 vosk

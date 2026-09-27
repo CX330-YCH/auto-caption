@@ -82,7 +82,7 @@ export class CaptionEngine {
       }
       if (
         provider === 'tencent_speech_translate' &&
-        !hasTencentSpeechCredentials(process.env)
+        !hasTencentSpeechCredentials(engineConfig.providers.tencentSpeech)
       ) {
         controlWindow.sendErrorMessage(i18n('tencent_speech.credentials.missing'))
         return false

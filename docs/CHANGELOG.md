@@ -1,5 +1,15 @@
 ## 未发布
 
+## v2.29.0 - 2026-09-27
+
+- macOS Python 引擎将 LLVM `libomp.dylib` 安装到项目虚拟环境，为 numba OpenMP 扩展配置相对运行时搜索路径，并由 PyInstaller 显式收集到 one-file 应用，避免目标机器依赖 Homebrew 路径。
+
+- Python 引擎开发与构建基线同步到 Python 3.14；为 Python 3.13+ 增加 `audioop-lts==0.2.2`，并将 `websocket-client` 更新到明确支持 Python 3.14 的 `1.9.2`。
+
+- 腾讯实时语音翻译改为在设置页填写 AppID、SecretID、SecretKey；配置升级到 V9，凭据以明文写入 `config.json` 并通过新增 CLI 参数传给可独立运行的 Python 引擎，不再读取腾讯环境变量。
+- 新增腾讯 CLI 凭据日志脱敏和 Debug 配置快照脱敏；普通文本输入框、配置文件和操作系统进程参数仍会显示明文凭据。
+- 将应用及中英日文档版本统一更新至 `2.29.0`，并重新生成、验证 macOS arm64 应用、ZIP、DMG、Swift 辅助程序与 Python 3.14 引擎。
+
 ## v2.28.0 - 2026-09-11
 
 - 新增 Tencent Speech Translate 内置引擎：同一 WebSocket 会话实时输出原文和译文，支持 Hunyuan Translation Lite/Standard、动态语言组合和可配置断句参数。

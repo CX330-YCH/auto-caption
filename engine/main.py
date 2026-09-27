@@ -1,4 +1,3 @@
-import os
 import sys
 import threading
 from queue import Queue
@@ -163,9 +162,9 @@ def _provider_config(options: CliOptions) -> ProviderConfig:
         fun_asr_vocabulary_model=options.fun_asr_vocabulary_model,
         fun_asr_context_terms=options.fun_asr_context_terms,
         apple_speech_helper=options.apple_speech_helper,
-        tencent_app_id=os.environ.get('TENCENTCLOUD_APP_ID', ''),
-        tencent_secret_id=os.environ.get('TENCENTCLOUD_SECRET_ID', ''),
-        tencent_secret_key=os.environ.get('TENCENTCLOUD_SECRET_KEY', ''),
+        tencent_app_id=options.tencent_speech_app_id,
+        tencent_secret_id=options.tencent_speech_secret_id,
+        tencent_secret_key=options.tencent_speech_secret_key,
         tencent_model=options.tencent_speech_model,
         tencent_vad_silence_ms=options.tencent_speech_vad_silence_ms,
         tencent_max_speak_time_ms=(

@@ -6,7 +6,7 @@
 
 - 已安装项目 Node.js 依赖。
 - Node.js 22.6 或更高版本，用于内置 TypeScript type stripping。
-- Python 字幕引擎虚拟环境已创建，并安装 `engine/requirements.txt` 中的依赖。
+- Python 3.14 字幕引擎虚拟环境已创建，并安装 `engine/requirements.txt` 中的依赖；`engine/.python-version` 是当前项目基线。
 
 Python 测试启动器会优先使用项目虚拟环境：
 
@@ -14,6 +14,10 @@ Python 测试启动器会优先使用项目虚拟环境：
 - macOS/Linux：`engine/.venv/bin/python3`
 
 虚拟环境不存在时，启动器会回退到系统 `python` 或 `python3`。
+
+Python 3.14 不再提供标准库 `audioop`。项目在 Python 3.13+ 安装 `audioop-lts==0.2.2`，继续向 GLM Provider 提供相同的 `audioop.rms` 导入接口。macOS 的 `pyaudio` 从源码构建时还需要 PortAudio 开发头文件；本地验证应把它们放在项目虚拟环境或明确指定项目内构建路径，不依赖修改系统 Python。
+
+macOS 的 numba OpenMP 后端依赖 `libomp.dylib`。执行 `brew install libomp` 后，用 `engine/.venv/bin/python3 engine/install_macos_libomp.py` 将运行时安装到 `engine/.venv/lib`，并为 `omppool` 添加相对 `LC_RPATH`。重装或升级 numba 后必须重新运行该脚本。macOS PyInstaller 构建会在缺少虚拟环境内 `libomp.dylib` 时直接失败，避免生成运行到 OpenMP 路径才报错的不完整产物。
 
 ## 常用命令
 
@@ -60,13 +64,13 @@ npm run build
 Node.js 测试覆盖：
 
 - 中英日界面文案的递归键结构一致性，防止新增用户可见文本时遗漏任一语言。
-- V8 分层配置默认值、V2/V3/V4/V5/V6/V7 显式迁移、独立翻译 common/Provider 配置校验、Debug Mode 布尔校验、严格版本拒绝、命名自定义引擎校验、Fun-ASR 热词约束、腾讯语言组合/断句/空热词约束和未知扩展字段保留。
-- 从 V8 `EngineConfig` 为 Gummy、Vosk、SOSV、GLM、Fun-ASR、Tencent Speech Translate 及自定义引擎生成启动参数，并验证旧翻译 CLI 参数兼容、Azure 未实现门禁、Debug Mode 仅传给内置引擎、关闭翻译后不传翻译 Provider 参数。
+- V9 分层配置默认值、V2/V3/V4/V5/V6/V7/V8 显式迁移、独立翻译 common/Provider 配置校验、Debug Mode 布尔校验、严格版本拒绝、命名自定义引擎校验、Fun-ASR 热词约束、腾讯凭据/AppID/语言组合/断句/空热词约束和未知扩展字段保留。
+- 从 V9 `EngineConfig` 为 Gummy、Vosk、SOSV、GLM、Fun-ASR、Tencent Speech Translate 及自定义引擎生成启动参数，并验证腾讯 AppID/SecretID/SecretKey CLI、旧翻译 CLI 参数兼容、Azure 未实现门禁、Debug Mode 仅传给内置引擎、关闭翻译后不传翻译 Provider 参数。
 - 公共字幕轨道的原文/译文 segment、逐句/连续组合、中英文连接符、视觉行字符范围、稳定行锚点、尾部增长/重写/生命周期/追加/历史变化分类、有界测量窗口和独立行额度。
 - 逐行字幕展示下界在 partial“增长 → 缩短/重写 → 再增长”期间只前进不后退；已滚出的历史不回填，原文/译文下界相互独立，显式布局重排可重新选行，partial→final 不移动或动画。
 - Renderer 引擎目录的 Provider 唯一注册、能力驱动字段组合、嵌套草稿路径读写、条件可见性、Provider 启动要求、默认值归一化、腾讯动态目标语言和必选集成翻译。
 - 字幕时间字符串解析、毫秒换算和当前跨日行为。
-- 命令行与配置对象中的 API Key 日志脱敏。
+- 命令行与配置对象中的 API Key、腾讯 SecretID、SecretKey 日志脱敏。
 - 现有 Python/Electron NDJSON 协议夹具的基本结构。
 - Electron 独立进程协议组件的 NDJSON 跨块缓冲、多消息合并、CRLF 与空行处理。
 - stdout UTF-8 字符跨字节块、非法 JSON 恢复、单行上限和流关闭兼容行为。

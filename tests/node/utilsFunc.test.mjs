@@ -16,6 +16,8 @@ test('masks every supported command-line secret without mutating the input', () 
     '-okey', 'openai-secret',
     '-gkey', 'glm-secret',
     '-fkey', 'fun-asr-secret',
+    '-tcsecretid', 'tencent-secret-id',
+    '-tcsecretkey', 'tencent-secret-key',
     '-s', 'zh'
   ]
 
@@ -25,6 +27,8 @@ test('masks every supported command-line secret without mutating the input', () 
     '-okey', '*************',
     '-gkey', '**********',
     '-fkey', '**************',
+    '-tcsecretid', '*****************',
+    '-tcsecretkey', '******************',
     '-s', 'zh'
   ])
   assert.equal(command[3], 'dashscope-secret')
@@ -41,6 +45,28 @@ test('extracts runtime secrets and redacts exact values from SDK stderr', () => 
       secrets
     ),
     'SDK rejected <redacted> with Authorization: Bearer <redacted>'
+  )
+})
+
+test('redacts Tencent credential names in structured and textual diagnostics', () => {
+  assert.deepEqual(redactSensitiveValue({
+    tencentSpeech: {
+      appId: '123456',
+      secretId: 'tencent-secret-id',
+      secretKey: 'tencent-secret-key'
+    }
+  }), {
+    tencentSpeech: {
+      appId: '123456',
+      secretId: '<redacted>',
+      secretKey: '<redacted>'
+    }
+  })
+  assert.equal(
+    redactSensitiveText(
+      'secretId=tencent-secret-id&secret_key=tencent-secret-key'
+    ),
+    'secretId=<redacted>&secret_key=<redacted>'
   )
 })
 
@@ -75,6 +101,8 @@ test('masks API key fields case-insensitively and preserves other fields', () =>
     API_KEY: 'ali-secret',
     glmApiKey: 'glm-secret',
     ollamaApiKey: '',
+    secretId: 'tencent-secret-id',
+    secretKey: 'tencent-secret-key',
     model: 'fun-asr-realtime'
   }
 
@@ -82,6 +110,8 @@ test('masks API key fields case-insensitively and preserves other fields', () =>
     API_KEY: '**********',
     glmApiKey: '**********',
     ollamaApiKey: '',
+    secretId: '*****************',
+    secretKey: '******************',
     model: 'fun-asr-realtime'
   })
   assert.equal(controls.API_KEY, 'ali-secret')

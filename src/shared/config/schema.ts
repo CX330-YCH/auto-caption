@@ -1,7 +1,7 @@
 import type { Styles, UILanguage, UITheme } from '../types'
 import type { TencentSpeechModel } from '../tencentSpeech.ts'
 
-export const CONFIG_SCHEMA_VERSION = 8 as const
+export const CONFIG_SCHEMA_VERSION = 9 as const
 
 export type KnownProviderName = 'gummy' | 'vosk' | 'sosv' | 'glm' | 'fun_asr' |
   'apple_speech' | 'tencent_speech_translate'
@@ -120,6 +120,9 @@ export interface TencentSpeechHotwordConfig {
 
 export interface TencentSpeechProviderConfig {
   [key: string]: unknown
+  appId: string
+  secretId: string
+  secretKey: string
   model: TencentSpeechModel
   vadSilenceMs: number
   maxSpeakTimeMs: number
@@ -186,7 +189,7 @@ export interface CaptionConfig {
   styles: Styles
 }
 
-export interface ConfigDocumentV8 {
+export interface ConfigDocumentV9 {
   [key: string]: unknown
   schemaVersion: typeof CONFIG_SCHEMA_VERSION
   application: ApplicationConfig
@@ -234,7 +237,7 @@ export function createDefaultStyles(): Styles {
   }
 }
 
-export function createDefaultConfig(recordingPath: string): ConfigDocumentV8 {
+export function createDefaultConfig(recordingPath: string): ConfigDocumentV9 {
   return {
     schemaVersion: CONFIG_SCHEMA_VERSION,
     application: {
@@ -284,6 +287,9 @@ export function createDefaultConfig(recordingPath: string): ConfigDocumentV8 {
           }
         },
         tencentSpeech: {
+          appId: '',
+          secretId: '',
+          secretKey: '',
           model: 'hunyuan-translation-lite',
           vadSilenceMs: 1000,
           maxSpeakTimeMs: 10000,

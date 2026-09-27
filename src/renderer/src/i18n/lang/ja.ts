@@ -39,6 +39,8 @@ export default {
     "funAsrHotwordModelMismatchNote": "事前コンパイル済み語彙のターゲットモデルは、現在の Fun-ASR 認識モデルと完全に一致する必要があります。",
     "tencentSpeechLanguagePairInvalid": "Tencent Cloud が対応していない言語ペアです",
     "tencentSpeechLanguagePairInvalidNote": "Tencent Cloud リアルタイム音声翻訳が対応するソース言語と翻訳言語の組み合わせを選択してください。",
+    "tencentSpeechCredentialsMissing": "Tencent Cloud の認証情報が不完全です",
+    "tencentSpeechCredentialsMissingNote": "Tencent リアルタイム音声翻訳を開始する前に AppID、SecretID、SecretKey を入力してください。",
     "customExecutableMissing": "カスタムエンジンのパスが未入力です",
     "customExecutableMissingNote": "カスタム字幕エンジンを起動する前に実行ファイルのパスを入力してください。",
     "customEngineMissing": "カスタムエンジンが存在しません",
@@ -126,6 +128,9 @@ export default {
       "funAsrSentenceSilence": "文分割の無音時間",
       "funAsrHeartbeat": "接続ハートビート",
       "tencentSpeechModel": "Hunyuan 翻訳モデル",
+      "tencentSpeechAppId": "Tencent Cloud AppID",
+      "tencentSpeechSecretId": "Tencent Cloud SecretID",
+      "tencentSpeechSecretKey": "Tencent Cloud SecretKey",
       "tencentSpeechVadSilence": "文分割の無音時間",
       "tencentSpeechMaxSpeakTime": "連続発話の最大時間",
       "openProviderConsole": "プロバイダーコンソールを開く",
@@ -176,7 +181,7 @@ export default {
       }
     },
     tencentSpeech: {
-      "credentialsInfo": "認証情報は TENCENTCLOUD_APP_ID、TENCENTCLOUD_SECRET_ID、TENCENTCLOUD_SECRET_KEY 環境変数からのみ読み取り、アプリ設定には保存しません。",
+      "credentialsInfo": "AppID、SecretID、SecretKey はローカルの config.json に平文で保存され、コマンドライン引数で Python エンジンへ渡されます。ソフトウェアログでは SecretID と SecretKey をマスクします。",
       "vadSilenceInfo": "指定時間の無音で現在の文を終了します。中国語、英語、中国語・英語混在のソースのみ対応し、範囲は 500～2000 ミリ秒です。",
       "maxSpeakTimeInfo": "連続発話が指定時間に達すると強制的に文を終了します。中国語、英語、中国語・英語混在のソースのみ対応し、範囲は 5000～90000 ミリ秒です。"
     },

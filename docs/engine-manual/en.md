@@ -1,6 +1,6 @@
 # Caption Engine Documentation
 
-Corresponding version: v2.28.0
+Corresponding version: v2.29.0
 
 ![](../../assets/media/structure_en.png)
 
@@ -173,7 +173,7 @@ Partial and final results for the same sentence must reuse `index`. `partial` re
 
 Custom caption engine settings provide command line parameter specification, so the caption engine parameters need to be set properly. Currently used parameters in this project are as follows:
 
-> `engine/cli.py` and `python main.py --help` are the authoritative complete parameter reference. Fun-ASR selects `-e fun_asr` and uses `-f*` arguments. Tencent realtime speech translation selects `-e tencent_speech_translate` with `-tcmodel`, `-tcvad`, and `-tcmax`; credentials come only from `TENCENTCLOUD_APP_ID`, `TENCENTCLOUD_SECRET_ID`, and `TENCENTCLOUD_SECRET_KEY`. Do not duplicate Provider assembly in `main.py`.
+> `engine/cli.py` and `python main.py --help` are the authoritative complete parameter reference. Fun-ASR selects `-e fun_asr` and uses `-f*` arguments. Tencent realtime speech translation selects `-e tencent_speech_translate` with `-tcappid`, `-tcsecretid`, `-tcsecretkey`, `-tcmodel`, `-tcvad`, and `-tcmax`. Python no longer reads Tencent environment variables. Do not duplicate Provider assembly in `main.py`.
 
 ```python
 if __name__ == "__main__":
@@ -220,14 +220,12 @@ The Provider uses the official DashScope SDK and accepts 16 kHz mono PCM16. `Hot
 Tencent realtime speech translation example:
 
 ```bash
-TENCENTCLOUD_APP_ID=<appid> \
-TENCENTCLOUD_SECRET_ID=<secret-id> \
-TENCENTCLOUD_SECRET_KEY=<secret-key> \
 python main.py -e tencent_speech_translate -s en -t zh -a 0 -c 10 \
+  -tcappid <appid> -tcsecretid <secret-id> -tcsecretkey <secret-key> \
   -tcmodel hunyuan-translation-lite -tcvad 1000 -tcmax 10000
 ```
 
-This Provider accepts 16 kHz mono PCM16 and combines approximately 100 ms input frames into approximately 200 ms network packets. Server `sentence_id`, `sentence_end`, `source_text`, `target_text`, and millisecond offsets map to stable IDs, partial/final state, source text, translated text, and caption times. `-tcvad` ends a sentence after 500–2000 ms of silence; `-tcmax` forces a sentence boundary after 5000–90000 ms of uninterrupted speech. Both are sent only for `zh`, `en`, and `zh_en`. Stop waits up to 5 seconds for final results inside an 8-second Electron deadline; existing engines keep 4 seconds. TTS, automatic reconnect, and active hotwords are not implemented. Hotword encoding and an empty config boundary are reserved for later integration.
+This Provider accepts 16 kHz mono PCM16 and combines approximately 100 ms input frames into approximately 200 ms network packets. Server `sentence_id`, `sentence_end`, `source_text`, `target_text`, and millisecond offsets map to stable IDs, partial/final state, source text, translated text, and caption times. `-tcvad` ends a sentence after 500–2000 ms of silence; `-tcmax` forces a sentence boundary after 5000–90000 ms of uninterrupted speech. Both are sent only for `zh`, `en`, and `zh_en`. V9 writes the three credentials from ordinary text fields to `config.json`, and Electron starts Python with the CLI arguments above. Command logs and diagnostics mask SecretID/SecretKey, but the configuration file and operating-system process arguments remain plain text. Stop waits up to 5 seconds for final results inside an 8-second Electron deadline; existing engines keep 4 seconds. TTS, automatic reconnect, and active hotwords are not implemented. Hotword encoding and an empty config boundary are reserved for later integration.
 
 Fun-ASR keeps an idempotent state for every connection generation: one task's `on_error → on_close → stop` sequence can cause at most one reconnect or one fatal result. Permanent service errors stop immediately, while transient errors use up to three bounded backoff retries; the SDK `stop()` method is not called after task-failed. Lifecycle diagnostics use the hidden `debug` protocol event and are written only to the complete Debug log, not the existing Software Log view. A fatal event asks the Session to close normally; Electron force-kills the complete packaged process tree only on exceptional timeout paths.
 

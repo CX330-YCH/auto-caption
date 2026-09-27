@@ -224,6 +224,21 @@ test('filters Tencent targets by source and keeps integrated translation enabled
   assert.equal(isEngineFieldVisible(config, vadField), false)
   config.common.sourceLanguage = 'zh_en'
   assert.equal(isEngineFieldVisible(config, vadField), true)
+
+  const credentialFields = getEngineFields(definition.id).filter((field) =>
+    field.id.startsWith('tencent-speech-') &&
+    ['app-id', 'secret-id', 'secret-key'].some((suffix) => field.id.endsWith(suffix))
+  )
+  assert.equal(credentialFields.length, 3)
+  assert.ok(credentialFields.every((field) => field.control === 'text'))
+  assert.equal(
+    validateEngineConfig(config, 'start')?.fieldId,
+    'tencent-speech-app-id'
+  )
+  config.providers.tencentSpeech.appId = '123456'
+  config.providers.tencentSpeech.secretId = 'secret-id'
+  config.providers.tencentSpeech.secretKey = 'secret-key'
+  assert.equal(validateEngineConfig(config, 'start'), null)
 })
 
 test('validates only the selected custom engine and skips builtin requirements', () => {

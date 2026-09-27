@@ -3,7 +3,7 @@
     <h1 align="center">auto-caption</h1>
     <p>Auto Caption 是一个跨平台的实时字幕显示软件。</p>
     <p>
-      <a href="https://github.com/HiMeditator/auto-caption/releases"><img src="https://img.shields.io/badge/release-2.28.0-blue"></a>
+      <a href="https://github.com/HiMeditator/auto-caption/releases"><img src="https://img.shields.io/badge/release-2.29.0-blue"></a>
       <a href="https://github.com/HiMeditator/auto-caption/issues"><img src="https://img.shields.io/github/issues/HiMeditator/auto-caption?color=orange"></a>
       <img src="https://img.shields.io/github/languages/top/HiMeditator/auto-caption?color=royalblue">
       <img src="https://img.shields.io/github/repo-size/HiMeditator/auto-caption?color=green">
@@ -14,7 +14,7 @@
         | <a href="./README_en.md">English</a>
         | <a href="./README_ja.md">日本語</a> |
     </p>
-    <p><i>v2.28.0 版本已经发布，包含 macOS arm64 构建...</i></p>
+    <p><i>v2.29.0 版本已经发布，包含 macOS arm64 构建...</i></p>
 </div>
 
 ![](./assets/media/main_zh.png)
@@ -53,7 +53,7 @@ https://github.com/user-attachments/assets/9c188d78-9520-4397-bacf-4c8fdcc54874
 
 ## 📖 基本使用
 
-> ⚠️ 注意：当前 v2.28.0 已提供 Windows 和 macOS arm64 构建；Linux 仍需从源码或现有构建链路验证。
+> ⚠️ 注意：当前 v2.29.0 已提供 Windows 和 macOS arm64 构建；Linux 仍需从源码或现有构建链路验证。
 
 软件已经适配了 Windows、macOS 和 Linux 平台。测试过的主流平台信息如下：
 
@@ -130,7 +130,7 @@ API KEY 获取相关链接：[快速开始](https://docs.bigmodel.cn/cn/guide/st
 
 ### 使用腾讯实时语音翻译
 
-该引擎在同一个 WebSocket 会话中持续返回识别原文和译文。启动应用前设置 `TENCENTCLOUD_APP_ID`、`TENCENTCLOUD_SECRET_ID`、`TENCENTCLOUD_SECRET_KEY`；凭据不会保存到应用配置或命令行。界面可选择混元翻译轻量版或标准版，并只显示当前源语言支持的目标语言。中文、英语和中英混合源语言可设置 500–2000 ms 静音断句及 5000–90000 ms 强制断句；其他语言使用服务端默认断句。
+该引擎在同一个 WebSocket 会话中持续返回识别原文和译文。在字幕引擎设置中填写腾讯云 `AppID`、`SecretID`、`SecretKey`；三个字段会保存到本机 `config.json`，并通过 `-tcappid`、`-tcsecretid`、`-tcsecretkey` 命令行参数传给 Python，因此独立运行 Python 引擎时也可使用同一组参数。输入框按普通文本显示，配置文件和操作系统进程参数也会包含明文凭据，请限制本机账号与配置文件访问权限；软件日志会隐藏 SecretID 和 SecretKey。界面可选择混元翻译轻量版或标准版，并只显示当前源语言支持的目标语言。中文、英语和中英混合源语言可设置 500–2000 ms 静音断句及 5000–90000 ms 强制断句；其他语言使用服务端默认断句。
 
 音频固定转换为 16 kHz、单声道 PCM16，并按约 200 ms 发送。停止时最多等待 5 秒冲刷最终字幕，Electron 为该引擎保留 8 秒退出窗口。语音合成未接入；热词只有内部预留接口，当前设置页不会展示或发送热词。
 
@@ -246,12 +246,12 @@ npm install
 
 ### 构建字幕引擎
 
-首先进入 `engine` 文件夹，执行如下指令创建虚拟环境（需要使用大于等于 Python 3.10 的 Python 运行环境，建议使用 Python 3.12）：
+首先进入 `engine` 文件夹，使用 Python 3.14 创建项目虚拟环境：
 
 ```bash
 cd ./engine
 # in ./engine folder
-python -m venv .venv
+python3.14 -m venv .venv
 # or
 python3 -m venv .venv
 ```
@@ -265,10 +265,17 @@ python3 -m venv .venv
 source .venv/bin/activate
 ```
 
-然后安装依赖（这一步在 macOS 和 Linux 可能会报错，一般是因为构建失败，需要根据报错信息进行处理）：
+然后安装依赖。Python 3.14 已移除标准库 `audioop`，项目通过仅对 Python 3.13+ 生效的 `audioop-lts` 保持 GLM 音频处理兼容。macOS 上 PyAudio 仍需要可用的 PortAudio 开发头文件；可以安装到项目虚拟环境或使用已有的项目内 PortAudio，不需要修改系统 Python：
 
 ```bash
 pip install -r requirements.txt
+```
+
+macOS 还需要 LLVM OpenMP 运行时。先安装 Homebrew 的 `libomp`，再通过项目脚本把 `libomp.dylib` 复制到当前虚拟环境，并为 numba 的 `omppool` 设置相对运行时搜索路径。PyInstaller 会从虚拟环境收集该库；重装或升级 numba 后应重新运行脚本：
+
+```bash
+brew install libomp
+.venv/bin/python3 install_macos_libomp.py
 ```
 
 然后使用 `pyinstaller` 构建项目：

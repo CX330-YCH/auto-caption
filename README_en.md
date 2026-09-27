@@ -3,7 +3,7 @@
     <h1 align="center">auto-caption</h1>
     <p>Auto Caption is a cross-platform real-time caption display software.</p>
     <p>
-      <a href="https://github.com/HiMeditator/auto-caption/releases"><img src="https://img.shields.io/badge/release-2.28.0-blue"></a>
+      <a href="https://github.com/HiMeditator/auto-caption/releases"><img src="https://img.shields.io/badge/release-2.29.0-blue"></a>
       <a href="https://github.com/HiMeditator/auto-caption/issues"><img src="https://img.shields.io/github/issues/HiMeditator/auto-caption?color=orange"></a>
       <img src="https://img.shields.io/github/languages/top/HiMeditator/auto-caption?color=royalblue">
       <img src="https://img.shields.io/github/repo-size/HiMeditator/auto-caption?color=green">
@@ -14,7 +14,7 @@
         | <b>English</b>
         | <a href="./README_ja.md">日本語</a> |
     </p>
-    <p><i>v2.28.0 has been released with a macOS arm64 build...</i></p>
+    <p><i>v2.29.0 has been released with a macOS arm64 build...</i></p>
 </div>
 
 ![](./assets/media/main_en.png)
@@ -53,7 +53,7 @@ https://github.com/user-attachments/assets/9c188d78-9520-4397-bacf-4c8fdcc54874
 
 ## 📖 Basic Usage
 
-> ⚠️ Note: v2.28.0 currently provides Windows and macOS arm64 builds; Linux still needs verification from source or the existing build pipeline.
+> ⚠️ Note: v2.29.0 currently provides Windows and macOS arm64 builds; Linux still needs verification from source or the existing build pipeline.
 
 The software has been adapted for Windows, macOS, and Linux platforms. The tested platform information is as follows:
 
@@ -130,7 +130,7 @@ For API KEY acquisition, see: [Quick Start](https://docs.bigmodel.cn/en/guide/st
 
 ### Using Tencent Realtime Speech Translation
 
-This engine streams recognized source text and translated text in the same WebSocket session. Set `TENCENTCLOUD_APP_ID`, `TENCENTCLOUD_SECRET_ID`, and `TENCENTCLOUD_SECRET_KEY` before starting the app; credentials are never saved in application configuration or command arguments. The UI offers Hunyuan Translation Lite and Standard and filters targets by the selected source language. Chinese, English, and mixed Chinese-English sources expose 500–2000 ms silence segmentation and 5000–90000 ms forced segmentation; other sources use service defaults.
+This engine streams recognized source text and translated text in the same WebSocket session. Enter the Tencent Cloud `AppID`, `SecretID`, and `SecretKey` in Caption Engine Settings. All three values are saved in the local `config.json` and passed to Python as `-tcappid`, `-tcsecretid`, and `-tcsecretkey`, so the Python engine can also run independently with the same arguments. The fields display plain text, and both the configuration file and operating-system process arguments contain the credentials in plain text; restrict access to the local account and configuration file. Software logs mask SecretID and SecretKey. The UI offers Hunyuan Translation Lite and Standard and filters targets by the selected source language. Chinese, English, and mixed Chinese-English sources expose 500–2000 ms silence segmentation and 5000–90000 ms forced segmentation; other sources use service defaults.
 
 Audio is converted to 16 kHz mono PCM16 and sent in approximately 200 ms packets. Shutdown waits up to 5 seconds for final captions, within an 8-second Electron process deadline. TTS is not implemented. Hotwords have an internal reserved interface only and are neither shown nor sent in this version.
 
@@ -226,12 +226,12 @@ npm install
 
 ### Build Subtitle Engine
 
-First enter the `engine` folder and execute the following commands to create a virtual environment (requires Python 3.10 or higher, with Python 3.12 recommended):
+First enter the `engine` folder and create the project virtual environment with Python 3.14:
 
 ```bash
 cd ./engine
 # in ./engine folder
-python -m venv .venv
+python3.14 -m venv .venv
 # or
 python3 -m venv .venv
 ```
@@ -245,10 +245,17 @@ Then activate the virtual environment:
 source .venv/bin/activate
 ```
 
-Then install dependencies (this step might result in errors on macOS and Linux, usually due to build failures, and you need to handle them based on the error messages):
+Then install the dependencies. Python 3.14 no longer includes the standard-library `audioop` module, so the project uses `audioop-lts` on Python 3.13 and newer to keep GLM audio processing compatible. On macOS, PyAudio still needs PortAudio development headers; they may be installed inside the project virtual environment or supplied by an existing project-local PortAudio build without changing the system Python:
 
 ```bash
 pip install -r requirements.txt
+```
+
+macOS also requires the LLVM OpenMP runtime. Install Homebrew `libomp`, then use the project script to copy `libomp.dylib` into the active virtual environment and add a relative runtime search path to numba's `omppool`. PyInstaller collects the library from the virtual environment. Run the script again after reinstalling or upgrading numba:
+
+```bash
+brew install libomp
+.venv/bin/python3 install_macos_libomp.py
 ```
 
 Then use `pyinstaller` to build the project:

@@ -10,24 +10,21 @@ test('keeps legacy stop timeout unchanged', () => {
   }
 })
 
-test('passes Tencent credentials only through environment and extends flush timeout', () => {
-  const environment = {
-    PATH: '/bin',
-    TENCENTCLOUD_APP_ID: '123456',
-    TENCENTCLOUD_SECRET_ID: 'secret-id',
-    TENCENTCLOUD_SECRET_KEY: 'secret-key'
-  }
+test('keeps Tencent launch environment generic and extends flush timeout', () => {
+  const environment = { PATH: '/bin' }
   const context = buildEngineLaunchContext('tencent_speech_translate', environment)
 
   assert.equal(context.stopTimeoutMs, 8000)
   assert.deepEqual(context.environment, environment)
-  assert.deepEqual(context.secrets, ['secret-id', 'secret-key'])
-  assert.equal(hasTencentSpeechCredentials(environment), true)
-  assert.equal(
-    hasTencentSpeechCredentials({
-      ...environment,
-      TENCENTCLOUD_SECRET_KEY: ''
-    }),
-    false
-  )
+  assert.deepEqual(context.secrets, [])
+  assert.equal(hasTencentSpeechCredentials({
+    appId: '123456',
+    secretId: 'secret-id',
+    secretKey: 'secret-key'
+  }), true)
+  assert.equal(hasTencentSpeechCredentials({
+    appId: '123456',
+    secretId: 'secret-id',
+    secretKey: ''
+  }), false)
 })

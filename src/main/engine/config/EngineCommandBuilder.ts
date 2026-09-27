@@ -81,6 +81,9 @@ const providerArgumentBuilders: Record<
     return [
       '-e', 'tencent_speech_translate',
       '-s', config.common.sourceLanguage,
+      '-tcappid', tencent.appId,
+      '-tcsecretid', tencent.secretId,
+      '-tcsecretkey', tencent.secretKey,
       '-tcmodel', tencent.model,
       '-tcvad', tencent.vadSilenceMs.toString(),
       '-tcmax', tencent.maxSpeakTimeMs.toString()

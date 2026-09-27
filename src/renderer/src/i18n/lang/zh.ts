@@ -39,6 +39,8 @@ export default {
     "funAsrHotwordModelMismatchNote": "预编译热词表的目标模型必须与当前 Fun-ASR 识别模型完全一致，否则热词不会生效。",
     "tencentSpeechLanguagePairInvalid": "腾讯云语言组合不受支持",
     "tencentSpeechLanguagePairInvalidNote": "请选择腾讯实时语音翻译支持的源语言和目标语言组合。",
+    "tencentSpeechCredentialsMissing": "腾讯云凭据不完整",
+    "tencentSpeechCredentialsMissingNote": "启动腾讯实时语音翻译前必须填写 AppID、SecretID 和 SecretKey。",
     "customExecutableMissing": "自定义引擎路径为空",
     "customExecutableMissingNote": "启动自定义字幕引擎前必须填写可执行文件路径。",
     "customEngineMissing": "自定义引擎不存在",
@@ -126,6 +128,9 @@ export default {
       "funAsrSentenceSilence": "断句静音阈值",
       "funAsrHeartbeat": "连接心跳",
       "tencentSpeechModel": "混元翻译模型",
+      "tencentSpeechAppId": "腾讯云 AppID",
+      "tencentSpeechSecretId": "腾讯云 SecretID",
+      "tencentSpeechSecretKey": "腾讯云 SecretKey",
       "tencentSpeechVadSilence": "断句静音阈值",
       "tencentSpeechMaxSpeakTime": "最长连续说话时间",
       "openProviderConsole": "打开服务商控制台",
@@ -176,7 +181,7 @@ export default {
       }
     },
     tencentSpeech: {
-      "credentialsInfo": "凭据仅从 TENCENTCLOUD_APP_ID、TENCENTCLOUD_SECRET_ID、TENCENTCLOUD_SECRET_KEY 环境变量读取，不写入应用配置。",
+      "credentialsInfo": "AppID、SecretID 和 SecretKey 会以明文保存到本机 config.json，并通过命令行传给 Python 引擎。软件日志会隐藏 SecretID 和 SecretKey。",
       "vadSilenceInfo": "静音达到该时长后结束当前句，仅对中文、英语和中英混合源语言生效。范围 500-2000 毫秒。",
       "maxSpeakTimeInfo": "连续说话达到该时长后强制结束当前句，仅对中文、英语和中英混合源语言生效。范围 5000-90000 毫秒。"
     },

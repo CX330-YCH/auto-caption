@@ -7,7 +7,7 @@ import {
 } from '../../src/shared/config/schema.ts'
 import {
   parseApplicationConfig,
-  parseConfigDocumentV8,
+  parseConfigDocumentV9,
   parseEngineConfig
 } from '../../src/shared/config/document.ts'
 
@@ -27,7 +27,7 @@ function asV6(config) {
   return { ...structuredClone(config), schemaVersion: 6, engine }
 }
 
-test('creates a complete layered V8 document', () => {
+test('creates a complete layered V9 document', () => {
   const config = createDefaultConfig('/recordings')
 
   assert.equal(config.schemaVersion, CONFIG_SCHEMA_VERSION)
@@ -52,6 +52,9 @@ test('creates a complete layered V8 document', () => {
     config.engine.providers.tencentSpeech.model,
     'hunyuan-translation-lite'
   )
+  assert.equal(config.engine.providers.tencentSpeech.appId, '')
+  assert.equal(config.engine.providers.tencentSpeech.secretId, '')
+  assert.equal(config.engine.providers.tencentSpeech.secretKey, '')
   assert.equal(config.engine.providers.tencentSpeech.vadSilenceMs, 1000)
   assert.deepEqual(config.engine.providers.tencentSpeech.hotwords.entries, [])
   assert.equal(config.caption.styles.fontSize, 24)
@@ -66,12 +69,12 @@ test('migrates schema V2 through V6 and rejects unversioned or future documents'
   const legacy = asV6(config)
 
   assert.throws(
-    () => parseConfigDocumentV8({ controls: {} }),
+    () => parseConfigDocumentV9({ controls: {} }),
     /schemaVersion/
   )
   assert.throws(
-    () => parseConfigDocumentV8({ ...config, schemaVersion: 9 }),
-    /Unsupported config schema version: 9/
+    () => parseConfigDocumentV9({ ...config, schemaVersion: 10 }),
+    /Unsupported config schema version: 10/
   )
 
   const v2 = {
@@ -90,7 +93,7 @@ test('migrates schema V2 through V6 and rejects unversioned or future documents'
   }
   delete v2.engine.activeEngineId
   delete v2.engine.customEngines
-  const migrated = parseConfigDocumentV8(v2)
+  const migrated = parseConfigDocumentV9(v2)
   assert.equal(migrated.schemaVersion, CONFIG_SCHEMA_VERSION)
   assert.equal(migrated.engine.activeEngineId, 'custom-migrated')
   assert.deepEqual(migrated.engine.customEngines, [{
@@ -104,7 +107,7 @@ test('migrates schema V2 through V6 and rejects unversioned or future documents'
   assert.equal(migrated.caption.styles.captionBoundaryMode, 'sentence')
 
   v2.engine.custom.enabled = false
-  const migratedInactive = parseConfigDocumentV8(v2)
+  const migratedInactive = parseConfigDocumentV9(v2)
   assert.equal(migratedInactive.engine.activeEngineId, 'vosk')
   assert.equal(migratedInactive.engine.customEngines[0].executable, '/engines/legacy')
 
@@ -119,7 +122,7 @@ test('migrates schema V2 through V6 and rejects unversioned or future documents'
   delete v3.caption.styles.displayMode
   delete v3.caption.styles.captionBoundaryMode
   v3.caption.styles.extensionStyle = 'preserved'
-  const migratedV3 = parseConfigDocumentV8(v3)
+  const migratedV3 = parseConfigDocumentV9(v3)
   assert.equal(migratedV3.schemaVersion, CONFIG_SCHEMA_VERSION)
   assert.equal(migratedV3.caption.styles.displayMode, 'static')
   assert.equal(migratedV3.caption.styles.captionBoundaryMode, 'sentence')
@@ -138,7 +141,7 @@ test('migrates schema V2 through V6 and rejects unversioned or future documents'
     }
   }
   delete v4.caption.styles.captionBoundaryMode
-  const migratedV4 = parseConfigDocumentV8(v4)
+  const migratedV4 = parseConfigDocumentV9(v4)
   assert.equal(migratedV4.caption.styles.displayMode, 'rolling')
   assert.equal(migratedV4.caption.styles.captionBoundaryMode, 'sentence')
   assert.equal(migratedV4.caption.styles.extensionStyle, 'preserved-v4')
@@ -151,7 +154,7 @@ test('migrates schema V2 through V6 and rejects unversioned or future documents'
       diagnostics: { extensionField: 'preserved-v5' }
     }
   }
-  const migratedV5 = parseConfigDocumentV8(v5)
+  const migratedV5 = parseConfigDocumentV9(v5)
   assert.equal(migratedV5.schemaVersion, CONFIG_SCHEMA_VERSION)
   assert.equal(migratedV5.application.diagnostics.debugMode, false)
   assert.equal(
@@ -159,7 +162,7 @@ test('migrates schema V2 through V6 and rejects unversioned or future documents'
     'preserved-v5'
   )
 
-  const migratedV6 = parseConfigDocumentV8(legacy)
+  const migratedV6 = parseConfigDocumentV9(legacy)
   assert.equal(migratedV6.engine.translation.activeProviderId, 'ollama')
   assert.equal(migratedV6.engine.translation.common.targetLanguage, 'zh')
   assert.equal(
@@ -173,34 +176,45 @@ test('migrates schema V2 through V6 and rejects unversioned or future documents'
   const v7 = structuredClone(config)
   v7.schemaVersion = 7
   delete v7.engine.providers.tencentSpeech
-  const migratedV7 = parseConfigDocumentV8(v7)
-  assert.equal(migratedV7.schemaVersion, 8)
+  const migratedV7 = parseConfigDocumentV9(v7)
+  assert.equal(migratedV7.schemaVersion, 9)
   assert.equal(
     migratedV7.engine.providers.tencentSpeech.model,
     'hunyuan-translation-lite'
   )
   assert.equal(migratedV7.engine.activeEngineId, config.engine.activeEngineId)
+
+  const v8 = structuredClone(config)
+  v8.schemaVersion = 8
+  delete v8.engine.providers.tencentSpeech.appId
+  delete v8.engine.providers.tencentSpeech.secretId
+  delete v8.engine.providers.tencentSpeech.secretKey
+  const migratedV8 = parseConfigDocumentV9(v8)
+  assert.equal(migratedV8.schemaVersion, 9)
+  assert.equal(migratedV8.engine.providers.tencentSpeech.appId, '')
+  assert.equal(migratedV8.engine.providers.tencentSpeech.secretId, '')
+  assert.equal(migratedV8.engine.providers.tencentSpeech.secretKey, '')
 })
 
-test('validates nested values while preserving V7 extension fields', () => {
+test('validates nested values while preserving V9 extension fields', () => {
   const config = createDefaultConfig('/recordings')
   config.extensionRoot = { enabled: true }
   config.engine.extensionEngine = 'future-engine-setting'
   config.engine.providers.glm.extensionGlm = 7
 
-  const parsed = parseConfigDocumentV8(config)
+  const parsed = parseConfigDocumentV9(config)
 
   assert.deepEqual(parsed.extensionRoot, { enabled: true })
   assert.equal(parsed.engine.extensionEngine, 'future-engine-setting')
   assert.equal(parsed.engine.providers.glm.extensionGlm, 7)
-  const rolling = parseConfigDocumentV8({
+  const rolling = parseConfigDocumentV9({
     ...config,
     caption: {
       styles: { ...config.caption.styles, displayMode: 'rolling' }
     }
   })
   assert.equal(rolling.caption.styles.displayMode, 'rolling')
-  const continuous = parseConfigDocumentV8({
+  const continuous = parseConfigDocumentV9({
     ...config,
     caption: {
       styles: {
@@ -214,7 +228,7 @@ test('validates nested values while preserving V7 extension fields', () => {
     'continuous'
   )
   assert.throws(
-    () => parseConfigDocumentV8({
+    () => parseConfigDocumentV9({
       ...config,
       caption: {
         styles: { ...config.caption.styles, displayMode: 'unknown' }
@@ -223,7 +237,7 @@ test('validates nested values while preserving V7 extension fields', () => {
     /Invalid displayMode/
   )
   assert.throws(
-    () => parseConfigDocumentV8({
+    () => parseConfigDocumentV9({
       ...config,
       caption: {
         styles: {
@@ -352,6 +366,19 @@ test('validates nested values while preserving V7 extension fields', () => {
         ...config.engine.providers,
         tencentSpeech: {
           ...config.engine.providers.tencentSpeech,
+          appId: 'not-an-app-id'
+        }
+      }
+    }),
+    /AppID must contain digits only/
+  )
+  assert.throws(
+    () => parseEngineConfig({
+      ...config.engine,
+      providers: {
+        ...config.engine.providers,
+        tencentSpeech: {
+          ...config.engine.providers.tencentSpeech,
           hotwords: { entries: ['reserved|5'] }
         }
       }
@@ -405,7 +432,7 @@ test('validates nested values while preserving V7 extension fields', () => {
 
 test('accepts selected local font values and legacy CSS font stacks', () => {
   const config = createDefaultConfig('/recordings')
-  const selectedFont = parseConfigDocumentV8({
+  const selectedFont = parseConfigDocumentV9({
     ...config,
     caption: {
       ...config.caption,

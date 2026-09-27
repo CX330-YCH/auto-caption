@@ -1,6 +1,8 @@
 # 配置文件 V8
 
-Auto Caption 的持久化配置位于 Electron `userData/config.json`。当前版本接受 `schemaVersion: 8`，磁盘、主进程、IPC 和 Renderer 共享 `ConfigDocumentV8`。
+> 本页记录历史 V8 结构。当前版本为 [配置文件 V9](config-v9.md)。
+
+V8 使用 `schemaVersion: 8`，当时磁盘、主进程、IPC 和 Renderer 共享 `ConfigDocumentV8`。
 
 V8 在 V7 独立翻译配置之上增加腾讯实时语音翻译 Provider。以下片段只展示新增字段，其余 application、caption、识别 Provider 和翻译 Provider 字段仍是完整配置的必需部分：
 

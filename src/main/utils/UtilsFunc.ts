@@ -2,8 +2,10 @@ function passwordMasking(pwd: string) {
   return pwd.replace(/./g, '*')
 }
 
-const SENSITIVE_KEY = /(?:api.?key|(?:access|refresh|auth|id)?token|password|secret|authorization|credentials?|cookie|set.?cookie)(?:$|[_-]?(?:value|header))$/i
-const SENSITIVE_ARGUMENTS = new Set(['-k', '-okey', '-gkey', '-fkey'])
+const SENSITIVE_KEY = /(?:api.?key|secret.?id|secret.?key|(?:access|refresh|auth|id)?token|password|secret|authorization|credentials?|cookie|set.?cookie)(?:$|[_-]?(?:value|header))$/i
+const SENSITIVE_ARGUMENTS = new Set([
+  '-k', '-okey', '-gkey', '-fkey', '-tcsecretid', '-tcsecretkey'
+])
 const MAX_DIAGNOSTIC_DEPTH = 16
 const MAX_DIAGNOSTIC_ITEMS = 4096
 const MAX_DIAGNOSTIC_STRING_LENGTH = 32 * 1024 * 1024
@@ -30,15 +32,15 @@ export function redactSensitiveText(
       '$1<redacted>'
     )
     .replace(
-      /([?&](?:api_?key|token|password|secret)=)[^&\s]+/gi,
+      /([?&](?:api_?key|token|password|secret(?:_?(?:id|key))?)=)[^&\s]+/gi,
       '$1<redacted>'
     )
     .replace(
-      /(\b(?:api.?key|token|password|secret|credential)\b["']?\s*[:=]\s*["']?)[^\s"',;}]+/gi,
+      /(\b(?:api.?key|token|password|secret.?id|secret.?key|secret|credential)\b["']?\s*[:=]\s*["']?)[^\s"',;}&]+/gi,
       '$1<redacted>'
     )
     .replace(
-      /(\b(?:api.?key|token|password|secret|credential)\b\s+)[A-Za-z0-9._-]{8,}/gi,
+      /(\b(?:api.?key|token|password|secret.?id|secret.?key|secret|credential)\b\s+)[A-Za-z0-9._-]{8,}/gi,
       '$1<redacted>'
     )
 }
@@ -200,7 +202,8 @@ export function passwordMaskingForObject(args: Record<string, any>) {
   const maskedArgs = {...args}
   for(const key in maskedArgs) {
     const lKey = key.toLowerCase()
-    if(lKey.includes('api') && lKey.includes('key')) {
+    if((lKey.includes('api') && lKey.includes('key')) ||
+      lKey.includes('secret')) {
       maskedArgs[key] = passwordMasking(maskedArgs[key])
     }
   }

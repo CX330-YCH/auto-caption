@@ -3,7 +3,7 @@
     <h1 align="center">auto-caption</h1>
     <p>Auto Caption はクロスプラットフォームのリアルタイム字幕表示ソフトウェアです。</p>
     <p>
-      <a href="https://github.com/HiMeditator/auto-caption/releases"><img src="https://img.shields.io/badge/release-2.28.0-blue"></a>
+      <a href="https://github.com/HiMeditator/auto-caption/releases"><img src="https://img.shields.io/badge/release-2.29.0-blue"></a>
       <a href="https://github.com/HiMeditator/auto-caption/issues"><img src="https://img.shields.io/github/issues/HiMeditator/auto-caption?color=orange"></a>
       <img src="https://img.shields.io/github/languages/top/HiMeditator/auto-caption?color=royalblue">
       <img src="https://img.shields.io/github/repo-size/HiMeditator/auto-caption?color=green">
@@ -14,7 +14,7 @@
         | <a href="./README_en.md">English</a>
         | <b>日本語</b> |
     </p>
-    <p><i>v2.28.0 がリリースされました。macOS arm64 ビルドを含みます...</i></p>
+    <p><i>v2.29.0 がリリースされました。macOS arm64 ビルドを含みます...</i></p>
 </div>
 
 ![](./assets/media/main_ja.png)
@@ -53,7 +53,7 @@ https://github.com/user-attachments/assets/9c188d78-9520-4397-bacf-4c8fdcc54874
 
 ## 📖 基本使い方
 
-> ⚠️ 注意：現在の v2.28.0 は Windows と macOS arm64 ビルドを提供しています。Linux はソースまたは既存のビルド手順での検証が必要です。
+> ⚠️ 注意：現在の v2.29.0 は Windows と macOS arm64 ビルドを提供しています。Linux はソースまたは既存のビルド手順での検証が必要です。
 
 このソフトウェアは Windows、macOS、Linux プラットフォームに対応しています。テスト済みのプラットフォーム情報は以下の通りです：
 
@@ -131,7 +131,7 @@ API キーの取得についてはこちらをご覧ください：[クイック
 
 ### Tencent リアルタイム音声翻訳の使用
 
-このエンジンは同じ WebSocket セッションで認識原文と翻訳文をストリーミングします。アプリを起動する前に `TENCENTCLOUD_APP_ID`、`TENCENTCLOUD_SECRET_ID`、`TENCENTCLOUD_SECRET_KEY` を設定してください。資格情報はアプリ設定やコマンドラインには保存されません。UI では Hunyuan Translation Lite または Standard を選択でき、対象言語は選択したソース言語に応じて絞り込まれます。中国語、英語、中英混合では 500～2000 ms の無音区切りと 5000～90000 ms の強制区切りを設定でき、その他の言語ではサービス既定値を使用します。
+このエンジンは同じ WebSocket セッションで認識原文と翻訳文をストリーミングします。字幕エンジン設定で Tencent Cloud の `AppID`、`SecretID`、`SecretKey` を入力します。3項目はローカルの `config.json` に保存され、`-tcappid`、`-tcsecretid`、`-tcsecretkey` のコマンドライン引数で Python に渡されるため、Python エンジンを同じ引数で単独実行できます。入力欄は平文表示で、設定ファイルと OS のプロセス引数にも平文の資格情報が含まれるため、ローカルアカウントと設定ファイルへのアクセスを制限してください。ソフトウェアログでは SecretID と SecretKey をマスクします。UI では Hunyuan Translation Lite または Standard を選択でき、対象言語は選択したソース言語に応じて絞り込まれます。中国語、英語、中英混合では 500～2000 ms の無音区切りと 5000～90000 ms の強制区切りを設定でき、その他の言語ではサービス既定値を使用します。
 
 音声は 16 kHz、モノラル PCM16 に変換し、約 200 ms 単位で送信します。停止時は最終字幕を最大5秒待ち、Electron 側はこのエンジンに8秒の終了期限を設定します。TTS は未実装です。ホットワードは内部インターフェースだけを予約しており、このバージョンでは画面表示も送信も行いません。
 
@@ -227,12 +227,12 @@ npm install
 
 ### 字幕エンジンの構築
 
-まず `engine` フォルダに入り、以下のコマンドを実行して仮想環境を作成します（Python 3.10 以上が必要で、Python 3.12 が推奨されます）：
+まず `engine` フォルダに入り、Python 3.14 でプロジェクト仮想環境を作成します：
 
 ```bash
 cd ./engine
 # ./engine フォルダ内
-python -m venv .venv
+python3.14 -m venv .venv
 # または
 python3 -m venv .venv
 ```
@@ -246,10 +246,17 @@ python3 -m venv .venv
 source .venv/bin/activate
 ```
 
-次に依存関係をインストールします（このステップでは macOS と Linux でエラーが発生する可能性があります。通常はビルド失敗によるもので、エラーメッセージに基づいて対処する必要があります）：
+次に依存関係をインストールします。Python 3.14 では標準ライブラリの `audioop` が削除されたため、プロジェクトは Python 3.13 以降で `audioop-lts` を使用して GLM の音声処理互換性を維持します。macOS の PyAudio には引き続き PortAudio の開発ヘッダーが必要です。システム Python を変更せず、プロジェクト仮想環境内に配置するか既存のプロジェクトローカル PortAudio ビルドを使用できます：
 
 ```bash
 pip install -r requirements.txt
+```
+
+macOS では LLVM OpenMP ランタイムも必要です。Homebrew の `libomp` をインストールした後、プロジェクトのスクリプトで `libomp.dylib` を現在の仮想環境にコピーし、numba の `omppool` に相対ランタイム検索パスを追加します。PyInstaller は仮想環境からこのライブラリを収集します。numba を再インストールまたは更新した後は、スクリプトを再実行してください：
+
+```bash
+brew install libomp
+.venv/bin/python3 install_macos_libomp.py
 ```
 
 その後、`pyinstaller` を使用してプロジェクトをビルドします：

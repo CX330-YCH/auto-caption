@@ -10,7 +10,7 @@ import {
   isKnownProviderName,
   isKnownTranslationProviderName,
   type ApplicationConfig,
-  type ConfigDocumentV8,
+  type ConfigDocumentV9,
   type EngineConfig,
   type ProviderConfigs,
   type TranslationConfig
@@ -37,27 +37,30 @@ import {
   isTencentSpeechLanguagePair
 } from '../tencentSpeech.ts'
 
-export function parseConfigDocumentV8(value: unknown): ConfigDocumentV8 {
+export function parseConfigDocumentV9(value: unknown): ConfigDocumentV9 {
   if (!isRecord(value)) {
     throw new InvalidConfigError('Config root must be an object')
   }
   if (value.schemaVersion === 2) {
-    return parseConfigDocumentV8(migrateConfigDocumentV2ToV3(value))
+    return parseConfigDocumentV9(migrateConfigDocumentV2ToV3(value))
   }
   if (value.schemaVersion === 3) {
-    return parseConfigDocumentV8(migrateConfigDocumentV3ToV4(value))
+    return parseConfigDocumentV9(migrateConfigDocumentV3ToV4(value))
   }
   if (value.schemaVersion === 4) {
-    return parseConfigDocumentV8(migrateConfigDocumentV4ToV5(value))
+    return parseConfigDocumentV9(migrateConfigDocumentV4ToV5(value))
   }
   if (value.schemaVersion === 5) {
-    return parseConfigDocumentV8(migrateConfigDocumentV5ToV6(value))
+    return parseConfigDocumentV9(migrateConfigDocumentV5ToV6(value))
   }
   if (value.schemaVersion === 6) {
-    return parseConfigDocumentV8(migrateConfigDocumentV6ToV7(value))
+    return parseConfigDocumentV9(migrateConfigDocumentV6ToV7(value))
   }
   if (value.schemaVersion === 7) {
-    return parseConfigDocumentV8(migrateConfigDocumentV7ToV8(value))
+    return parseConfigDocumentV9(migrateConfigDocumentV7ToV8(value))
+  }
+  if (value.schemaVersion === 8) {
+    return parseConfigDocumentV9(migrateConfigDocumentV8ToV9(value))
   }
   if (value.schemaVersion !== CONFIG_SCHEMA_VERSION) {
     if (
@@ -76,6 +79,33 @@ export function parseConfigDocumentV8(value: unknown): ConfigDocumentV8 {
     application: parseApplicationConfig(value.application),
     engine: parseEngineConfig(value.engine),
     caption: parseCaptionConfig(value.caption)
+  }
+}
+
+function migrateConfigDocumentV8ToV9(
+  value: Record<string, unknown>
+): Record<string, unknown> {
+  const engine = requireRecord(value.engine, 'engine')
+  const providers = requireRecord(engine.providers, 'engine.providers')
+  const tencentSpeech = requireRecord(
+    providers.tencentSpeech,
+    'engine.providers.tencentSpeech'
+  )
+  return {
+    ...value,
+    schemaVersion: 9,
+    engine: {
+      ...engine,
+      providers: {
+        ...providers,
+        tencentSpeech: {
+          ...tencentSpeech,
+          appId: '',
+          secretId: '',
+          secretKey: ''
+        }
+      }
+    }
   }
 }
 
@@ -566,6 +596,24 @@ function parseProviderConfigs(value: Record<string, unknown>): ProviderConfigs {
   if (!TENCENT_SPEECH_MODELS.includes(tencentModel as never)) {
     throw new InvalidConfigError('Invalid tencentSpeech.model')
   }
+  const tencentAppId = requireString(
+    tencentSpeech.appId,
+    'tencentSpeech.appId',
+    64
+  )
+  if (tencentAppId && !/^\d+$/.test(tencentAppId)) {
+    throw new InvalidConfigError('Tencent Speech AppID must contain digits only')
+  }
+  const tencentSecretId = requireString(
+    tencentSpeech.secretId,
+    'tencentSpeech.secretId',
+    256
+  )
+  const tencentSecretKey = requireString(
+    tencentSpeech.secretKey,
+    'tencentSpeech.secretKey',
+    256
+  )
   const tencentHotwordEntries = requireContextTerms(tencentHotwords.entries)
   if (tencentHotwordEntries.length > 0) {
     throw new InvalidConfigError('Tencent Speech hotwords are reserved and must be empty')
@@ -619,6 +667,9 @@ function parseProviderConfigs(value: Record<string, unknown>): ProviderConfigs {
     },
     tencentSpeech: {
       ...tencentSpeech,
+      appId: tencentAppId,
+      secretId: tencentSecretId,
+      secretKey: tencentSecretKey,
       model: tencentModel as (typeof TENCENT_SPEECH_MODELS)[number],
       vadSilenceMs: requireNumber(
         tencentSpeech.vadSilenceMs,
@@ -642,7 +693,7 @@ function parseProviderConfigs(value: Record<string, unknown>): ProviderConfigs {
 
 export function parseCaptionConfig(
   value: unknown
-): ConfigDocumentV8['caption'] {
+): ConfigDocumentV9['caption'] {
   if (!isRecord(value)) {
     throw new InvalidConfigError('Caption config must be an object')
   }

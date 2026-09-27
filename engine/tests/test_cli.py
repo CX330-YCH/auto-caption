@@ -28,6 +28,9 @@ class CliTests(unittest.TestCase):
             options.tencent_speech_model,
             'hunyuan-translation-lite',
         )
+        self.assertEqual(options.tencent_speech_app_id, '')
+        self.assertEqual(options.tencent_speech_secret_id, '')
+        self.assertEqual(options.tencent_speech_secret_key, '')
         self.assertEqual(options.tencent_speech_vad_silence_ms, 1000)
         self.assertEqual(options.tencent_speech_max_speak_time_ms, 10000)
         self.assertFalse(options.debug_mode)
@@ -99,14 +102,22 @@ class CliTests(unittest.TestCase):
     def test_parses_tencent_speech_arguments(self):
         options = parse_args([
             '-e', 'tencent_speech_translate',
+            '-tcappid', '123456',
+            '-tcsecretid', 'dummy-tencent-secret-id',
+            '-tcsecretkey', 'dummy-tencent-secret-key',
             '-tcmodel', 'hunyuan-translation',
             '-tcvad', '700',
             '-tcmax', '30000',
         ])
 
+        self.assertEqual(options.tencent_speech_app_id, '123456')
+        self.assertEqual(options.tencent_speech_secret_id, 'dummy-tencent-secret-id')
+        self.assertEqual(options.tencent_speech_secret_key, 'dummy-tencent-secret-key')
         self.assertEqual(options.tencent_speech_model, 'hunyuan-translation')
         self.assertEqual(options.tencent_speech_vad_silence_ms, 700)
         self.assertEqual(options.tencent_speech_max_speak_time_ms, 30000)
+        self.assertNotIn('dummy-tencent-secret-id', repr(options))
+        self.assertNotIn('dummy-tencent-secret-key', repr(options))
 
 
 if __name__ == '__main__':

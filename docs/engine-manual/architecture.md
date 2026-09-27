@@ -214,7 +214,7 @@ Vosk、SOSV、GLM、Fun-ASR 和 Apple Speech 的 final 通过独立 `Translation
 Electron 持久化、主进程、IPC 和渲染进程共享 `src/shared/config/` 中的 V8 分层模型：
 
 ```text
-ConfigDocumentV8
+ConfigDocumentV9
 ├── application          # 语言、主题、颜色、窗口布局、Debug Mode
 ├── engine
 │   ├── activeEngineId   # 当前内置 Provider 或自定义引擎 ID
@@ -225,11 +225,11 @@ ConfigDocumentV8
 └── caption              # 字幕样式
 ```
 
-`AllConfig` 是主进程中的配置所有者，只接受 `schemaVersion: 8`。Renderer 通过 application、engine、caption 三个完整层级交换配置，主进程重新校验后才更新内存；运行态 `engineEnabled` 与 PID、端口、日志不进入磁盘配置。
+`AllConfig` 是主进程中的配置所有者，只接受 `schemaVersion: 9`。Renderer 通过 application、engine、caption 三个完整层级交换配置，主进程重新校验后才更新内存；运行态 `engineEnabled` 与 PID、端口、日志不进入磁盘配置。按用户明确要求，腾讯 AppID、SecretID、SecretKey 属于完整 engine 配置并以明文落盘和进入控制窗口 Renderer。
 
 引擎启动参数由纯函数 `EngineCommandBuilder` 从 `EngineConfig` 构建，`CaptionEngine` 不再读取扁平 controls 或拼装各 Provider 字段。Builder 内部使用 Provider 参数注册表，共用音频、录音、端口和目标语言参数只生成一次。
 
-完整 V2 会依次显式迁移到 V3、V4、V5、V6、V7、V8；V7 把旧 `engine.common.translation` 和目标语言迁移到独立翻译层，V8 增加腾讯 Provider 默认配置。无版本和其他不支持的版本仍被拒绝并使用默认 V8。完整字段、范围和凭据限制见 [`config-v8.md`](../api-docs/config-v8.md)。
+完整 V2 会依次显式迁移到 V3、V4、V5、V6、V7、V8、V9；V7 把旧 `engine.common.translation` 和目标语言迁移到独立翻译层，V8 增加腾讯 Provider 默认配置，V9 增加空的腾讯 AppID、SecretID、SecretKey。无版本和其他不支持的版本仍被拒绝并使用默认 V9。完整字段、范围和凭据限制见 [`config-v9.md`](../api-docs/config-v9.md)。
 
 ## Renderer 字幕文本轨道
 
@@ -288,7 +288,7 @@ Provider 的启动前要求同样由目录字段校验提供，`EngineStatus.vue
 - Vosk、SOSV、GLM 和 Fun-ASR 的 final 使用统一客户端翻译；Gummy 和 Tencent Speech Translate 使用服务端翻译。
 - `-d 1` 现在按参数声明正确启用终端字幕显示；迁移前入口把整数错误地与字符串比较，导致该参数不生效。
 - 直接导入旧 `audio2text.*Recognizer` 的未文档化内部路径不再支持。应用公开扩展点仍是命令行和进程协议。
-- Electron 内部配置 IPC 使用 V8 application/engine/caption 分层对象；该 IPC 不作为第三方公开扩展点。
+- Electron 内部配置 IPC 使用 V9 application/engine/caption 分层对象；该 IPC 不作为第三方公开扩展点。
 
 ## 新 Provider 接入顺序
 
@@ -299,4 +299,4 @@ Provider 的启动前要求同样由目录字段校验提供，`EngineStatus.vue
 5. 验证外部 command 协议和错误脱敏。
 6. 对需要网络的 Provider 增加有界重试、停止冲刷和显式启用的在线测试。
 
-Fun-ASR 与两级热词、Tencent Speech Translate 基础链路已按上述顺序完成离线可验证纵向接入；真实账号、地域、设备、计费和远端 CRUD 链路仍需在有凭据时由用户显式执行在线验收。腾讯热词当前只有请求级编码和 V8 空配置边界，启用前必须增加能力校验、UI 和真实接口验收。后续 Provider 的热词能力应继续复用独立服务边界，不能通过复制识别循环、在 `main.py` 增加 Provider 条件分支或向通用表单塞入临时资源状态接入。
+Fun-ASR 与两级热词、Tencent Speech Translate 基础链路已按上述顺序完成离线可验证纵向接入；真实账号、地域、设备、计费和远端 CRUD 链路仍需在有凭据时由用户显式执行在线验收。腾讯热词当前只有请求级编码和 V9 空配置边界，启用前必须增加能力校验、UI 和真实接口验收。后续 Provider 的热词能力应继续复用独立服务边界，不能通过复制识别循环、在 `main.py` 增加 Provider 条件分支或向通用表单塞入临时资源状态接入。

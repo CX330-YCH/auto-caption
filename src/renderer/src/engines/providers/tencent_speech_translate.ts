@@ -5,6 +5,12 @@ import {
 } from '../../../../shared/tencentSpeech.ts'
 import { language } from './shared.ts'
 
+const missingCredentials = {
+  phase: 'start' as const,
+  titleKey: 'noti.tencentSpeechCredentialsMissing',
+  descriptionKey: 'noti.tencentSpeechCredentialsMissingNote'
+}
+
 const sourceLanguages = Object.keys(TENCENT_SPEECH_TARGETS_BY_SOURCE)
 const allLanguages = [
   ...new Set([...sourceLanguages, ...Object.values(TENCENT_SPEECH_TARGETS_BY_SOURCE).flat()])
@@ -26,6 +32,33 @@ export const tencentSpeechTranslateEngine: EngineDefinition = {
   ),
   targetLanguagesBySource: TENCENT_SPEECH_TARGETS_BY_SOURCE,
   providerFields: [
+    {
+      id: 'tencent-speech-app-id',
+      path: 'providers.tencentSpeech.appId',
+      control: 'text',
+      section: 'advanced',
+      labelKey: 'engine.fields.tencentSpeechAppId',
+      helpKey: 'engine.tencentSpeech.credentialsInfo',
+      required: missingCredentials
+    },
+    {
+      id: 'tencent-speech-secret-id',
+      path: 'providers.tencentSpeech.secretId',
+      control: 'text',
+      section: 'advanced',
+      labelKey: 'engine.fields.tencentSpeechSecretId',
+      required: missingCredentials
+    },
+    {
+      id: 'tencent-speech-secret-key',
+      path: 'providers.tencentSpeech.secretKey',
+      control: 'text',
+      section: 'advanced',
+      labelKey: 'engine.fields.tencentSpeechSecretKey',
+      helpLink: 'https://console.cloud.tencent.com/cam/capi',
+      helpLinkLabelKey: 'engine.fields.openProviderConsole',
+      required: missingCredentials
+    },
     {
       id: 'tencent-speech-model',
       path: 'providers.tencentSpeech.model',

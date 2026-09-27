@@ -34,6 +34,9 @@ class CliOptions:
     fun_asr_vocabulary_model: str = 'fun-asr-realtime'
     fun_asr_context_terms: tuple[str, ...] = ()
     apple_speech_helper: str = ''
+    tencent_speech_app_id: str = ''
+    tencent_speech_secret_id: str = field(default='', repr=False)
+    tencent_speech_secret_key: str = field(default='', repr=False)
     tencent_speech_model: str = 'hunyuan-translation-lite'
     tencent_speech_vad_silence_ms: int = 1000
     tencent_speech_max_speak_time_ms: int = 10000
@@ -168,6 +171,18 @@ def build_parser() -> argparse.ArgumentParser:
         help='Path to the macOS Apple Speech helper executable'
     )
     parser.add_argument(
+        '-tcappid', '--tencent_speech_app_id', default='',
+        help='Tencent Cloud AppID'
+    )
+    parser.add_argument(
+        '-tcsecretid', '--tencent_speech_secret_id', default='',
+        help='Tencent Cloud SecretID'
+    )
+    parser.add_argument(
+        '-tcsecretkey', '--tencent_speech_secret_key', default='',
+        help='Tencent Cloud SecretKey'
+    )
+    parser.add_argument(
         '-tcmodel', '--tencent_speech_model',
         choices=('hunyuan-translation-lite', 'hunyuan-translation'),
         default='hunyuan-translation-lite',
@@ -225,6 +240,9 @@ def parse_args(arguments: list[str] | None = None) -> CliOptions:
         fun_asr_vocabulary_model=args.fun_asr_vocabulary_model,
         fun_asr_context_terms=tuple(args.fun_asr_context_term),
         apple_speech_helper=args.apple_speech_helper,
+        tencent_speech_app_id=args.tencent_speech_app_id,
+        tencent_speech_secret_id=args.tencent_speech_secret_id,
+        tencent_speech_secret_key=args.tencent_speech_secret_key,
         tencent_speech_model=args.tencent_speech_model,
         tencent_speech_vad_silence_ms=(
             args.tencent_speech_vad_silence_ms

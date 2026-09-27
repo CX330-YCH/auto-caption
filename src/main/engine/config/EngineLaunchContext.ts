@@ -1,5 +1,4 @@
 import type { KnownProviderName } from '../../../shared/config/schema.ts'
-import { TENCENT_SPEECH_CREDENTIAL_ENV } from '../../../shared/tencentSpeech.ts'
 
 export interface EngineLaunchContext {
   environment: NodeJS.ProcessEnv
@@ -12,10 +11,7 @@ type LaunchPolicy = (environment: NodeJS.ProcessEnv) => EngineLaunchContext
 const policies: Partial<Record<KnownProviderName, LaunchPolicy>> = {
   tencent_speech_translate: (environment) => ({
     environment: { ...environment },
-    secrets: [
-      environment[TENCENT_SPEECH_CREDENTIAL_ENV.secretId] ?? '',
-      environment[TENCENT_SPEECH_CREDENTIAL_ENV.secretKey] ?? ''
-    ].filter(Boolean),
+    secrets: [],
     stopTimeoutMs: 8000
   })
 }

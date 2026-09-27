@@ -13,7 +13,7 @@ function valueAfter(args, flag) {
   return args[index + 1]
 }
 
-test('builds common and Provider-specific arguments from V8 config', () => {
+test('builds common and Provider-specific arguments from V9 config', () => {
   const engine = createDefaultConfig('/recordings').engine
   engine.common.audioSource = 1
   engine.common.recording.enabled = true
@@ -27,6 +27,9 @@ test('builds common and Provider-specific arguments from V8 config', () => {
   engine.providers.funAsr.apiKey = 'fun-asr-secret'
   engine.providers.funAsr.hotwords.vocabularyId = 'vocab-project-1'
   engine.providers.funAsr.hotwords.contextTerms = ['Auto Caption', '阿里云百炼']
+  engine.providers.tencentSpeech.appId = '123456'
+  engine.providers.tencentSpeech.secretId = 'tencent-secret-id'
+  engine.providers.tencentSpeech.secretKey = 'tencent-secret-key'
 
   for (const provider of [
     'gummy', 'vosk', 'sosv', 'glm', 'fun_asr',
@@ -94,6 +97,9 @@ test('builds common and Provider-specific arguments from V8 config', () => {
     2345
   )
   assert.equal(valueAfter(tencentArgs, '-t'), 'en')
+  assert.equal(valueAfter(tencentArgs, '-tcappid'), '123456')
+  assert.equal(valueAfter(tencentArgs, '-tcsecretid'), 'tencent-secret-id')
+  assert.equal(valueAfter(tencentArgs, '-tcsecretkey'), 'tencent-secret-key')
   assert.equal(valueAfter(tencentArgs, '-tcmodel'), 'hunyuan-translation-lite')
   assert.equal(valueAfter(tencentArgs, '-tcvad'), '1000')
   assert.equal(valueAfter(tencentArgs, '-tcmax'), '10000')

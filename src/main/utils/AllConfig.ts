@@ -7,7 +7,7 @@ import type {
 } from '../types'
 import type {
   ApplicationConfig,
-  ConfigDocumentV8,
+  ConfigDocumentV9,
   EngineConfig
 } from '../../shared/config/schema'
 import {
@@ -18,7 +18,7 @@ import {
 import {
   parseApplicationConfig,
   parseCaptionConfig,
-  parseConfigDocumentV8,
+  parseConfigDocumentV9,
   parseEngineConfig
 } from '../../shared/config/document'
 import { Log } from './Log'
@@ -39,7 +39,7 @@ function getDesktopPath(): string {
 }
 
 class AllConfig {
-  private document: ConfigDocumentV8 = createDefaultConfig(getDesktopPath())
+  private document: ConfigDocumentV9 = createDefaultConfig(getDesktopPath())
   private readonly captions = new CaptionLog()
 
   public engineEnabled: boolean = false
@@ -48,7 +48,7 @@ class AllConfig {
     return this.captions.items
   }
 
-  public get config(): ConfigDocumentV8 {
+  public get config(): ConfigDocumentV9 {
     return this.document
   }
 
@@ -77,7 +77,7 @@ class AllConfig {
     if (!fs.existsSync(configPath)) return
     try {
       const raw: unknown = JSON.parse(fs.readFileSync(configPath, 'utf-8'))
-      this.document = parseConfigDocumentV8(raw)
+      this.document = parseConfigDocumentV9(raw)
       Log.info(
         `Read config schema v${CONFIG_SCHEMA_VERSION} from:`,
         configPath

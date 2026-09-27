@@ -2,7 +2,7 @@
 
 ## 注意：このドキュメントはメンテナンスが行われていないため、記載されている情報は古くなっています。最新の情報については、[中国語版](./zh.md)または[英語版](./en.md)のドキュメントをご参照ください。
 
-対応バージョン：v2.28.0
+対応バージョン：v2.29.0
 
 この文書は大規模モデルを使用して翻訳されていますので、内容に正確でない部分があるかもしれません。
 
@@ -163,7 +163,7 @@ export interface CaptionItem {
 
 カスタム字幕エンジンの設定はコマンドラインパラメータで指定するため、字幕エンジンのパラメータを設定する必要があります。このプロジェクトで現在使用されているパラメータは以下のとおりです：
 
-> 完全な引数の正本は `engine/cli.py` と `python main.py --help` です。Fun-ASR は `-e fun_asr` と `-f*` 引数を使用します。Tencent リアルタイム音声翻訳は `-e tencent_speech_translate`、`-tcmodel`、`-tcvad`、`-tcmax` を使用し、資格情報は `TENCENTCLOUD_APP_ID`、`TENCENTCLOUD_SECRET_ID`、`TENCENTCLOUD_SECRET_KEY` 環境変数からだけ読み取ります。`main.py` に Provider 組み立て分岐を複製しないでください。
+> 完全な引数の正本は `engine/cli.py` と `python main.py --help` です。Fun-ASR は `-e fun_asr` と `-f*` 引数を使用します。Tencent リアルタイム音声翻訳は `-e tencent_speech_translate`、`-tcappid`、`-tcsecretid`、`-tcsecretkey`、`-tcmodel`、`-tcvad`、`-tcmax` を使用します。Python は Tencent の環境変数を読み取りません。`main.py` に Provider 組み立て分岐を複製しないでください。
 
 ```python
 import argparse
@@ -203,14 +203,12 @@ python main.py -e fun_asr -s ja -t zh -a 0 -c 10 \
 Tencent リアルタイム音声翻訳の例：
 
 ```bash
-TENCENTCLOUD_APP_ID=<appid> \
-TENCENTCLOUD_SECRET_ID=<secret-id> \
-TENCENTCLOUD_SECRET_KEY=<secret-key> \
 python main.py -e tencent_speech_translate -s ja -t zh -a 0 -c 10 \
+  -tcappid <appid> -tcsecretid <secret-id> -tcsecretkey <secret-key> \
   -tcmodel hunyuan-translation-lite -tcvad 1000 -tcmax 10000
 ```
 
-この Provider は 16 kHz モノラル PCM16 を受け取り、約100 ms の入力フレームを約200 ms のネットワークパケットにまとめます。サーバーの `sentence_id`、`sentence_end`、`source_text`、`target_text`、ミリ秒オフセットを、安定 ID、partial/final、原文、翻訳文、字幕時刻へ変換します。`-tcvad` は 500～2000 ms の無音後に文を区切り、`-tcmax` は 5000～90000 ms の連続発話後に強制区切りします。両方とも `zh`、`en`、`zh_en` の場合だけ送信します。停止時は最終結果を最大5秒待ち、Electron の期限は8秒です。既存エンジンは4秒のままです。TTS、自動再接続、利用可能なホットワードは未実装で、ホットワードのエンコードと空設定境界だけを将来用に予約しています。
+この Provider は 16 kHz モノラル PCM16 を受け取り、約100 ms の入力フレームを約200 ms のネットワークパケットにまとめます。サーバーの `sentence_id`、`sentence_end`、`source_text`、`target_text`、ミリ秒オフセットを、安定 ID、partial/final、原文、翻訳文、字幕時刻へ変換します。`-tcvad` は 500～2000 ms の無音後に文を区切り、`-tcmax` は 5000～90000 ms の連続発話後に強制区切りします。両方とも `zh`、`en`、`zh_en` の場合だけ送信します。V9 は通常のテキスト欄から3つの資格情報を `config.json` に保存し、Electron は上記 CLI 引数で Python を起動します。コマンドログと診断では SecretID/SecretKey をマスクしますが、設定ファイルと OS のプロセス引数は平文です。停止時は最終結果を最大5秒待ち、Electron の期限は8秒です。既存エンジンは4秒のままです。TTS、自動再接続、利用可能なホットワードは未実装で、ホットワードのエンコードと空設定境界だけを将来用に予約しています。
 
 Fun-ASR は接続 generation ごとに冪等な状態を保持し、同一タスクの `on_error → on_close → stop` は最大1回の再接続または1回の fatal だけを発生させます。恒久的なサービスエラーは即時停止し、一時的なエラーだけを最大3回のバックオフ付きで再試行します。task-failed 後に SDK `stop()` は呼びません。ライフサイクル診断は非表示の `debug` プロトコルイベントとして完全 Debug ログだけに保存され、既存のログ記録画面には表示されません。fatal 時は Session が通常終了を試み、タイムアウトなどの異常経路だけで Electron がパッケージ済みプロセスツリー全体を強制終了します。
 

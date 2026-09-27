@@ -4,6 +4,8 @@ from pathlib import Path
 import sys
 from PyInstaller.utils.hooks import collect_submodules
 
+extra_binaries = []
+
 if sys.platform == 'win32':
     vosk_path = str(Path('./.venv/Lib/site-packages/vosk').resolve())
 else:
@@ -14,10 +16,19 @@ else:
     else:
         vosk_path = str(Path('./.venv/lib/python3.12/site-packages/vosk').resolve())
 
+if sys.platform == 'darwin':
+    libomp_path = Path(sys.prefix) / 'lib' / 'libomp.dylib'
+    if not libomp_path.is_file():
+        raise FileNotFoundError(
+            'Missing .venv/lib/libomp.dylib. From engine/, run '
+            '`.venv/bin/python3 install_macos_libomp.py` first.'
+        )
+    extra_binaries.append((str(libomp_path.resolve()), '.'))
+
 a = Analysis(
     ['main.py'],
     pathex=[],
-    binaries=[],
+    binaries=extra_binaries,
     datas=[(vosk_path, 'vosk')],
     hiddenimports=collect_submodules('truststore'),
     hookspath=[],

@@ -5823,3 +5823,204 @@
 - 未执行真实 Tencent 凭据/API/音频测试，也未执行完整 Electron GUI 人工回归；相关功能的离线单元测试已通过，但在线服务行为仍需真实账号验收。
 - 只在当前 macOS arm64 构建机验证；Windows、Linux 和 Intel macOS 未构建，不声明这些平台已验证。
 - PyInstaller 的 `libomp.dylib` 警告可能影响实际调用依赖 OpenMP 的 numba 路径；本次 CLI 启动和全部离线测试通过，但发布前仍建议进行目标机器上的相关引擎实测。
+## 2026-09-27：腾讯实时语音翻译凭据改为配置与命令行传递
+
+### 用户授权、目标与范围
+
+- 用户明确要求删除腾讯凭据的环境变量配置方式，将 AppID、SecretID、SecretKey 保存到应用配置，设置页使用普通文本输入框，并通过命令行参数传给 Python，使内置 Python 引擎可以脱离 Electron 独立运行。
+- 该要求与项目安全约束中“不得继续扩大明文凭据存储、优先安全存储或环境变量”存在直接冲突；修改前已向用户指出该冲突及配置文件、Renderer 和系统进程列表暴露风险，并按用户最新明确要求实施。日志和诊断脱敏仍保留且扩大覆盖范围。
+- 变更类型：功能、配置、测试、文档。按“V9 配置迁移与校验 → 普通文本界面与启动校验 → CLI 传递与 Python 消费 → 脱敏、测试和文档”组织。
+- 非目标：不修改腾讯识别/翻译 WebSocket 协议、模型、语言矩阵、断句、字幕事件、热词预留语义或停止冲刷实现；不修改旧引擎命令参数和停止期限；不调用真实/付费 API，不安装依赖，不构建安装包，不提交、不推送。
+- 修改前已阅读根目录 `AGENTS.md`，仓库内没有更具体的子目录规则；首次 `git status --short --branch` 为干净的 `main...origin/main`。
+
+### 修改文件与原因
+
+- `src/shared/config/schema.ts`、`src/shared/config/document.ts`、`src/shared/types.ts`、`src/main/utils/AllConfig.ts`：将当前配置从 V8 升级到 V9，在 `engine.providers.tencentSpeech` 增加三项明文凭据，提供 V8→V9 显式迁移、长度/AppID 数字校验并更新共享类型和读取入口。
+- `src/shared/tencentSpeech.ts`：删除腾讯环境变量名常量，把凭据完整性检查改为接收结构化配置值。
+- `src/renderer/src/engines/types.ts`、`src/renderer/src/engines/providers/tencent_speech_translate.ts`：增加三项配置路径和普通 `text` 字段，并在启动阶段要求三项均非空；没有使用密码控件或 Tencent 专属组件分支。
+- `src/renderer/src/i18n/lang/zh.ts`、`src/renderer/src/i18n/lang/en.ts`、`src/renderer/src/i18n/lang/ja.ts`：补齐 AppID、SecretID、SecretKey、缺失提示和明文风险的中英日界面文案。
+- `src/main/i18n/lang/zh.ts`、`src/main/i18n/lang/en.ts`、`src/main/i18n/lang/ja.ts`：把主进程缺失凭据错误改为提示在设置页填写，不再提示环境变量。
+- `src/main/engine/config/EngineCommandBuilder.ts`、`src/main/engine/config/EngineLaunchContext.ts`、`src/main/utils/CaptionEngine.ts`：启动腾讯引擎前校验 V9 配置，生成 `-tcappid`、`-tcsecretid`、`-tcsecretkey` 参数；停止从进程环境提取腾讯凭据，并保持腾讯 8000 ms、旧引擎 4000 ms 的停止契约。
+- `src/main/utils/UtilsFunc.ts`：命令展示、结构化诊断和文本诊断增加 SecretID/SecretKey 脱敏；AppID 按非密钥标识保留可诊断性。
+- `engine/cli.py`、`engine/main.py`：CLI 增加三项腾讯凭据参数，SecretID/SecretKey 不进入 `CliOptions` repr；ProviderConfig 只消费 CLI 值，删除 `os.environ` 腾讯凭据读取。
+- `tests/node/configDocument.test.mjs`、`tests/node/engineCatalog.test.mjs`、`tests/node/engineCommandBuilder.test.mjs`、`tests/node/engineLaunchContext.test.mjs`、`tests/node/utilsFunc.test.mjs`：覆盖 V9 默认值/V8 迁移、AppID 校验、普通文本字段和启动必填、腾讯 CLI 参数、环境策略/停止期限以及命令和诊断脱敏。
+- `engine/tests/test_cli.py`：覆盖三项参数默认值、解析、独立运行参数和 SecretID/SecretKey repr 脱敏。
+- `README.md`、`README_en.md`、`README_ja.md`：把腾讯使用说明改为设置页明文保存和 CLI 传递，并同步风险提示。
+- `docs/user-manual/zh.md`、`docs/user-manual/en.md`、`docs/user-manual/ja.md`：说明 V9 迁移、普通文本配置、命令行传递、不再读取环境变量和本机暴露风险。
+- `docs/engine-manual/zh.md`、`docs/engine-manual/en.md`、`docs/engine-manual/ja.md`：更新独立 Python 引擎 CLI 参数、示例、必填规则和风险说明。
+- `docs/api-docs/config-v9.md`：新增当前 V9 配置、字段约束、迁移、兼容、回滚和安全边界文档。
+- `docs/api-docs/config-v3.md`、`docs/api-docs/config-v4.md`、`docs/api-docs/config-v5.md`、`docs/api-docs/config-v6.md`、`docs/api-docs/config-v7.md`、`docs/api-docs/config-v8.md`：把历史配置页指向 V9 并补全迁移链；V8 页保留当时环境变量行为作为历史记录。
+- `docs/api-docs/electron-ipc.md`、`docs/engine-manual/architecture.md`：更新内部完整配置 IPC 与架构版本为 V9，注明控制 Renderer 会接收腾讯凭据；公开 IPC 通道未变化。
+- `docs/testing.md`、`docs/CHANGELOG.md`：记录 V9、CLI、普通文本 UI、脱敏和离线测试覆盖。
+- `change.md`：追加本批次授权、安全冲突、行为、验证、风险和回滚流水，不修改已有历史。
+
+### 修改前后行为
+
+- 修改前：腾讯 AppID、SecretID、SecretKey 只从 `TENCENTCLOUD_APP_ID`、`TENCENTCLOUD_SECRET_ID`、`TENCENTCLOUD_SECRET_KEY` 读取；不进入配置、Renderer 或命令行，独立启动 Python 前必须设置环境变量。
+- 修改后：设置页以三个普通文本框编辑凭据，点击应用后以明文保存到 `config.json`。Electron 启动腾讯引擎时把三项配置分别作为 `-tcappid`、`-tcsecretid`、`-tcsecretkey` 传入，直接运行 `engine/main.py` 也使用同样参数。TypeScript 和 Python 运行路径不再读取腾讯环境变量。
+- 腾讯模型、动态语言组合、原文/译文实时字幕、断句参数、热词空接口、WebSocket 生命周期及 8000 ms 停止期限没有变化。其他内置和自定义引擎的配置、参数、凭据方式和 4000 ms 停止期限保持原样。
+
+### 配置、IPC、协议、命令行与安全
+
+- 配置 schema 从 V8 升级为 V9。V8→V9 只在 `engine.providers.tencentSpeech` 增加空 `appId`、`secretId`、`secretKey`，保留活动引擎、翻译选择、其他 Provider 配置和未知扩展字段；迁移不从环境变量导入旧凭据。
+- AppID 默认空、最长 64 字符，非空时只允许数字；SecretID、SecretKey 默认空、最长 256 字符。允许空值以便旧配置迁移和使用其他引擎，但选择腾讯启动时三项必须均非空。
+- Electron IPC 通道和 Python stdout/TCP `command` envelope 均未变化。内部完整配置 IPC 的数据从 `ConfigDocumentV8` 变为 `ConfigDocumentV9`，因此控制 Renderer 会收到三项腾讯凭据。
+- Python CLI 新增 `-tcappid/--tencent_speech_app_id`、`-tcsecretid/--tencent_speech_secret_id`、`-tcsecretkey/--tencent_speech_secret_key`；既有 CLI 参数没有删除或改名。
+- SecretID 和 SecretKey 在应用生成的命令展示、对象快照、文本诊断及 CLI repr 中被隐藏；但明文仍存在于磁盘配置、Renderer 内存和操作系统进程参数。日志脱敏不能防止有权限读取配置文件、Renderer 内存或进程列表的本机用户获取凭据。
+
+### 兼容性、迁移与回滚
+
+- V2–V7 继续沿既有迁移链升级到 V8，再升级到 V9；合法 V8 配置升级后需要用户在设置页重新填写腾讯凭据。旧引擎行为不依赖新增字段。
+- 旧应用不能读取 V9。回滚前必须恢复升级前的 V8 配置备份，并按旧版本要求重新设置三个腾讯环境变量；不能只把 `schemaVersion` 手工改回 8。
+- 代码回滚应成组撤销本条列出的 V9 schema/迁移、三语字段、CLI 参数、启动校验、脱敏测试与文档，不得撤销此前腾讯 Provider 基础接入或其他历史功能。
+- 实际验证平台为 macOS arm64；本批次未改变平台路径，但 Windows/Linux 未实测，不能声明已完成跨平台运行验证。
+
+### 实际验证与真实结果
+
+- `npm run test:node`：通过，`119/119`；包含 V9 迁移、字段元数据、启动必填、CLI 参数生成和腾讯凭据脱敏。输出只有项目既有 npm mirror 配置弃用警告和 Node module type 性能警告。
+- `npm run typecheck`：通过，Node TypeScript 和 Vue typecheck 均成功。
+- `npm run lint`：通过。
+- `npm run build`：通过；Electron main、preload、renderer 分别转换 37、1、3297 个模块，生成的 `out/` 为忽略目录，未加入 Git。
+- `PYTHONPATH=engine python3 -m unittest engine.tests.test_cli -v`：通过，`6/6`，包含新增腾讯 CLI 参数及 repr 脱敏。
+- `python3 -m py_compile engine/cli.py engine/main.py`：通过。
+- `npm run test:python`：未通过；项目 `engine/.venv/bin/python3` 是指向已不存在 Python 3.13 的悬空链接，测试脚本退回系统 Python 3.14 后运行 55 项，出现 9 个导入错误和 2 个失败，原因为 Python 3.14 已移除 `audioop` 且当前系统环境缺少 `numpy`、`truststore`。本次新增的 6 项 CLI 测试在同一次全量运行中全部通过；未安装依赖或修改系统环境。
+- `git diff --check`：追加本记录前通过；交付前再次执行最终检查。
+
+### 未执行验证、已知风险与后续事项
+
+- 未使用真实腾讯凭据、麦克风或付费 API；未执行 Electron GUI 人工回归、真实进程列表检查、PyInstaller 打包、安装包构建及 Windows/Linux 实机构建。
+- 普通文本控件会直接显示 SecretID 和 SecretKey，完整配置 IPC 会把它们发送给控制 Renderer，`config.json` 和进程参数也包含明文。这是用户明确选择的配置方式，不应被描述为安全存储。
+- 全量 Python 回归仍需要修复或重建项目 Python 3.13 虚拟环境并安装锁定依赖后重新执行；本批次没有权限安装依赖，因此不能把 Python 全量测试标记为通过。
+- 腾讯热词仍只是空数组和 Provider 内部预留边界，未增加 UI、CLI 或请求参数，不应宣传为可用功能。
+
+### 关键外部文档与技术决策来源
+
+- 用户最新明确要求：删除环境变量方式，凭据保存至 config，使用普通文本输入框，并由命令行传给可独立运行的引擎。
+- 腾讯云《实时语音翻译（WebSocket）》：https://cloud.tencent.com/document/product/1093/127565 。
+- 根目录 `AGENTS.md`：用户明确要求优先、配置显式迁移、Provider 元数据表单、三语同步、CLI/协议兼容、日志脱敏、真实记录验证和逐批追加 `change.md`。
+
+## 2026-09-27：Python 引擎开发与打包环境同步至 Python 3.14
+
+### 用户授权、目标与范围
+
+- 用户明确要求“同步至 Python 3.14，检查并安装或更新缺少的依赖”。本批次将项目内 `engine/.venv` 重建为 Python 3.14.7，检查全部 Python 依赖和可更新版本，补齐 Python 3.14 缺少的 `audioop` 兼容依赖，并验证 PyInstaller 产物。
+- 变更类型：配置、依赖、文档、测试、构建。
+- 只修改项目虚拟环境和仓库依赖声明，不安装或升级系统 Python、Homebrew formula 或全局 Python 包；不调用真实音频设备和付费 API，不修改当前工作区既有 V9/腾讯凭据功能。
+- 修改前已阅读根目录 `AGENTS.md`，仓库内没有子目录 `AGENTS.md`。`git status --short --branch` 显示当前工作区已有 V9、腾讯凭据和文档修改；本批次保留并绕开这些既有改动，修改同一 README、测试文档和 CHANGELOG 前先阅读现有 diff。
+
+### 修改文件与原因
+
+- `engine/.python-version`：新增 `3.14`，作为 pyenv 等本地工具和开发文档可读取的 Python 基线声明。
+- `engine/requirements.txt`：新增 `audioop-lts==0.2.2; python_version >= '3.13'`，补回 Python 3.13 起从标准库移除、但 GLM Provider 仍通过 `audioop.rms` 使用的兼容模块；将直接使用的 `websocket-client` 从 `1.9.0` 更新到明确声明支持 Python 3.14 的 `1.9.2`。
+- `README.md`、`README_en.md`、`README_ja.md`：将字幕引擎开发环境从“Python 3.10+、推荐 3.12”同步为 Python 3.14，并用中英日三语说明 `audioop-lts` 和 macOS PyAudio/PortAudio 构建要求；未覆盖同文件中既有腾讯凭据修改。
+- `docs/testing.md`：记录 Python 3.14 测试基线、条件依赖和项目内 PortAudio 构建约束；保留既有 V9 测试范围更新。
+- `docs/CHANGELOG.md`：在“未发布”追加 Python 3.14、`audioop-lts` 和 `websocket-client` 变更摘要；保留既有 V9 条目。
+- `change.md`：追加本批次授权、依赖决策、真实失败与成功结果、兼容性和回滚方式，不重写历史。
+- Git 忽略目录 `engine/.venv`：由已失效的 Python 3.13.12 环境重建为 Python 3.14.7，安装 requirements 当前解析结果；原 3.13 环境完整移动到 `/private/tmp/auto-caption-engine-venv-python313-backup-20260927`，没有直接删除。
+- Git 忽略目录 `engine/dist`、`engine/build`：使用 Python 3.14.7 与 PyInstaller 6.22.3 重新生成 arm64 `main` 引擎及分析文件。
+
+### 修改前后行为、依赖与兼容性
+
+- 修改前：`engine/.venv/bin/python3` 指向已不存在的 `/Library/Frameworks/Python.framework/Versions/3.13/bin/python3.13`，无法启动；测试会退回系统 Python 3.14，而 Python 3.14 不再自带 `audioop`，因此导入 GLM Provider 时失败并连带多个 Provider 测试无法加载。
+- 修改后：项目虚拟环境由 `/opt/homebrew/bin/python3.14` 创建，实际版本为 Python 3.14.7；`audioop-lts` 继续提供同名 `audioop` 模块和 `rms` 接口，不修改 GLM 代码或算法；全部 Python 模块、测试和 PyInstaller 入口可在 3.14 下运行。
+- `audioop-lts 0.2.2` 要求 Python 3.13+、许可证 PSF-2.0，并提供 CPython 3.13/3.14 的 macOS、Windows 和 Linux wheel。条件 marker 保持 Python 3.12 及更早版本继续使用标准库实现，不安装重复模块。替代方案是自行重写 `audioop.rms`，但会增加数值行为和跨平台回归范围，本批次选择兼容端口以保持行为。
+- `websocket-client 1.9.2` 为 Apache-2.0、Python 3.10+，PyPI 元数据包含 Python 3.14；项目腾讯实时翻译 Provider 的现有 WebSocket 生命周期测试全部通过。
+- `pip list --outdated` 最终仍报告 `dashscope 1.26.7 → 1.27.7`、`multidict 6.9.1 → 7.0.0`、`pydantic_core 2.46.5 → 2.49.0`。DashScope 未升级，因为 Fun-ASR 有针对 1.26.7 私有 `_silence_timer`/task-failed 行为的隔离和直接测试，升级必须独立复核 SDK 回调与关闭语义；multidict 7 被当前 aiohttp 的 `<7.0` 约束排除；pydantic_core 版本由已安装的 pydantic 2.13.5 精确约束，未强制破坏解析器结果。
+- macOS PyAudio 0.2.14 仍需 PortAudio 头文件和库。首次安装因找不到 `portaudio.h` 失败，第二次补充普通头后因缺少 `pa_mac_core.h` 失败；最终复用旧项目虚拟环境中的 PortAudio 静态库与两个头文件，通过 `CFLAGS`/`LDFLAGS` 只在 `engine/.venv` 内成功编译。未执行 `brew install portaudio`，系统环境未变化。
+- 配置 schema、IPC、Electron/Python 协议、CLI 参数和业务数据结构均未变化。Python 3.14 构建继续生成 macOS arm64 可执行文件；Windows/Linux 有可用依赖 wheel，但本批次没有实机构建，不能声明已验证。
+
+### 安装、验证与真实结果
+
+- `/opt/homebrew/bin/python3.14 -m venv engine/.venv`：通过，`python --version` 为 `3.14.7`，虚拟环境自带 pip `26.2.1`。
+- `engine/.venv/bin/python3 -m pip install -r engine/requirements.txt`：沙箱内首次因 PyPI DNS 被限制失败；获准联网后依赖解析成功，但 PyAudio 两次分别因缺少 `portaudio.h` 和 `pa_mac_core.h` 失败；指定项目内完整 PortAudio include/lib 后成功安装所有依赖。
+- `engine/.venv/bin/python3 -m pip install --upgrade -r engine/requirements.txt`：通过，安装 `audioop-lts 0.2.2` 并将 `websocket-client 1.9.0` 更新到 `1.9.2`；其他依赖按当前 requirements 和传递约束安装到项目虚拟环境。
+- `engine/.venv/bin/python3 -m pip check`：通过，输出 `No broken requirements found`；pip 缓存目录不可写警告仅表示禁用用户级缓存，没有使用 sudo 或修改缓存权限。
+- 首次 Python 3.14 全量测试：运行 59 项后失败，出现 8 个测试模块导入错误和 1 个失败，根因均为 `ModuleNotFoundError: audioop`；该真实失败促成新增条件依赖。
+- `engine/.venv/bin/python3 -m unittest discover -s engine/tests -p 'test_*.py' -v`：补齐依赖后通过，`84/84`。
+- `npm run verify`：通过；Node 测试 `119/119`、Python 测试 `84/84`，TypeScript、Vue typecheck 和 ESLint 全部成功。输出只有项目既有 npm mirror 配置弃用与 Node `MODULE_TYPELESS_PACKAGE_JSON` 性能警告。
+- `PYTHONPATH=engine engine/.venv/bin/python3 engine/main.py --help`：通过，全部现有 Provider 和参数正常加载。
+- Python 3.14 导入探测：`audioop.rms`、PyAudio 0.2.14、websocket-client 1.9.2、DashScope、truststore、NumPy、resampy、Vosk、PyInstaller、Googletrans、Ollama、Sherpa-ONNX、Requests 和 OpenAI 全部成功导入。
+- `PYINSTALLER_CONFIG_DIR=/private/tmp/auto-caption-pyinstaller-python314 .venv/bin/pyinstaller --clean --noconfirm main.spec`（在 `engine/` 执行）：通过，确认 PyInstaller 6.22.3、Python 3.14.7，生成 Mach-O arm64 `engine/dist/main`。日志仍有既有 `pycparser.lextab/yacctab` 隐式导入未找到和 numba `@rpath/libomp.dylib` 未解析警告。
+- `engine/dist/main --help`：沙箱内首次因 macOS `semctl: Operation not permitted` 无法初始化 PyInstaller 同步信号量；以只读提升权限重试后退出码 0，打包入口及完整 CLI 正常。
+- `git diff --check`：追加本记录前通过；交付前再次执行最终检查。
+
+### 回滚、未执行验证与风险
+
+- 代码回滚：删除 `engine/.python-version`，恢复 `engine/requirements.txt` 的 `websocket-client==1.9.0` 并移除条件 `audioop-lts`，恢复三语 README、`docs/testing.md` 和 `docs/CHANGELOG.md` 的本批次段落。环境回滚可在没有后续使用的前提下把 `/private/tmp/auto-caption-engine-venv-python313-backup-20260927` 移回 `engine/.venv`，但其 Python 3.13 解释器链接本身已经失效，不能直接运行。
+- 未使用真实麦克风、模型文件、腾讯/阿里云/API 凭据或付费服务；未执行 Electron GUI、macOS 安装包、Windows/Linux 或 Intel macOS 构建。
+- numba 的 `libomp.dylib` PyInstaller 警告仍可能影响实际走 OpenMP 的路径；当前音频处理测试、CLI 和打包入口通过，但发布前仍应以目标设备和真实引擎补充运行验证。
+- PyAudio 当前依赖保存在 Git 忽略虚拟环境中的项目内 PortAudio 静态构建。新机器需要自行提供对应开发头文件/库；本批次文档已明确此要求，但没有把第三方 PortAudio 源码或二进制加入仓库。
+
+### 关键外部文档与技术决策来源
+
+- Python 3.14 官方 `audioop` 页面：https://docs.python.org/3/library/audioop.html ，确认该模块在 Python 3.11 弃用、Python 3.13 移除，最后内置版本为 Python 3.12。
+- `audioop-lts 0.2.2` PyPI：https://pypi.org/project/audioop-lts/ ，确认 Python 3.13+、PSF-2.0 许可及 CPython 3.14 多平台 wheel。
+- `websocket-client 1.9.2` PyPI：https://pypi.org/project/websocket-client/ ，确认 Apache-2.0、Python 3.10+ 与 Python 3.14 分类。
+- DashScope 官方 Python SDK：https://github.com/dashscope/dashscope-sdk-python ，用于检查当前 1.27 系列变化；项目仍锁定并验证 1.26.7，避免未经专项回归改变 Fun-ASR 生命周期。
+- 根目录 `AGENTS.md`：项目内环境、显式依赖约束、跨平台说明、真实测试记录、生成目录和 `change.md` 追加要求。
+
+## 2026-09-27：macOS libomp 虚拟环境安装、RPATH 与应用打包
+
+### 用户授权、目标与范围
+
+- 用户明确要求“在虚拟环境中安装并随应用打包 `libomp.dylib`，同时正确设置运行时搜索路径”。本批次安装 LLVM OpenMP 运行时，把 dylib 放入项目 `engine/.venv`，修复 numba OpenMP 扩展的虚拟环境加载路径，并使 PyInstaller one-file 引擎和 Electron `.app` 包含该运行时。
+- 变更类型：修复、构建、配置、测试、文档。
+- 修改前已阅读根目录 `AGENTS.md`，仓库内没有子目录 `AGENTS.md`；已执行 `git status --short --branch` 并阅读本批次涉及文件的现有 diff。工作区已有 V9 腾讯凭据、Python 3.14 及相关文档修改，本批次只作增量修改，没有覆盖或回退这些用户改动。
+- 本批次不修改识别、翻译、音频算法、配置 schema、IPC、Python 进程协议、CLI、Node/Python业务依赖或 Electron 资源布局；不生成发布 DMG/ZIP，不提交、推送或发布。
+
+### 修改文件与原因
+
+- `engine/install_macos_libomp.py`：新增可重复执行的 macOS 安装脚本。脚本要求从项目虚拟环境运行，默认定位 Homebrew `libomp`，复制 dylib 到 `engine/.venv/lib`，把其 install name 设为 `@rpath/libomp.dylib`，为已安装 numba 的 `omppool*.so` 增加相对虚拟环境 lib 目录的 `LC_RPATH`，并在修改 Mach-O 后执行 ad-hoc codesign。脚本保留 `--source` 入口以支持明确提供的其他 LLVM libomp 构建。
+- `engine/main.spec`：macOS 构建时只从当前 Python 虚拟环境的 `lib/libomp.dylib` 收集运行时到 one-file 根目录；缺少文件时在构建阶段直接失败并提示运行安装脚本。Windows/Linux 保持原有空额外二进制列表。
+- `engine/tests/test_install_macos_libomp.py`：新增 3 项单元测试，覆盖 numba 扩展发现、相对 RPATH 计算、仅解析 `LC_RPATH`、dylib 复制/签名/RPATH 命令及只读目标上的幂等重装。
+- `README.md`、`README_en.md`、`README_ja.md`：用中英日同步记录 macOS `brew install libomp`、虚拟环境安装脚本、PyInstaller 收集行为和 numba 重装后需要重跑脚本。
+- `docs/testing.md`：记录 macOS OpenMP 验证前置条件、目标位置、相对 RPATH 和缺库时的构建失败策略。
+- `docs/CHANGELOG.md`：在未发布条目记录 libomp 虚拟环境安装与 one-file 收集修复。
+- `change.md`：追加本批次授权、文件、失败/修复、验证、兼容性、回滚和来源；既有历史未改写。
+- Git 忽略目录 `engine/.venv`：新增 `lib/libomp.dylib`，并给 `lib/python3.14/site-packages/numba/np/ufunc/omppool.cpython-314-darwin.so` 增加 `@loader_path/../../../../..`；两者均重新 ad-hoc 签名。
+- Git 忽略目录 `engine/build`、`engine/dist`：使用修复后的 spec 重新生成 macOS arm64 one-file 引擎。
+- Git 忽略目录 `dist/mac-arm64/Auto Caption.app`：由 electron-builder `--mac --dir` 重新生成，用于验证最终应用资源复制，不作为源文件提交。
+
+### 修改前后行为与技术决策
+
+- 修改前：numba `omppool` 链接 `@rpath/libomp.dylib`，但虚拟环境没有该 dylib，扩展也没有指向虚拟环境的 `LC_RPATH`。直接导入报 `Library not loaded: @rpath/libomp.dylib`；PyInstaller 虽然完成构建，却持续警告无法解析该依赖，目标机器走 OpenMP 路径时存在运行失败风险。
+- 修改后：开发环境从 `engine/.venv/lib/libomp.dylib` 加载，`omppool` 通过相对 loader path 定位，不依赖 `/opt/homebrew` 绝对运行路径。PyInstaller 将 dylib 作为 binary 放在 one-file 解包根目录，并把包内 `omppool` 的 RPATH 改写为 `@loader_path/../../..`，从 `numba/np/ufunc` 正确回到根目录；最终 `.app` 复制包含该 dylib 的同一个 one-file 引擎。
+- 安装来源为 Homebrew `libomp 23.1.2` bottle，对应 LLVM OpenMP，MIT 许可，arm64。Homebrew formula 是 keg-only；这里只把它作为可信构建机来源，发布后的 Python 引擎不读取 Homebrew 路径。没有可用的项目 Python requirement 能直接提供 macOS `libomp.dylib`，因此没有伪造 pip 依赖；替代的源码编译会引入 CMake/编译器和更大跨平台维护范围，本批次未采用。
+- 目标 dylib 的 install name 使用通用 `@rpath/libomp.dylib`，而不是构建机 Homebrew 绝对路径。开发虚拟环境 RPATH 和 PyInstaller 包内 RPATH 分别按实际目录层级设置，避免依赖 `DYLD_LIBRARY_PATH` 或修改全局链接路径。
+- 安装脚本修改第三方 wheel 内 `omppool`，所以重装/升级 numba 后必须重跑。脚本对已存在的只读 dylib 先恢复用户写权限，再覆盖、修复 install name 和签名，可幂等执行。
+- 配置、IPC、Python stdout/TCP 协议、CLI、业务数据结构和持久化迁移均无变化。Windows/Linux 不执行 dylib 逻辑；本批次仅在 macOS arm64 实测，不能据此声明 Intel macOS、Windows 或 Linux 已验证。
+
+### 安装、验证与真实结果
+
+- `brew install libomp`：经用户批准在沙箱外成功；Homebrew 安装 `libomp 23.1.2` arm64 bottle 到 `/opt/homebrew/Cellar/libomp/23.1.2`。该 formula 为 keg-only，没有链接进 `/opt/homebrew/lib`。
+- `engine/.venv/bin/python3 engine/install_macos_libomp.py`：首次通过，生成 arm64 `engine/.venv/lib/libomp.dylib`，install name 为 `@rpath/libomp.dylib`，并给 numba `omppool` 添加 `@loader_path/../../../../..`。
+- 首次 numba 导入探测已成功导入 `omppool`，但验证表达式误把其整数属性 `get_num_threads` 当作函数调用，出现 `TypeError: 'int' object is not callable`；这是探测命令错误，不是动态库加载失败。
+- 首次幂等重跑安装脚本未通过：Homebrew dylib 的只读权限被 `copy2` 保留，覆盖目标时报 `PermissionError`。随后脚本增加目标用户写权限处理和对应测试，两次连续重跑均通过。
+- 首次从 `engine/` 执行合并验证时误写 `engine/.venv/bin/python3`，因相对路径重复而退出 127；改为 `.venv/bin/python3` 后继续验证。这不是产品或脚本失败。
+- `.venv/bin/python3 -m unittest tests.test_install_macos_libomp -v`：通过，`3/3`；覆盖相对路径、Mach-O RPATH 解析、复制/签名及只读目标幂等重装。
+- `.venv/bin/python3 -m py_compile install_macos_libomp.py`：通过。
+- `codesign --verify --verbose=2`：虚拟环境中的 `libomp.dylib` 与 `omppool` 均 valid on disk，并满足各自 designated requirement。
+- 首次 OpenMP 计算探测使用 generator 交给 numba `njit(parallel=True)`，因 numba 不支持 closure yield 而失败；改为显式 `prange` 循环后输出 `49995000`，`numba.threading_layer()` 输出 `omp`，确认虚拟环境实际加载 LLVM OpenMP 后端。
+- `PYINSTALLER_CONFIG_DIR=/private/tmp/auto-caption-pyinstaller-libomp .venv/bin/pyinstaller --clean --noconfirm main.spec`（在 `engine/` 执行）：通过，PyInstaller 6.22.3/Python 3.14.7 生成 arm64 `engine/dist/main`。此前的 `@rpath/libomp.dylib` 未解析警告已消失；仍有既有可选 `pycparser.lextab`/`yacctab` 缺失警告。
+- `.venv/bin/pyi-archive_viewer -l dist/main`：确认 one-file 归档包含 `libomp.dylib`（解压 721,776 bytes）和 `numba/np/ufunc/omppool.cpython-314-darwin.so`。解出检查显示 libomp install name 为 `@rpath/libomp.dylib`，包内 omppool 依赖该名称且 `LC_RPATH` 为 `@loader_path/../../..`，两者签名验证通过。
+- `engine/dist/main --help`：沙箱内首次仍因 macOS `semctl: Operation not permitted` 无法初始化 PyInstaller 同步信号量；经批准在沙箱外只读重试后退出码 0，完整 CLI help 正常输出。
+- `npm run verify`：通过；TypeScript/Vue typecheck、ESLint、Node `119/119`、Python `87/87` 全部成功。输出只有现有 npm mirror 配置弃用和 Node module type 性能警告。
+- `npm run build`：通过；Electron main、preload、renderer 分别转换 37、1、3297 个模块并生成忽略目录 `out/`。
+- `npx electron-builder --mac --dir`：沙箱内首次因 `npmmirror.com` DNS 受限失败并终止；经用户批准联网后通过，生成 arm64 `dist/mac-arm64/Auto Caption.app`。由于本机没有 Developer ID，electron-builder 明确跳过应用正式签名。
+- 最终 `.app/Contents/Resources/engine/main` 为 arm64 Mach-O，SHA-256 与 `engine/dist/main` 均为 `be732c5947c47d9a7af95c2ee27289e2320d654ba768aede3bf643ba6897f344`；对应用内引擎再次列归档，确认仍含 libomp 与 omppool。
+- `git diff --check`：追加本记录前通过；交付前再次执行最终检查。
+
+### 兼容性、回滚、未执行验证与风险
+
+- 代码回滚应成组撤销 `engine/install_macos_libomp.py`、对应测试、`engine/main.spec` 的 macOS binary 收集及本批次三语 README、测试文档和 CHANGELOG 段落。虚拟环境回滚可对 `omppool` 删除 `@loader_path/../../../../..` RPATH 并重新 ad-hoc 签名，再移除本批次的 `engine/.venv/lib/libomp.dylib`；更安全的方式是在确认没有其他项目状态需要保留后按 requirements 重建虚拟环境。Homebrew `libomp` 只有在确认没有其他本机项目使用时才可单独卸载。
+- 未生成 DMG/ZIP、未做 Developer ID 签名或 Apple 公证，未执行安装覆盖、Electron GUI、真实麦克风/系统音频、模型或付费 API 回归。`--mac --dir` 证明应用资源包含关系，不等于可发布安装包已完成签名验收。
+- 未执行 Intel macOS、Windows 或 Linux 构建。Windows/Linux spec 分支未改变；Intel macOS 必须使用同架构 libomp 和 Python/numba 构建，不能复用本次 arm64 dylib。
+- Homebrew 是构建机安装前置项，不是目标机器前置项。新构建机必须先安装 `libomp` 并运行项目脚本；spec 会在遗漏时失败，避免静默产出不完整包。
+- 当前脚本定位所有已安装 `omppool*.so` 并逐个签名。若未来 numba 改变扩展目录或库名，脚本会因找不到扩展而失败，需要随 numba 专项升级更新；不会静默跳过。
+
+### 关键外部文档与技术决策来源
+
+- Homebrew `libomp` 公式与 bottle 元数据：https://formulae.brew.sh/formula/libomp ，确认 LLVM OpenMP、MIT、keg-only 和 macOS arm64 bottle。
+- LLVM OpenMP 项目：https://openmp.llvm.org/ 。
+- PyInstaller 6.22.3 spec 文档：https://pyinstaller.org/en/stable/spec-files.html ，其 binary 收集说明用于把未自动解析的动态库加入 `Analysis.binaries`；one-file 会把附加文件解到运行时临时目录。
+- 根目录 `AGENTS.md`：依赖必要性/许可/平台说明、PyInstaller 隐式依赖验证、三语文档、真实失败记录、生成目录和逐批追加 `change.md` 要求。
