@@ -6244,3 +6244,62 @@
 - 用户提供的 2026-09-28 Debug 日志：Lite 模型运行未产生 `ProviderReady`，Provider 事件队列高水位保持 0，但音频采集仍提交首帧并在 `accept_audio()` 报 not ready。
 - 腾讯云《实时语音翻译（WebSocket）》：握手成功需收到 `code: 0` 确认消息，最终结束消息不能替代握手确认。
 - 根目录 `AGENTS.md`：Provider 生命周期、启动/停止测试、兼容性、真实验证记录和 `change.md` 逐批追加要求。
+
+## 2026-09-28：发布版本更新至 2.31.0 并生成 macOS arm64 安装包
+
+### 用户授权、目标与范围
+
+- 用户明确要求“编译一下 Mac 版本并更新小版本号”。本批次把应用版本从 `2.30.0` 更新为 `2.31.0`，使用项目内 Python 3.14 虚拟环境重建字幕引擎、Apple Speech 辅助程序、Electron 应用、ZIP 和 DMG。
+- 变更类型：构建、配置、文档、测试。
+- 修改前完整阅读根目录 `AGENTS.md`、确认没有子目录规则、执行 `git status --short --branch`，并检查目标版本文件与全部现有 diff。工作区已有腾讯 WebSocket 握手成功门控补全、测试及记录，本批次原样保留并将其包含在 2.31.0 包中。
+- 本批次不修改腾讯修复之外的业务逻辑，不安装或升级依赖，不修改系统 Python、PATH 或全局环境，不提交、推送或发布远端 Release。
+
+### 修改文件与原因
+
+- `package.json`、`package-lock.json`：把应用及锁文件根包版本从 `2.30.0` 更新为 `2.31.0`，没有改变依赖树。
+- `src/renderer/index.html`、`src/renderer/src/components/EngineStatus.vue`：同步窗口标题与关于界面版本。
+- `README.md`、`README_en.md`、`README_ja.md`：同步中英日发布徽章、发布提示与平台版本说明。
+- `docs/user-manual/zh.md`、`docs/user-manual/en.md`、`docs/user-manual/ja.md`：同步三语用户手册版本。
+- `docs/engine-manual/zh.md`、`docs/engine-manual/en.md`、`docs/engine-manual/ja.md`：同步三语引擎手册版本。
+- `docs/CHANGELOG.md`：新增 `v2.31.0 - 2026-09-28`，把 2.30.0 后新增的腾讯握手成功门控补全归入本版；2.30.0 保留首次握手前关闭竞态修复的历史描述。
+- `change.md`：在既有记录后追加本批次真实构建、失败、验证、兼容性和风险记录，没有覆盖历史。
+- Git 忽略目录 `native/apple-speech-helper/.build`、`native/apple-speech-helper/dist`、`engine/build`、`engine/dist`、`out`、`dist`：生成 Swift、Python、Electron 中间产物及最终发布包，不加入版本控制。
+
+### 修改前后行为、接口与兼容性
+
+- 修改前：源码与界面版本为 `2.30.0`，已生成的 2.30.0 安装包不包含随后完成的腾讯握手成功状态门控。
+- 修改后：源码、锁文件、界面与三语文档统一为 `2.31.0`；macOS arm64 包包含握手前提前结果/final、静默返回和合法握手后结束路径的完整防护，应用 `Info.plist` 短版本与构建版本均为 `2.31.0`。
+- 版本发布自身没有改变配置、schemaVersion、迁移、Electron IPC、Python stdout/TCP 协议、CLI 或数据结构；所含腾讯修复的接口影响已在上一条独立记录中说明。
+- 构建使用项目 `engine/.venv` 的 Python 3.14.7、PyInstaller 6.22.3 和当前锁文件中的 Node 依赖。没有执行 `npm install`、`pip install` 或 Homebrew 安装/升级，没有修改系统默认解释器或全局动态库搜索路径。
+- 产物目标为 Apple Silicon arm64；Windows、Linux 和 Intel macOS 未因本次版本同步改变，但本批次没有实机构建验证。
+
+### 实际验证与真实结果
+
+- `npm run verify`：通过；TypeScript/Vue typecheck、ESLint、Node `119/119`、Python `91/91` 全部成功，其中腾讯 Provider 测试 `8/8`。输出只有既有 npm mirror 配置弃用和 Node module type 性能警告。
+- `SDKROOT=/Library/Developer/CommandLineTools/SDKs/MacOSX26.5.sdk npm run build:apple-speech`：通过；Swift production build 完成。沙箱导致 SwiftPM 用户缓存不可写，并出现两个 CommandLineTools 搜索路径不存在的链接器警告，但目标正常链接完成。
+- `PYINSTALLER_CONFIG_DIR=/private/tmp/auto-caption-pyinstaller-231 .venv/bin/pyinstaller --clean --noconfirm main.spec`（在 `engine/` 执行）：通过；Python 3.14.7/PyInstaller 6.22.3 生成 arm64 one-file 引擎。仅有既有可选 `pycparser.lextab`/`yacctab` 缺失警告，没有 libomp 未解析警告。
+- `engine/.venv/bin/pyi-archive_viewer -l engine/dist/main | rg 'libomp|omppool'`：通过；确认引擎包含 `libomp.dylib` 和 Python 3.14 numba `omppool`。
+- `engine/dist/main --help`：沙箱内首次因 `semctl: Operation not permitted` 失败；经批准在沙箱外只读重试后退出码 0，完整 CLI 帮助正常输出。
+- `npm run build`：通过；Electron main、preload、renderer 分别转换 37、1、3297 个模块。
+- `npx electron-builder --mac`：沙箱内首次因 `npmmirror.com` DNS 受限失败；经批准联网重试后通过，生成 arm64 APP、ZIP、DMG、blockmap 和更新元数据。因本机无有效 Developer ID，打包器明确跳过正式签名。
+- `plutil`、`file`、应用内归档检查与 `apple-speech-helper probe`：版本为 `2.31.0`；应用主程序、Python 引擎和 helper 均为 Mach-O arm64；应用内引擎保留 libomp/omppool；helper 返回 protocolVersion 1 且 `isAvailable` 为 true。
+- `codesign --force --deep --sign -` 及 `codesign --verify --deep --strict --verbose=2`：通过；最终 APP 为 ad-hoc 签名，`TeamIdentifier=not set`。
+- `ditto` 从最终签名 APP 重建 ZIP；`unzip -tq` 通过，无压缩数据错误。
+- `hdiutil create` 在沙箱内首次因“设备未配置”失败；经批准在沙箱外成功重建 DMG。工具提示旧式 create 语法已弃用；`hdiutil verify` 仍确认最终映像校验和有效。
+- 重新生成 ZIP/DMG blockmap，并核对 `dist/latest-mac.yml` 中两项 SHA-512 与字节数均和最终产物一致。
+- 最终 ZIP `dist/Auto Caption-2.31.0-arm64-mac.zip`：228,554,272 bytes，SHA-256 `2a3e8a97380ae8f471cfc4b878fa59e9d20ed6da2dda6e119fba72631085e7db`。
+- 最终 DMG `dist/auto-caption-2.31.0.dmg`：248,628,188 bytes，SHA-256 `c8ab18c0e17bdf9c989c4bed28c3f18a582714728705c3f5e86d2ad19504cac4`。
+- `git diff --check`、活动版本残留搜索及 `git status --short --branch`：在本记录追加后执行最终审计，结果见交付说明。
+
+### 回滚、未执行验证与风险
+
+- 回滚本批次时应成组恢复版本文件、三语文档和 `docs/CHANGELOG.md` 的 2.31.0 发布段落；腾讯握手门控属于先前独立功能修复，仅回滚版本号时不能删除。`change.md` 如需纠错只能追加更正记录。
+- 未执行 Developer ID 正式签名、Apple 公证、Gatekeeper 外部下载场景、Electron GUI 人工回归、真实麦克风/系统音频、腾讯真实凭据或付费 API 测试；ad-hoc 包不能视为已公证发行包。
+- 未执行 Windows、Linux 或 Intel macOS 构建，不能据此声明这些平台已验证。
+- 依赖检查以现有锁文件、项目虚拟环境和完整测试为依据；本次没有依赖升级授权，因此没有查询、安装或升级依赖，也没有修改系统环境。
+
+### 关键技术决策来源
+
+- 根目录 `AGENTS.md`：脏工作区保护、版本文档同步、构建测试、依赖授权、生成目录和 `change.md` 逐批追加要求。
+- Apple `codesign`、`hdiutil`、`ditto` 本机工具输出：用于最终签名状态、DMG 和 ZIP 完整性验证。
+- PyInstaller 6.22.3 与 electron-builder 26.15.3 构建日志：用于确认 Python 3.14 one-file 引擎、Electron 43.4.0 arm64 应用及产物构成。
