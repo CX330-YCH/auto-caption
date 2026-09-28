@@ -2,7 +2,7 @@
 
 ## 注意：このドキュメントはメンテナンスが行われていないため、記載されている情報は古くなっています。最新の情報については、[中国語版](./zh.md)または[英語版](./en.md)のドキュメントをご参照ください。
 
-対応バージョン：v2.32.0
+対応バージョン：v2.33.0
 
 この文書は大規模モデルを使用して翻訳されていますので、内容に正確でない部分があるかもしれません。
 
@@ -209,6 +209,8 @@ python main.py -e tencent_speech_translate -s ja -t zh -a 0 -c 10 \
 ```
 
 この Provider は 16 kHz モノラル PCM16 を受け取り、約100 ms の入力フレームを約200 ms のネットワークパケットにまとめます。サーバーの `sentence_id`、`sentence_end`、`source_text`、`target_text`、ミリ秒オフセットを、安定 ID、partial/final、原文、翻訳文、字幕時刻へ変換します。`-tcvad` は 500～2000 ms の無音後に文を区切り、`-tcmax` は 5000～90000 ms の連続発話後に強制区切りします。両方とも `zh`、`en`、`zh_en` の場合だけ送信します。V9 は通常のテキスト欄から3つの資格情報を `config.json` に保存し、Electron は上記 CLI 引数で Python を起動します。コマンドログと診断では SecretID/SecretKey をマスクしますが、設定ファイルと OS のプロセス引数は平文です。停止時は最終結果を最大5秒待ち、Electron の期限は8秒です。既存エンジンは4秒のままです。TTS、自動再接続、利用可能なホットワードは未実装で、ホットワードのエンコードと空設定境界だけを将来用に予約しています。
+
+Tencent の成功ハンドシェイクは `code: 0` と `final: 0` を含む場合と、`final` を省略する場合があり、どちらも Ready へ移行します。ハンドシェイク前の非 null `result` または `final: 1/2` は引き続き拒否し、結果メッセージをハンドシェイク確認として誤認しません。
 
 Debug Mode を有効にすると、Tencent Provider は機密情報を除いたリクエスト引数、WebSocket worker と transport-open、ハンドシェイク待機状態、完全にマスクされた JSON 応答、例外と traceback、close code/reason、停止時の flush、ネットワーク音声パケットのバイト数を非表示の `debug` イベントへ記録します。定期 snapshot には ready/失敗状態、保留音声、送受信数、partial/final 数が含まれます。解析不能な payload は種類、長さ、SHA-256 のみを記録します。署名済み URL、`secretid`、`signature`、SecretID、SecretKey、PCM 本文は記録しません。
 

@@ -6421,3 +6421,113 @@
 - 根目录 `AGENTS.md`：脏工作区保护、诊断脱敏、版本文档同步、构建测试、依赖授权和 `change.md` 逐批追加要求。
 - Apple `codesign`、`hdiutil`、`ditto` 本机工具输出：用于最终签名状态、DMG 和 ZIP 完整性验证。
 - PyInstaller 6.22.3 与 electron-builder 26.15.3 构建日志：用于确认 Python 3.14 one-file 引擎、Electron 43.4.0 arm64 应用及产物构成。
+
+## 2026-09-28：兼容腾讯成功握手中的 final: 0
+
+### 用户授权、目标与范围
+
+- 用户在提供 Debug JSONL 并确认问题后明确要求“执行修复”。本批次修复腾讯实时语音翻译将服务端成功握手响应中的 `final: 0` 误判为提前结果的问题。
+- 变更类型：修复、测试、文档。范围仅限腾讯 WebSocket 私有握手判定、对应测试和协议/三语引擎文档；不修改签名、凭据、音频分包、字幕映射、停止期限、配置界面或其他识别引擎。
+- 修改前已阅读根目录 `AGENTS.md`，确认没有目标子目录的额外规则，并执行 `git status --short --branch`；工作区为干净的 `main...origin/main`，没有需要合并或绕开的用户改动。
+
+### 修改文件与原因
+
+- `engine/providers/tencent_speech_translate.py`：新增共享的私有握手确认判定，使 WebSocket 客户端和 Provider Ready 门控使用同一规则；接受 `code: 0`、无识别结果且 `final` 缺省或为 `0` 的响应。
+- `engine/tests/test_tencent_speech_provider.py`：将伪客户端和 WebSocket 成功响应改为日志中观测到的 `final: 0` 形态，直接覆盖文档形态、线上形态、提前 `final` 和提前 `result`，并保留握手前 `final: 1` 必须失败的集成回归。
+- `docs/api-docs/caption-engine.md`：记录腾讯成功握手的两种实际形态及握手前结果拒绝规则。
+- `docs/engine-manual/zh.md`、`docs/engine-manual/en.md`、`docs/engine-manual/ja.md`：同步中英日 Provider 握手兼容行为。
+- `docs/CHANGELOG.md`：在未发布版本记录本次修复。
+- `change.md`：追加本批次授权、行为、验证和风险记录，不改写既有历史。
+
+### 修改前后行为
+
+- 修改前：腾讯服务端已建立 WebSocket，并返回 `code: 0`、`message: success`、`final: 0` 且没有 `result` 的握手消息；客户端使用“只要存在 `final` 字段就是提前结果”的判定抛出 `Tencent result arrived before handshake confirmation`，Provider 也因只接受 `final` 缺省而不能进入 Ready。
+- 修改后：客户端与 Provider 统一把 `code: 0`、`result` 缺省或为 null、且 `final` 缺省或为数值 `0` 认定为握手确认。`final: 1/2` 或非空 `result` 仍属于握手前结果并立即拒绝，因此没有放宽真实结果消息的启动门控。
+- 修复只决定腾讯 Provider 何时进入 Ready；成功后原文/译文 partial/final、稳定字幕 ID、时间戳、停止冲刷和 Debug 记录行为保持不变，其他引擎不经过该私有函数。
+
+### 配置、协议、兼容性与回滚
+
+- 没有配置 schema、配置迁移、默认值、Electron IPC、Python CLI、stdout/TCP 公开协议、命令行凭据或字幕数据结构变化。
+- 腾讯私有 WebSocket 响应兼容性扩大到线上实际返回的 `final: 0`，同时继续兼容文档示例中省略 `final` 的握手；旧引擎行为不变。
+- 实现没有新增依赖或平台分支。理论上适用于 Windows、macOS 和 Linux，但本批次仅在 macOS arm64 开发环境完成离线验证。
+- 回滚时应成组恢复 Provider、测试和六份文档修改；`change.md` 如需更正只能追加记录，不能删除本条历史。
+
+### 实际验证与真实结果
+
+- `engine/.venv/bin/python3 -m py_compile engine/providers/tencent_speech_translate.py engine/tests/test_tencent_speech_provider.py`：通过。
+- `engine/.venv/bin/python3 -m unittest engine.tests.test_tencent_speech_provider -v`：最终通过，`12/12`。
+- `npm run test:python`：最终通过，`96/96`。
+- `npm run verify`：最终通过；TypeScript/Vue typecheck、ESLint、Node `119/119`、Python `96/96` 全部成功。输出只有项目已有的 npm mirror 配置弃用提示和 Node module type 性能提示。
+- `npm run build`：通过；Electron main、preload、renderer 分别转换 37、1、3297 个模块并生成忽略目录 `out/`。
+- `git diff --check`、敏感信息搜索和 `git status --short --branch`：在本记录追加后执行最终审计，结果见交付说明。
+
+### 未执行验证、风险与后续事项
+
+- 未再次调用真实腾讯付费 API，未使用真实麦克风或系统音频，未执行 Electron GUI、PyInstaller、安装包、Windows、Linux 或 Intel macOS 验证；本次回归测试使用日志中的真实握手结构和伪造传输验证判定逻辑。
+- 当前已安装的 2.32.0 应用不自动包含源码修复；需要后续重新构建并安装应用/引擎后，线上运行才会采用新判定。本批次没有获得更新版本号或生成安装包的授权。
+- 服务端若未来改变握手字段语义，仍会由严格的 `code`、`result` 和 `final` 组合检查拒绝未知形态，并通过现有 Debug 诊断保留脱敏响应供定位。
+
+### 关键外部文档与技术决策来源
+
+- 用户提供的 `auto-caption-debug-2026-09-28T05-58-53-060Z.jsonl`：确认 WebSocket 已打开，并观测到服务端实际成功响应 `code: 0`、`message: success`、`final: 0` 后被本地握手门控拒绝；日志中的凭据不写入仓库。
+- 腾讯云《实时语音翻译（WebSocket）》：`https://cloud.tencent.com/document/product/1093/127565`，用于核对握手、结果及 final 流程；实现同时兼容文档示例和日志中的线上响应。
+- 根目录 `AGENTS.md`：最小范围、旧引擎兼容、测试、三语文档、安全和 `change.md` 追加要求。
+
+## 2026-09-28：macOS arm64 2.33.0 构建与小版本更新
+
+### 用户授权、目标与范围
+
+- 用户明确要求“编译一下 Mac 版本并更新小版本号”；本批次将版本从 `2.32.0` 更新为 `2.33.0`，并生成 macOS arm64 安装产物。
+- 变更类型：版本、文档、构建。保留工作区中已存在的腾讯 WebSocket `final: 0` 握手兼容修复及其测试和文档修改，不扩大功能范围。
+- 按项目约束未安装或升级依赖、未修改系统环境、未提交或推送 Git。
+
+### 修改文件与原因
+
+- `package.json`、`package-lock.json`：将应用版本与锁文件根包版本更新为 `2.33.0`。
+- `src/renderer/index.html`、`src/renderer/src/components/EngineStatus.vue`：同步界面显示版本。
+- `README.md`、`README_en.md`、`README_ja.md`：同步三语项目版本信息。
+- `docs/user-manual/{zh,en,ja}.md`、`docs/engine-manual/{zh,en,ja}.md`：同步三语用户/引擎手册版本信息。
+- `docs/CHANGELOG.md`：新增 `v2.33.0 - 2026-09-28` 发布记录，包含腾讯握手兼容修复和 macOS 构建说明。
+- `change.md`：追加本批次完整构建记录。
+- 工作区已有的 `engine/providers/tencent_speech_translate.py`、对应测试、协议文档和三语引擎文档修改均原样保留，本批次未重写其实现。
+
+### 修改前后行为
+
+- 修改前：项目发布版本为 `2.32.0`。
+- 修改后：应用、Electron bundle、Python 引擎构建元数据及三语版本信息为 `2.33.0`；macOS 产物目标为 arm64。腾讯 Provider 的 `final: 0` 握手兼容行为保持不变。
+
+### 配置、协议、依赖与兼容性
+
+- 没有配置 schema、配置迁移、默认值、Electron IPC、Python CLI、stdout/TCP 协议或字幕数据结构变化。
+- 没有新增、安装或升级依赖；使用现有 `package-lock.json`、项目 `.venv`、Python 3.14.7、PyInstaller 6.22.3 和 electron-builder 26.15.3。
+- 仅验证 macOS arm64；未据此声明 Windows、Linux 或 Intel macOS 已验证。回滚时成组恢复版本文件和 `docs/CHANGELOG.md` 的 2.33.0 段落；`change.md` 仅追加更正记录。
+
+### 实际构建与验证
+
+- `npm run verify`：通过；TypeScript/Vue typecheck、ESLint、Node `119/119`、Python `96/96` 全部通过。
+- `SDKROOT=/Library/Developer/CommandLineTools/SDKs/MacOSX26.5.sdk npm run build:apple-speech`：通过，Swift helper 构建完成。
+- `PYINSTALLER_CONFIG_DIR=/private/tmp/auto-caption-pyinstaller-232 .venv/bin/pyinstaller --clean --noconfirm main.spec`（`engine/`）：通过，生成 Python 3.14.7 arm64 one-file 引擎；归档确认包含 `libomp.dylib` 与 `numba` 的 `omppool.cpython-314-darwin.so`。
+- `npm run build`：通过，Electron main/preload/renderer 分别转换 37、1、3297 个模块。
+- `npx electron-builder --mac`：沙箱内首次因 `npmmirror.com` DNS 受限失败，经批准联网重试成功，生成 arm64 APP、ZIP、DMG、blockmaps 和更新元数据。
+- 对最终 APP 执行 `codesign --force --deep --sign -`，随后 `codesign --verify --deep --strict --verbose=2`：通过；`CFBundleShortVersionString`、`CFBundleVersion` 均为 `2.33.0`，签名为 ad-hoc，`TeamIdentifier=not set`。
+- `unzip -tq 'dist/Auto Caption-2.33.0-arm64-mac.zip'`：通过，无压缩数据错误。
+- `hdiutil verify 'dist/auto-caption-2.33.0.dmg'`：通过，映像校验和有效；沙箱内首次 `hdiutil create` 因设备未配置失败，经批准沙箱外重建成功。
+- `dist/latest-mac.yml` SHA-512 和字节数核对：通过。
+
+### 最终产物
+
+- `dist/Auto Caption-2.33.0-arm64-mac.zip`：228,563,807 bytes；SHA-256 `81225cf706013d8daa59c4a5f897ea39c14f66836fe4b0737e33aad465cad7f7`。
+- `dist/auto-caption-2.33.0.dmg`：248,642,000 bytes；SHA-256 `cdeacca1a317bea6731aa28f4fba9568bad9158c938ca5b4c2672be6c85ab631`。
+- `dist/mac-arm64/Auto Caption.app`：arm64 Mach-O；Apple Speech helper probe 返回 `protocolVersion: 1`、`isAvailable: true`。
+
+### 未执行验证、风险与后续事项
+
+- 未执行 Developer ID 正式签名、Apple 公证、Gatekeeper 外部下载验证、Electron GUI 人工回归、真实麦克风/系统音频、腾讯真实凭据或付费 API 测试。
+- 未执行 Windows、Linux 或 Intel macOS 构建。
+- 最终 APP 为 ad-hoc 签名，未公证；在其他 Mac 上可能显示未验证开发者，需要用户明确允许或后续使用 Developer ID 签名并公证。
+
+### 关键技术决策来源
+
+- 根目录 `AGENTS.md`：版本同步、三语文档、构建验证、依赖授权、脏工作区保护和 `change.md` 追加要求。
+- Apple `codesign`、`hdiutil`、`ditto` 本机工具输出：用于最终签名状态、DMG 和 ZIP 完整性验证。
+- PyInstaller 6.22.3、Python 3.14.7 与 electron-builder 26.15.3 构建日志：用于确认 arm64 引擎、Electron 应用及产物构成。

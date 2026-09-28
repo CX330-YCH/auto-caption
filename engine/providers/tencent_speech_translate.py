@@ -158,6 +158,14 @@ def _validate_options(options: TencentSpeechOptions) -> None:
         raise ValueError('Tencent max speak time must be between 5000 and 90000 ms')
 
 
+def _is_handshake_confirmation(response: dict[str, object]) -> bool:
+    return (
+        response.get('code') == 0 and
+        response.get('result') is None and
+        response.get('final') in (None, 0)
+    )
+
+
 class _WebSocketClient:
     def __init__(
         self,
@@ -333,7 +341,7 @@ class _WebSocketClient:
                     finally:
                         self._ready.set()
                     return
-                if response.get('final') is not None or 'result' in response:
+                if not _is_handshake_confirmation(response):
                     raise ValueError(
                         'Tencent result arrived before handshake confirmation'
                     )
@@ -671,7 +679,7 @@ class TencentSpeechTranslateProvider(RecognitionProvider):
             return
         result = response.get('result')
         if result is None:
-            if not self._ready and response.get('final') is None:
+            if not self._ready and _is_handshake_confirmation(response):
                 self._ready = True
                 self._emit(ProviderReady(
                     provider=self.name,

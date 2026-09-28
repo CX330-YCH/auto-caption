@@ -111,6 +111,8 @@ Fun-ASR 的预编译热词表 ID 和上下文术语是任务启动参数，不�
 
 腾讯实时语音翻译将服务端同一结果中的 `source_text` 和 `target_text` 映射为一条 `caption` 的 `text` 与 `translation`。服务端 `sentence_id` 在本次 Session 中映射为稳定 `index`，`sentence_end: false/true` 映射为 partial/final，`start_time`/`end_time` 毫秒偏移映射到 Session 起点时间。重复 final 被忽略，腾讯 Provider 不再生成独立 `translation` command。
 
+腾讯 WebSocket 建连后的成功握手以 `code: 0` 且尚未携带识别 `result` 为准；服务端实际响应可能省略 `final`，也可能返回 `final: 0`，两者都表示可以进入 Ready。握手前出现非空 `result` 或 `final: 1/2` 仍按协议异常处理，禁止提前开始采集音频。
+
 腾讯 Provider 收到停止请求后先发送 WebSocket `{"type":"end"}`，最多等待5秒接收最终结果并关闭连接；Electron 为该 Provider 提供8秒进程停止期限。其他内置及自定义引擎继续使用原有4秒期限，因此这个契约不改变旧引擎行为。当前腾讯基础版本不自动重连，意外断线会产生 fatal 并结束本次 Session。
 
 ### `translation`

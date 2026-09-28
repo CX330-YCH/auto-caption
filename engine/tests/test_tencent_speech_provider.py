@@ -24,6 +24,7 @@ from providers.tencent_speech_translate import (  # noqa: E402
     TencentSpeechOptions,
     TencentSpeechTranslateProvider,
     _WebSocketClient,
+    _is_handshake_confirmation,
     build_signed_url,
     encode_hotword_list,
 )
@@ -39,7 +40,12 @@ class FakeClient:
     def start(self):
         if self.fail_start:
             raise RuntimeError('rejected secret-key')
-        self.response_handler({'code': 0, 'message': 'success'})
+        self.response_handler({
+            'code': 0,
+            'message': 'success',
+            'message_type': '',
+            'final': 0,
+        })
 
     def send_audio(self, data):
         self.sent.append(data)
@@ -71,6 +77,25 @@ def frame(data=b'\x00' * 3200):
 
 
 class TencentSpeechProviderTests(unittest.TestCase):
+    def test_accepts_documented_and_observed_handshake_shapes(self):
+        self.assertTrue(_is_handshake_confirmation({
+            'code': 0,
+            'message': 'success',
+        }))
+        self.assertTrue(_is_handshake_confirmation({
+            'code': 0,
+            'message': 'success',
+            'final': 0,
+        }))
+        self.assertFalse(_is_handshake_confirmation({
+            'code': 0,
+            'final': 1,
+        }))
+        self.assertFalse(_is_handshake_confirmation({
+            'code': 0,
+            'result': {'source_text': 'premature'},
+        }))
+
     def test_maps_partial_final_translation_and_server_timestamps(self):
         clients = []
 
@@ -309,7 +334,10 @@ class TencentSpeechProviderTests(unittest.TestCase):
 
             def run_forever(self):
                 self.on_open(self)
-                self.on_message(self, '{"code": 0, "message": "success"}')
+                self.on_message(
+                    self,
+                    '{"code": 0, "message": "success", "final": 0}',
+                )
                 self.on_message(self, '{"code": 0, "final": 1}')
                 self.on_close(self, 1000, 'finished')
 
@@ -336,6 +364,7 @@ class TencentSpeechProviderTests(unittest.TestCase):
             client.start()
 
         self.assertEqual(len(responses), 2)
+        self.assertEqual(responses[0]['final'], 0)
         self.assertEqual(failures, [])
         self.assertEqual(unexpected_closes, [])
         diagnostic_messages = {message for message, details in diagnostics}
