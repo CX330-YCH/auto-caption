@@ -6531,3 +6531,106 @@
 - 根目录 `AGENTS.md`：版本同步、三语文档、构建验证、依赖授权、脏工作区保护和 `change.md` 追加要求。
 - Apple `codesign`、`hdiutil`、`ditto` 本机工具输出：用于最终签名状态、DMG 和 ZIP 完整性验证。
 - PyInstaller 6.22.3、Python 3.14.7 与 electron-builder 26.15.3 构建日志：用于确认 arm64 引擎、Electron 应用及产物构成。
+
+## 2026-09-28 - 修复滚动字幕 partial 修订导致的清屏
+
+### 授权与目标
+
+- 用户授权：要求修复 partial 修订期间老字幕偶发直接清屏的问题，并保证修订后的文字结尾保持在原本结束时的视觉行位置。
+- 目标：当识别结果发生非前缀增长的 tail revision 或历史修订时，丢弃失效的滚动显示锚点，在下一次文本测量后重新选择修订文本的末尾可见行。
+- 变更类型：修复、测试。
+
+### 修改文件
+
+- `src/renderer/src/components/caption/RollingCaptionTrack.vue`
+  - 在 `tail-revision` 和 `historical-change` 分支重置 `displayFloor`，避免旧锚点位于新文本末尾之后时把所有测量行过滤掉。
+  - 保留当前可见行作为测量间隙中的稳定内容，待新测量完成后按滚动窗口末尾重新定位。
+- `tests/node/rollingTrackState.test.mjs`
+  - 将修订后可见行为空的旧断言改为验证修订文本仍显示，并重新锚定到修订文本起始行。
+- `change.md`
+  - 追加本次修复的授权、行为、兼容性和验证记录。
+
+### 行为变化
+
+- 修改前：partial 文本缩短或重写后，旧 `displayFloor` 可能位于新文本末尾之后，`visibleRows` 变为空数组，字幕窗口短暂清屏。
+- 修改后：修订发生时清除失效的 `displayFloor`；下一次测量选择当前有界字幕窗口的最后若干视觉行，文本结尾继续停留在滚动窗口底部，不再被失效锚点过滤为空。
+
+### 配置与协议
+
+- 持久化配置：无变化。
+- Electron IPC：无变化。
+- Python/Electron 子进程协议：无变化。
+- 命令行参数、字幕数据结构和翻译关联：无变化。
+
+### 兼容性、迁移与回滚
+
+- 兼容性：仅改变 Vue 滚动字幕的 partial 修订呈现；静态字幕、字幕协议、配置和其他平台路径不变。
+- 配置迁移：不需要。
+- 回滚方式：回退本条记录涉及的两个代码/测试修改即可；不涉及用户数据或远端资源。
+
+### 验证
+
+- `npm run test:node`：首次执行发现 1 项旧断言仍要求修订后的下一句只显示新字幕；更新断言后重新执行，119 项测试全部通过。
+- `npm run typecheck`：通过。
+- `npm run lint`：通过。
+- `npm run build`：通过；Electron main、preload、renderer 分别完成 37、1、3297 个模块的构建。
+
+### 风险与后续事项
+
+- 修订期间会保留上一帧可见行，直到新文本测量完成；这是避免闪烁和清屏的刻意取舍。修订完成后允许当前有界窗口内的最近历史行重新参与选择，以保持尾部视觉位置。
+- 未执行真实麦克风、腾讯云 API 或 Windows/macOS/Linux 打包回归；本次修复不改变这些外部接口。
+
+### 参考与决策依据
+
+- 用户提供的两份 Debug JSONL 和截图：确认引擎没有发送清空/删除事件，而 partial 结果存在非前缀修订。
+- `rollingTrackState` 现有锚点过滤逻辑及其回归测试。
+
+## 2026-09-28 - macOS arm64 2.34.0 构建与小版本更新
+
+### 用户授权与目标
+
+- 用户明确要求“编译一下 Mac 版本并更新小版本号”；本批次将版本从 `2.33.0` 更新为 `2.34.0`，并生成 macOS arm64 安装产物。
+- 变更类型：版本、文档、构建。工作区已有滚动字幕修复及对应测试、记录均予以保留，本批次不改写其行为。
+- 未安装或升级依赖，未修改系统环境，未提交、推送或发布 Git 内容。
+
+### 修改文件与原因
+
+- `package.json`、`package-lock.json`：版本更新为 `2.34.0`。
+- `src/renderer/index.html`、`src/renderer/src/components/EngineStatus.vue`：同步窗口标题和关于页版本。
+- `README.md`、`README_en.md`、`README_ja.md`：同步三语项目版本说明。
+- `docs/user-manual/{zh,en,ja}.md`、`docs/engine-manual/{zh,en,ja}.md`：同步三语手册版本。
+- `docs/CHANGELOG.md`：追加 `v2.34.0`，记录滚动字幕修复和本次 macOS 构建。
+- `dist/latest-mac.yml`：在签名后的 ZIP/DMG 重建后同步最终 SHA-512 和大小。
+- `change.md`：追加本批次授权、构建、验证和风险记录。
+
+### 修改前后行为
+
+- 修改前：发布版本为 `2.33.0`。
+- 修改后：应用、Electron bundle、Python 引擎构建元数据及三语文档为 `2.34.0`；macOS 目标为 arm64。滚动字幕 partial 修订修复保持不变。
+
+### 配置、协议、依赖与兼容性
+
+- 无配置 schema、配置迁移、默认值、Electron IPC、Python CLI、stdout/TCP 协议或字幕数据结构变化。
+- 未新增或升级依赖，沿用现有锁文件、Python 3.14.7、PyInstaller 6.22.3 和 electron-builder 26.15.3。
+- 仅验证 macOS arm64；未据此声明 Windows、Linux 或 Intel macOS 已验证。回滚时成组恢复版本文件、文档和 `docs/CHANGELOG.md` 的 2.34.0 段落；`change.md` 只能追加更正。
+
+### 实际验证与构建结果
+
+- `npm run verify`：通过；TypeScript/Vue typecheck、ESLint、Node `119/119`、Python `96/96` 全部通过。
+- `npm run build:mac`：Apple Speech helper、Electron main/preload/renderer 构建通过；renderer 转换 3297 个模块。
+- 首次 `electron-builder --mac` 在沙箱内因 `npmmirror.com` DNS 受限失败；获批准联网重试成功，生成 arm64 APP、ZIP、DMG 和 blockmap。
+- 对最终 APP 执行 `codesign --force --deep --sign -`；`codesign --verify --deep --strict --verbose=2` 通过，签名为 ad-hoc，未配置 Developer ID/TeamIdentifier。
+- 使用签名后的 APP 重建 ZIP，并在沙箱外重建 DMG；`dist/latest-mac.yml` SHA-512 与文件大小已核对一致。
+- `dist/Auto Caption-2.34.0-arm64-mac.zip`：228,566,123 bytes；SHA-256 `4824d9e4b06ebdf284415834d3e0563f63e7c8895ec4ce218538b68ec4748ef2`。
+- `dist/auto-caption-2.34.0.dmg`：248,643,309 bytes；SHA-256 `d194a389bddf044cc43fe9115059bb55bb0d32bc55caed315dbc90641c9770a3`。
+
+### 未执行验证、风险与后续事项
+
+- 最终 `codesign --verify --deep --strict --verbose=2`、ZIP `unzip -tq`、DMG `hdiutil verify` 和 `latest-mac.yml` SHA-512/大小核对均已通过；版本残留审计与 `git diff --check` 在交付前完成。
+- 未执行 Developer ID 正式签名、Apple 公证、Gatekeeper 外部下载验证、Electron GUI 人工回归、真实麦克风/系统音频、腾讯真实凭据或付费 API 测试。
+- 未执行 Windows、Linux 或 Intel macOS 构建。最终 APP 为 ad-hoc 签名，未公证。
+
+### 关键技术决策来源
+
+- 根目录 `AGENTS.md`：版本同步、三语文档、构建验证、依赖授权、脏工作区保护和 `change.md` 追加要求。
+- Apple `codesign`、`hdiutil`、`ditto` 本机工具输出，以及 PyInstaller/electron-builder 构建日志。

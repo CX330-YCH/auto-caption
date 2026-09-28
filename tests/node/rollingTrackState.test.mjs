@@ -64,7 +64,7 @@ test('does not backfill evicted history when a partial shrinks and grows', () =>
   assert.equal(update.animate, true)
 })
 
-test('keeps the display floor when a revision removes all text after it', () => {
+test('reanchors the revised tail when a revision removes all text after it', () => {
   const initial = measuredTrack([
     caption('1', '甲甲甲甲甲乙乙乙乙乙丙丙丙丙丙', 'partial')
   ])
@@ -80,6 +80,7 @@ test('keeps the display floor when a revision removes all text after it', () => 
   const shortened = measuredTrack([
     caption('1', '甲甲甲甲甲', 'partial')
   ])
+  state = resetRollingTrackDisplayFloor(state)
   state = updateRollingTrackPresentation(
     state,
     shortened.track,
@@ -88,8 +89,12 @@ test('keeps the display floor when a revision removes all text after it', () => 
     false
   ).state
 
-  assert.deepEqual(rowTexts(state), [])
-  assert.equal(state.displayFloor?.captionOffset, 5)
+  assert.deepEqual(rowTexts(state), ['甲甲甲甲甲'])
+  assert.deepEqual(state.displayFloor, {
+    captionId: '1',
+    kind: 'source',
+    captionOffset: 0
+  })
 
   const nextCaption = measuredTrack([
     caption('1', '甲甲甲甲甲', 'final'),
@@ -102,8 +107,12 @@ test('keeps the display floor when a revision removes all text after it', () => 
     2,
     true
   ).state
-  assert.deepEqual(rowTexts(state), ['乙乙乙乙乙'])
-  assert.equal(state.displayFloor?.captionId, '2')
+  assert.deepEqual(rowTexts(state), ['甲甲甲甲甲', '乙乙乙乙乙'])
+  assert.deepEqual(state.displayFloor, {
+    captionId: '1',
+    kind: 'source',
+    captionOffset: 0
+  })
 })
 
 test('advances the display floor but never moves it back', () => {

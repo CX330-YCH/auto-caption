@@ -159,6 +159,10 @@ watch(
       mutation === 'tail-growth'
     animateRows.value = false
     if (mutation === 'tail-revision' || mutation === 'historical-change') {
+      // A revision can shorten or rewrite the text past the old floor. Rebase
+      // the visible window on the next measurement so the revised tail stays
+      // in the rolling viewport instead of filtering every row out.
+      resetPresentationForLayout()
       resetMeasurementAnchor()
     }
     if (mutation === 'lifecycle-only') {
