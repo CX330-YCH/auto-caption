@@ -1,5 +1,15 @@
 ## 未发布
 
+## v2.31.0 - 2026-09-28
+
+- 补全腾讯实时语音翻译 WebSocket 启动门控：只有收到合法 `code: 0` 握手确认后才允许采集音频，握手前提前返回结果或 `final`、客户端静默返回均按启动失败处理。
+- 将应用及中英日文档版本统一更新至 `2.31.0`，并重新生成、验证 macOS arm64 应用、ZIP、DMG、Swift 辅助程序与 Python 3.14 引擎。
+
+## v2.30.0 - 2026-09-27
+
+- 修复腾讯实时语音翻译 WebSocket 在握手成功前关闭时错误放行启动等待的问题；连接失败会先固定失败状态并发布原始 Provider 错误，不再被首帧“provider is not ready”覆盖。
+- 将应用及中英日文档版本统一更新至 `2.30.0`，并重新生成、验证 macOS arm64 应用、ZIP、DMG、Swift 辅助程序与 Python 3.14 引擎。
+
 ## v2.29.0 - 2026-09-27
 
 - macOS Python 引擎将 LLVM `libomp.dylib` 安装到项目虚拟环境，为 numba OpenMP 扩展配置相对运行时搜索路径，并由 PyInstaller 显式收集到 one-file 应用，避免目标机器依赖 Homebrew 路径。

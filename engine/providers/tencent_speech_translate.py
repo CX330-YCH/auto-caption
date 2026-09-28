@@ -166,6 +166,7 @@ class _WebSocketClient:
         self._start_timeout = start_timeout
         self._finish_timeout = finish_timeout
         self._ready = threading.Event()
+        self._handshake_succeeded = threading.Event()
         self._finished = threading.Event()
         self._failed = threading.Event()
         self._closing = False
@@ -198,7 +199,10 @@ class _WebSocketClient:
             self._closing = True
             self._websocket.close()
             raise TimeoutError('Tencent WebSocket handshake timed out')
-        if self._failed.is_set():
+        if (
+            self._failed.is_set() or
+            not self._handshake_succeeded.is_set()
+        ):
             raise ConnectionError('Tencent WebSocket handshake failed')
 
     def send_audio(self, data: bytes) -> None:
@@ -226,34 +230,59 @@ class _WebSocketClient:
             response = json.loads(message)
             if not isinstance(response, dict):
                 raise ValueError('Tencent response must be an object')
-            self._response_handler(response)
-            if response.get('code') != 0:
-                self._failed.set()
+            code = response.get('code')
+            if not isinstance(code, int):
+                raise ValueError('Tencent response code must be an integer')
+            if not self._handshake_succeeded.is_set():
+                if code != 0:
+                    self._failed.set()
+                    try:
+                        self._response_handler(response)
+                    finally:
+                        self._ready.set()
+                    return
+                if response.get('final') is not None or 'result' in response:
+                    raise ValueError(
+                        'Tencent result arrived before handshake confirmation'
+                    )
+                self._response_handler(response)
+                self._handshake_succeeded.set()
                 self._ready.set()
+                return
+            self._response_handler(response)
+            if code != 0:
+                self._failed.set()
             elif response.get('final') == 1:
                 self._finished.set()
-            elif 'result' not in response:
-                self._ready.set()
         except Exception as error:
             self._failed.set()
-            self._ready.set()
-            self._failure_handler(type(error).__name__)
+            try:
+                self._failure_handler(type(error).__name__)
+            finally:
+                self._ready.set()
 
     def _on_error(self, ws, error: object) -> None:
         if self._closing:
             return
         self._failed.set()
-        self._ready.set()
-        self._failure_handler(type(error).__name__)
+        try:
+            self._failure_handler(type(error).__name__)
+        finally:
+            self._ready.set()
 
     def _on_close(self, ws, status_code=None, message=None) -> None:
-        self._ready.set()
-        if (
-            not self._closing and
-            not self._failed.is_set() and
-            not self._finished.is_set()
-        ):
+        if self._failed.is_set():
+            return
+        if self._closing:
+            self._ready.set()
+            return
+        if self._handshake_succeeded.is_set() and self._finished.is_set():
+            return
+        self._failed.set()
+        try:
             self._close_handler()
+        finally:
+            self._ready.set()
 
 
 def _build_client(
@@ -306,6 +335,10 @@ class TencentSpeechTranslateProvider(RecognitionProvider):
                 self.handle_close,
             )
             self._client.start()
+            if not self._ready:
+                raise ConnectionError(
+                    'Tencent client returned before handshake confirmation'
+                )
         except Exception as error:
             if self._failed:
                 return

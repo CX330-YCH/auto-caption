@@ -6086,3 +6086,161 @@
 - 根目录 `AGENTS.md`：版本文档同步、构建与测试、生成目录、依赖授权、跨平台说明及 `change.md` 逐批追加要求。
 - Apple `codesign`、`hdiutil`、`ditto` 本机工具输出：用于签名状态、磁盘映像和 ZIP 完整性验证。
 - PyInstaller 6.22.3 与 electron-builder 26.15.3 构建日志：用于确认 Python 3.14 one-file 引擎、Electron 43.4.0 arm64 应用及发布产物构成。
+
+## 2026-09-27：修复腾讯 WebSocket 握手关闭状态竞争
+
+### 用户授权、目标与范围
+
+- 用户提供 `auto-caption-debug-2026-09-27T14-11-40-104Z.jsonl` 后明确要求修复腾讯实时语音翻译在握手成功前关闭时，首个音频帧触发 `Tencent speech translation is not ready` 并覆盖底层连接错误的问题。
+- 变更类型：修复、测试、文档。本批次只调整腾讯 `_WebSocketClient` 的握手失败发布顺序和回归测试，不修改签名算法、凭据配置、音频格式、字幕事件、停止冲刷或其他 Provider。
+- 修改前已重新阅读根目录 `AGENTS.md`，仓库内没有更具体的子目录规则；`git status --short --branch` 为干净的 `main...origin/main`，目标文件没有待保留的用户修改。
+
+### 修改文件与原因
+
+- `engine/providers/tencent_speech_translate.py`：错误回调和握手前关闭回调先固定失败状态、同步发布 Provider 失败，再释放启动等待；已由其他失败回调接管时，后续关闭回调不再提前释放等待。
+- `engine/tests/test_tencent_speech_provider.py`：增加伪造 WebSocket 在握手响应前关闭的确定性回归测试，验证 `start()` 抛出握手失败、关闭处理发生时失败状态已设置且启动等待尚未释放。
+- `docs/CHANGELOG.md`：在未发布段记录腾讯握手关闭错误不再被首帧 `provider is not ready` 覆盖。
+- `change.md`：追加本批次授权、行为、兼容性、验证和风险流水，不修改已有记录。
+
+### 修改前后行为
+
+- 修改前：`_on_close()` 无条件先设置 `_ready` 事件。WebSocket 在腾讯成功响应前关闭时，等待中的 `start()` 可能先返回，RecognitionSession 随即启动音频采集；Provider 自身仍未就绪，首帧在 `accept_audio()` 抛出 `RuntimeError`，覆盖真正的连接关闭错误。
+- 修改后：只有腾讯首条合法 `code: 0` 握手响应能进入成功就绪路径。握手前错误或关闭会先标记客户端失败并发布对应 Provider 错误，最后才唤醒 `start()`；`start()` 因失败状态抛出 `ConnectionError`，Session 在发布 fatal ProviderError 并请求停止后不会启动音频采集。
+- 非零腾讯服务码仍由现有响应处理器输出，例如 `6002` 继续表示鉴权失败；成功字幕、partial/final、音频分包、尾包冲刷及正常 final 关闭行为不变。
+
+### 配置、协议、兼容性与回滚
+
+- 没有配置 schema、迁移、Electron IPC、Python CLI、stdout/TCP command envelope、数据结构、依赖或三语界面变化。
+- 修改限于腾讯私有 WebSocket 客户端回调顺序；其他识别/翻译 Provider 和自定义引擎不经过该路径，行为不变。
+- Windows、macOS 和 Linux 共用此 Python 状态逻辑，没有新增平台分支；实际只在 macOS arm64 离线验证，其他平台未实测。
+- 回滚应同时撤销上述 Provider 顺序修改、回归测试和未发布 CHANGELOG 条目；`change.md` 按追加制度保留，需另行追加更正，不能删除历史。
+
+### 实际验证与真实结果
+
+- `engine/.venv/bin/python3 -m unittest engine.tests.test_tencent_speech_provider -v`：通过，`5/5`；新增握手前关闭回归用例在修复后稳定抛出 `ConnectionError: Tencent WebSocket handshake failed`。
+- `engine/.venv/bin/python3 -m py_compile engine/providers/tencent_speech_translate.py engine/tests/test_tencent_speech_provider.py`：通过。
+- `npm run test:python`：通过，`88/88`。
+- `npm run verify`：通过；TypeScript/Vue typecheck、ESLint、Node `119/119`、Python `88/88` 全部成功。输出只有项目既有 npm mirror 配置弃用警告和 Node module type 性能警告。
+- `npm run build`：通过；Electron main、preload、renderer 分别转换 37、1、3297 个模块并生成忽略目录 `out/`。
+- `git diff --check`：本记录追加前通过；交付前再次执行最终检查。
+
+### 未执行验证、风险与后续事项
+
+- 未使用真实腾讯凭据、麦克风或付费 API，未执行 Electron GUI、PyInstaller/安装包和 Windows/Linux 实机构建；因此尚未在线确认下一次失败会暴露为腾讯服务码、传输错误类型或成功 `code: 0`。
+- 本修复保证根因事件先于启动等待释放，但 WebSocket 静默关闭本身仍可能由网络、代理、服务端或鉴权导致；需要新的 Debug 日志区分。只有收到腾讯 `code: 0` 才代表服务握手和鉴权成功，本地 Electron 与 Python TCP `connect` 不代表腾讯连接成功。
+- 当前腾讯 Provider 仍没有自动重连；连接失败会明确结束本次 Session，保持既有有界失败策略。
+
+### 关键来源
+
+- 用户提供的 2026-09-27 Debug 日志：WebSocket 未产生 `ProviderReady`，首个 100 ms 音频帧触发 `Tencent speech translation is not ready`，证明启动等待在 Provider 成功就绪前被释放。
+- 腾讯云《实时语音翻译（WebSocket）》：https://cloud.tencent.com/document/api/1093/127565 ，握手成功响应为 `code: 0`，非零 code 表示错误并由服务端断开连接。
+- 根目录 `AGENTS.md`：Provider `start -> accept_audio* -> stop` 生命周期、错误可诊断、测试、兼容性、真实验证记录和逐批追加 `change.md` 要求。
+
+## 2026-09-27：发布版本更新至 2.30.0 并生成 macOS arm64 安装包
+
+### 用户授权、目标与范围
+
+- 用户明确要求“编译一下 Mac 版本并更新小版本号”。本批次把应用版本从 `2.29.0` 更新为 `2.30.0`，使用项目内 Python 3.14 虚拟环境重建字幕引擎、Apple Speech 辅助程序、Electron 应用、ZIP 和 DMG。
+- 变更类型：构建、配置、文档、测试。
+- 修改前完整阅读根目录 `AGENTS.md`、确认没有子目录规则、执行 `git status --short --branch`，并阅读目标版本文件以及工作区现有 diff。工作区已有腾讯 WebSocket 握手关闭状态竞争修复、测试、CHANGELOG 和 `change.md` 记录，本批次保留这些修改并将其包含在 2.30.0 构建中。
+- 本批次不修改该腾讯修复或其他业务逻辑，不升级/安装依赖，不修改系统 Python、PATH 或系统环境，不提交、推送或发布远端 Release。
+
+### 修改文件与原因
+
+- `package.json`、`package-lock.json`：把应用和根锁包版本从 `2.29.0` 同步到 `2.30.0`，未改变依赖树。
+- `src/renderer/index.html`、`src/renderer/src/components/EngineStatus.vue`：同步窗口标题与关于界面的用户可见版本。
+- `README.md`、`README_en.md`、`README_ja.md`：同步中英日发布徽章、发布提示和平台版本说明。
+- `docs/user-manual/zh.md`、`docs/user-manual/en.md`、`docs/user-manual/ja.md`：同步三语用户手册版本。
+- `docs/engine-manual/zh.md`、`docs/engine-manual/en.md`、`docs/engine-manual/ja.md`：同步三语引擎手册版本。
+- `docs/CHANGELOG.md`：保留工作区未提交的腾讯握手修复说明，将其归入 `v2.30.0 - 2026-09-27`，并追加本次 macOS 构建说明。
+- `change.md`：在既有未提交记录后追加本批次授权、文件、验证、兼容性、失败和风险流水，没有覆盖历史。
+- Git 忽略目录 `native/apple-speech-helper/.build`、`native/apple-speech-helper/dist`、`engine/build`、`engine/dist`、`out`、`dist`：生成 Swift、Python、Electron 中间产物和最终发布包，不加入版本控制。
+
+### 修改前后行为、配置与兼容性
+
+- 修改前：源码、界面和当前文档版本为 `2.29.0`；工作区腾讯握手修复尚未进入新的安装包。
+- 修改后：源码、锁文件、界面和三语文档统一为 `2.30.0`；macOS arm64 安装包包含腾讯握手关闭状态竞争修复，应用 `Info.plist` 的短版本与构建版本均为 `2.30.0`。
+- 本次版本更新没有改变持久化配置、schemaVersion、迁移、Electron IPC、Python stdout/TCP 协议、CLI 或数据结构。被打包的腾讯修复本身也已在其上一条 `change.md` 记录中确认不改变这些接口。
+- 构建使用 `engine/.venv` 的 Python 3.14.7、PyInstaller 6.22.3 和当前锁文件的 Node 依赖。未运行 `npm install`、`pip install` 或 Homebrew 安装/升级，没有修改系统默认解释器或全局动态库路径。
+- 产物只面向 Apple Silicon arm64；Windows、Linux 与 Intel macOS 未因版本变更修改，但本批次没有实机构建验证。
+
+### 实际验证与真实结果
+
+- `npm run verify`：通过；TypeScript/Vue typecheck、ESLint、Node `119/119`、Python `88/88` 全部成功，新增腾讯握手关闭回归测试包含在内。输出只有既有 npm mirror 配置弃用与 Node module type 性能警告。
+- `SDKROOT=/Library/Developer/CommandLineTools/SDKs/MacOSX26.5.sdk npm run build:apple-speech`：通过；Swift production build 完成。沙箱禁止 SwiftPM 写用户缓存的警告不影响项目目录内产物。
+- `PYINSTALLER_CONFIG_DIR=/private/tmp/auto-caption-pyinstaller-230 .venv/bin/pyinstaller --clean --noconfirm main.spec`（在 `engine/` 执行）：通过；Python 3.14.7/PyInstaller 6.22.3 生成 arm64 one-file 引擎。仅有既有可选 `pycparser.lextab`/`yacctab` 缺失警告，没有 libomp 未解析警告。
+- `engine/.venv/bin/pyi-archive_viewer -l engine/dist/main | rg 'libomp|omppool'`：通过；确认引擎内含 `libomp.dylib` 和 Python 3.14 的 numba `omppool`。
+- `engine/dist/main --help`：沙箱内首次因 `semctl: Operation not permitted` 无法初始化 PyInstaller 同步信号量；经批准在沙箱外只读重试后退出码 0，完整 CLI 帮助正常输出。
+- `npm run build`：通过；Electron main、preload、renderer 分别转换 37、1、3297 个模块。
+- `npx electron-builder --mac`：沙箱内首次因 `npmmirror.com` DNS 受限失败；经批准联网重试后通过，生成 arm64 APP、ZIP、DMG、blockmap 和更新元数据。打包器因本机没有有效 Developer ID 证书明确跳过正式签名。
+- `plutil`、`file` 和应用内归档检查：短版本/构建版本为 `2.30.0`；应用主程序、Python 引擎和 Apple Speech helper 均为 Mach-O arm64；应用内引擎仍含 libomp/omppool。
+- 应用内 `apple-speech-helper probe`：通过，返回 protocolVersion 1 capability 且 `isAvailable` 为 true。
+- `codesign --force --deep --sign -` 与 `codesign --verify --deep --strict --verbose=2`：通过；最终应用为 ad-hoc 签名，`TeamIdentifier=not set`。
+- `ditto -c -k --sequesterRsrc --keepParent` 从最终签名 APP 重建 ZIP；`unzip -tq` 通过，无压缩数据错误。
+- `hdiutil create` 在沙箱内首次因“设备未配置”失败；经批准在沙箱外从最终签名 APP 重建 DMG。工具提示旧式 create 语法已弃用，但创建成功；`hdiutil verify` 确认校验和有效。
+- 重新生成 ZIP/DMG blockmap，并核对 `dist/latest-mac.yml` 的 SHA-512 与实际字节数完全一致。
+- 最终 ZIP `dist/Auto Caption-2.30.0-arm64-mac.zip`：228,551,183 bytes，SHA-256 `34b447d8eddcbf4bc29f3884b23374083c8cbd2a7e375bceb67a9825c53fbfa6`。
+- 最终 DMG `dist/auto-caption-2.30.0.dmg`：248,624,567 bytes，SHA-256 `2711c966ce39cd8f29d48c61d8f7563b77126f9be7281a1209a088f07adbbedb`。
+- `git diff --check`、版本残留搜索和 `git status --short --branch`：在本记录追加后执行最终审计，结果记录在交付说明。
+
+### 回滚、未执行验证与风险
+
+- 回滚版本批次时应成组恢复上述版本文件、三语文档与 `docs/CHANGELOG.md` 的 2.30.0 发布段落；腾讯握手修复属于先前独立修改，不能在仅回滚版本号时一并删除。`change.md` 遵循追加制度，纠错需另加记录。
+- 未执行 Developer ID 正式签名、Apple 公证、Gatekeeper 外部下载场景、Electron GUI 人工回归、真实麦克风/系统音频、腾讯真实凭据或付费 API 测试；ad-hoc 包不能视为已公证发行包。
+- 未执行 Windows、Linux 或 Intel macOS 构建；不能据此声明这些平台已验证。
+- 依赖检查以现有锁文件、项目虚拟环境和完整测试为依据；本次没有依赖升级授权，因此没有查询、安装或升级依赖，也没有改变系统环境。
+
+### 关键技术决策来源
+
+- 根目录 `AGENTS.md`：脏工作区保护、三语文档同步、构建测试、依赖授权、生成目录和 `change.md` 逐批追加要求。
+- Apple `codesign`、`hdiutil`、`ditto` 本机工具输出：用于最终签名状态、磁盘映像与 ZIP 完整性验证。
+- PyInstaller 6.22.3 与 electron-builder 26.15.3 构建日志：用于确认 Python 3.14 one-file 引擎、Electron 43.4.0 arm64 应用及产物构成。
+
+## 2026-09-28：补全腾讯实时语音翻译握手成功门控
+
+### 用户授权、目标与范围
+
+- 用户提供 `auto-caption-debug-2026-09-28T05-13-24-596Z.jsonl` 后明确要求修复腾讯实时语音翻译切回 Lite 模型仍在首帧报 `Tencent speech translation is not ready` 的问题。
+- 变更类型：修复、测试、文档。本批次只补全腾讯私有 WebSocket 客户端和 Provider 的启动状态契约，不修改腾讯签名算法、配置、命令行、音频格式、字幕协议、其他 Provider 或 UI。
+- 修改前已阅读根目录 `AGENTS.md`，仓库没有子目录 `AGENTS.md`；已执行 `git status --short --branch` 并阅读目标文件现有 diff。工作区已有上一批腾讯握手修复和 2.30.0 版本构建修改，本批次保留并在其上增量修改。
+
+### 修改文件与原因
+
+- `engine/providers/tencent_speech_translate.py`：增加独立的握手成功状态；启动等待结束后同时校验失败状态与握手成功状态；握手前收到结果或 `final` 视为协议顺序错误；仅在已握手且已收到正常 final 时把关闭视为正常；Provider 额外验证客户端返回时自身已进入 Ready。
+- `engine/tests/test_tencent_speech_provider.py`：在既有握手前关闭测试基础上，增加握手前提前 `final`、客户端未报告握手即返回、合法握手后 final 正常关闭测试。
+- `docs/CHANGELOG.md`：完善 2.30.0 腾讯修复说明，明确只有合法 `code: 0` 握手确认后才允许采集音频。
+- `change.md`：追加本批次授权、行为、兼容性、验证与风险记录，不覆盖既有历史。
+
+### 修改前后行为
+
+- 修改前：底层客户端的启动等待事件同时承担“等待结束”和“握手成功”两种语义。在未收到握手确认却提前进入结束路径时，客户端可能正常返回，Provider 仍未 Ready，RecognitionSession 随后启动音频，第一帧以 `RuntimeError: Tencent speech translation is not ready` 覆盖连接根因。
+- 修改后：客户端只有处理完合法、无 `result`/`final` 的腾讯 `code: 0` 握手消息后才记录握手成功。握手前关闭、错误、提前结果或提前 final 均以启动失败结束；Provider 还会拒绝任何未使其进入 Ready 的客户端返回，因此 fatal 启动错误会在 Session 启动音频前被处理。
+- 已成功握手后的 partial/final 字幕、正常 final 关闭、100 ms 音频合并为 200 ms/6400 字节上传、停止尾包冲刷和非零腾讯服务码处理保持不变。
+
+### 配置、协议、兼容性与回滚
+
+- 没有配置 schema、迁移、Electron IPC、Python CLI、stdout/TCP envelope、公开数据结构、依赖或三语界面变化。
+- 修改只影响腾讯 WebSocket 私有启动状态；旧引擎、其他 Provider 和自定义引擎不经过该逻辑，行为不变。
+- 状态逻辑没有新增平台分支，理论上适用于 Windows、macOS 和 Linux；实际验证平台为 macOS arm64，其他平台未实测。
+- 回滚应同时撤销本批次 Provider 状态、三项新增测试及 CHANGELOG 说明；`change.md` 只能通过追加更正记录处理，不能删除历史。
+
+### 实际验证与真实结果
+
+- `engine/.venv/bin/python3 -m py_compile engine/providers/tencent_speech_translate.py engine/tests/test_tencent_speech_provider.py`：通过。
+- `engine/.venv/bin/python3 -m unittest engine.tests.test_tencent_speech_provider -v`：通过，`8/8`；覆盖握手前关闭、提前 final、客户端静默返回和成功握手后正常结束。
+- `npm run test:python`：通过，`91/91`。
+- `npm run verify`：通过；TypeScript/Vue typecheck、ESLint、Node `119/119` 和 Python `91/91` 全部成功。输出只有项目既有 npm mirror 配置弃用警告和 Node module type 性能警告。
+- `npm run build`：通过；Electron main、preload、renderer 分别转换 37、1、3297 个模块并生成忽略目录 `out/`。
+- `git diff --check`：代码修改后及本记录追加后的最终检查均通过。
+
+### 未执行验证、风险与后续事项
+
+- 未使用真实腾讯凭据、麦克风或付费 API，未验证当前腾讯端返回 404 的外部根因；本修复保证失败不会再放行音频，但不能修复腾讯服务端、网络代理、账号开通或凭据问题。
+- 未重建 PyInstaller 引擎、Electron 安装包或 `/Applications/Auto Caption.app`。当前已安装的 2.30.0 应用不会自动获得本批次源码修复，后续需要重新打包安装后才能进行 GUI 在线复测。
+- 未执行 Windows、Linux 或 Intel macOS 构建，不能据此声明这些平台已实机验证。
+
+### 关键来源
+
+- 用户提供的 2026-09-28 Debug 日志：Lite 模型运行未产生 `ProviderReady`，Provider 事件队列高水位保持 0，但音频采集仍提交首帧并在 `accept_audio()` 报 not ready。
+- 腾讯云《实时语音翻译（WebSocket）》：握手成功需收到 `code: 0` 确认消息，最终结束消息不能替代握手确认。
+- 根目录 `AGENTS.md`：Provider 生命周期、启动/停止测试、兼容性、真实验证记录和 `change.md` 逐批追加要求。

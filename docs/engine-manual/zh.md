@@ -1,6 +1,6 @@
 # 字幕引擎说明文档
 
-对应版本：v2.29.0
+对应版本：v2.31.0
 
 ![](../../assets/media/structure_zh.png)
 

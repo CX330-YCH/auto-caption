@@ -2,6 +2,8 @@ import sys
 import unittest
 from datetime import datetime
 from pathlib import Path
+from types import SimpleNamespace
+from unittest.mock import patch
 from urllib.parse import parse_qs, urlparse
 
 
@@ -20,6 +22,7 @@ from providers.tencent_speech_translate import (  # noqa: E402
     TencentHotword,
     TencentSpeechOptions,
     TencentSpeechTranslateProvider,
+    _WebSocketClient,
     build_signed_url,
     encode_hotword_list,
 )
@@ -203,6 +206,139 @@ class TencentSpeechProviderTests(unittest.TestCase):
         errors = handshake_failure.drain_events()
         self.assertEqual(len(errors), 1)
         self.assertIsInstance(errors[0], ProviderError)
+
+    def test_close_before_handshake_fails_before_releasing_start(self):
+        close_states = []
+
+        class ClosingWebSocketApp:
+            def __init__(self, url, on_message, on_error, on_close):
+                self.on_close = on_close
+
+            def run_forever(self):
+                self.on_close(self, None, 'closed before handshake')
+
+            def close(self):
+                return None
+
+        client = None
+
+        def handle_close():
+            close_states.append((
+                client._failed.is_set(),
+                client._ready.is_set(),
+            ))
+
+        client = _WebSocketClient(
+            options(),
+            response_handler=lambda response: None,
+            failure_handler=lambda error_type: None,
+            close_handler=handle_close,
+            start_timeout=0.1,
+        )
+        websocket_module = SimpleNamespace(WebSocketApp=ClosingWebSocketApp)
+
+        with patch.dict(sys.modules, {'websocket': websocket_module}):
+            with self.assertRaisesRegex(
+                ConnectionError,
+                'handshake failed',
+            ):
+                client.start()
+
+        self.assertEqual(close_states, [(True, False)])
+
+    def test_final_before_handshake_is_a_start_failure(self):
+        failures = []
+        responses = []
+
+        class PrematureFinalWebSocketApp:
+            def __init__(self, url, on_message, on_error, on_close):
+                self.on_message = on_message
+                self.on_close = on_close
+
+            def run_forever(self):
+                self.on_message(self, '{"code": 0, "final": 1}')
+                self.on_close(self, 1000, 'finished')
+
+            def close(self):
+                return None
+
+        client = _WebSocketClient(
+            options(),
+            response_handler=responses.append,
+            failure_handler=failures.append,
+            close_handler=lambda: None,
+            start_timeout=0.1,
+        )
+        websocket_module = SimpleNamespace(
+            WebSocketApp=PrematureFinalWebSocketApp
+        )
+
+        with patch.dict(sys.modules, {'websocket': websocket_module}):
+            with self.assertRaisesRegex(
+                ConnectionError,
+                'handshake failed',
+            ):
+                client.start()
+
+        self.assertEqual(responses, [])
+        self.assertEqual(failures, ['ValueError'])
+
+    def test_handshake_then_final_closes_without_transport_failure(self):
+        failures = []
+        responses = []
+        unexpected_closes = []
+
+        class SuccessfulWebSocketApp:
+            def __init__(self, url, on_message, on_error, on_close):
+                self.on_message = on_message
+                self.on_close = on_close
+
+            def run_forever(self):
+                self.on_message(self, '{"code": 0, "message": "success"}')
+                self.on_message(self, '{"code": 0, "final": 1}')
+                self.on_close(self, 1000, 'finished')
+
+            def close(self):
+                return None
+
+        client = _WebSocketClient(
+            options(),
+            response_handler=responses.append,
+            failure_handler=failures.append,
+            close_handler=lambda: unexpected_closes.append(True),
+            start_timeout=0.1,
+        )
+        websocket_module = SimpleNamespace(WebSocketApp=SuccessfulWebSocketApp)
+
+        with patch.dict(sys.modules, {'websocket': websocket_module}):
+            client.start()
+
+        self.assertEqual(len(responses), 2)
+        self.assertEqual(failures, [])
+        self.assertEqual(unexpected_closes, [])
+
+    def test_provider_rejects_client_return_without_handshake(self):
+        class SilentClient(FakeClient):
+            def start(self):
+                return None
+
+        provider = TencentSpeechTranslateProvider(
+            options(),
+            client_factory=lambda config, response, failure, close: (
+                SilentClient(response)
+            ),
+        )
+
+        provider.start()
+
+        events = provider.drain_events()
+        self.assertEqual(len(events), 1)
+        self.assertIsInstance(events[0], ProviderError)
+        self.assertTrue(events[0].fatal)
+        self.assertEqual(
+            events[0].details['operation'],
+            'tencent_speech.start',
+        )
 
     def test_validates_signing_language_pairs_and_reserved_hotwords(self):
         url = build_signed_url(

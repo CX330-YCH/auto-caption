@@ -1,6 +1,6 @@
 # Caption Engine Documentation
 
-Corresponding version: v2.29.0
+Corresponding version: v2.31.0
 
 ![](../../assets/media/structure_en.png)
 
