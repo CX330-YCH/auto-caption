@@ -70,6 +70,7 @@ import {
   createFontFamilyOptions,
   findMatchingFontOption,
   isValidFontFamilyValue,
+  isLocalFontLookupCandidate,
   parseSingleFontFamily,
   type FontFamilyOption
 } from '@renderer/utils/fontFamily.ts'
@@ -145,6 +146,15 @@ const statusClass = computed(() => ({
 watch(fontValueValid, valid => emit('validity-change', valid), {
   immediate: true
 })
+
+watch(() => props.modelValue, value => {
+  if (
+    accessState.value === 'idle' &&
+    isLocalFontLookupCandidate(value)
+  ) {
+    void loadFonts(false)
+  }
+}, { immediate: true })
 
 function updateManualValue(value: string): void {
   emit('update:modelValue', value)

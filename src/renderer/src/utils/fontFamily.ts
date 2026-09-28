@@ -72,6 +72,15 @@ export function parseSingleFontFamily(value: string): string | undefined {
   return trimmed
 }
 
+export function isLocalFontLookupCandidate(value: string): boolean {
+  const family = parseSingleFontFamily(value)
+  return Boolean(
+    family && !GENERIC_FONT_FAMILIES.includes(
+      family as typeof GENERIC_FONT_FAMILIES[number]
+    )
+  )
+}
+
 export function createFontFamilyOptions(
   fonts: readonly LocalFontMetadata[],
   locale: string

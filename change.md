@@ -6634,3 +6634,100 @@
 
 - 根目录 `AGENTS.md`：版本同步、三语文档、构建验证、依赖授权、脏工作区保护和 `change.md` 追加要求。
 - Apple `codesign`、`hdiutil`、`ditto` 本机工具输出，以及 PyInstaller/electron-builder 构建日志。
+
+## 2026-09-28 - 修复冷启动字体被误标为自定义
+
+### 用户授权与目标
+
+- 用户明确要求修复每次完全退出并重新启动后，已选择的本机字体被显示为“自定义”的问题。
+- 目标：Renderer 收到持久化字体配置后，在字体列表仍未加载的冷启动状态下自动尝试枚举非通用单字体；若枚举结果包含所选字体，沿用现有匹配逻辑清除“自定义”标记。
+- 变更类型：修复、测试。
+
+### 修改文件与原因
+
+- `src/renderer/src/utils/fontFamily.ts`
+  - 新增 `isLocalFontLookupCandidate`，集中判断字体值是否为需要本机枚举的非通用单字体；完整 CSS 字体栈和通用字体不触发冷启动查询。
+- `src/renderer/src/components/FontFamilySelect.vue`
+  - 监听异步回填的 `modelValue`；当选择器仍处于 `idle` 且当前值是本机字体候选时，自动调用现有 `loadFonts(false)`。
+- `tests/node/localFontFamily.test.mjs`
+  - 覆盖带引号/不带引号的本机字体、通用字体和 CSS 字体栈的查询候选判断。
+- `change.md`
+  - 追加本批次变更、验证、兼容性和风险记录。
+
+### 修改前后行为
+
+- 修改前：字体列表只在用户打开下拉框时枚举。冷启动时 `fontOptions` 只有通用字体，已保存的 `"Yuppy SC"` 暂时匹配不到，因此被渲染成带“自定义”标记的临时选项。
+- 修改后：主进程配置异步回填 `"Yuppy SC"` 后，选择器自动触发一次本机字体枚举；成功返回包含该字体时，显示本机字体名称且不再显示“自定义”。通用字体和多字体 CSS 栈保持原有行为。
+
+### 配置、IPC、协议、依赖与兼容性
+
+- 持久化配置、`schemaVersion`、字体字段格式、Electron IPC、Python 引擎协议和命令行参数均无变化。
+- 复用现有 Renderer 内存缓存和 Local Font Access 错误降级；完全退出后仍会重新查询，这是预期的冷启动行为。
+- 未新增、删除或升级依赖。回滚时恢复本批次三个代码/测试文件并保留本记录即可；不涉及用户配置迁移。
+
+### 实际验证
+
+- `npm run test:node`：通过，Node `120/120` 全部通过；命令输出了项目既有 npm 配置和 Node 模块类型警告，未影响结果。
+- `npm run typecheck`：通过，Node 与 Vue TypeScript 检查均无错误。
+- `npm run lint`：通过。
+- `npm run build`：通过；Electron main、preload、renderer 分别完成 37、1、3297 个模块的构建。
+- `git diff --check`：通过。
+
+### 未执行验证、已知风险与后续事项
+
+- 尚未在真实 Electron 打包窗口及 Windows/macOS/Linux 实机验证 Local Font Access 权限行为；若系统拒绝枚举，组件仍按既有逻辑降级到手动输入。
+- 本次没有运行真实音频、识别、翻译、付费 API 或安装包构建，这些路径未被修改。
+
+### 关键技术决策来源
+
+- 用户提供的冷启动截图。
+- `FontFamilySelect.vue` 的懒加载逻辑、`fontFamily.ts` 的字体值匹配逻辑以及 `AllConfig` 的现有配置持久化流程。
+
+## 2026-09-28 - macOS arm64 2.35.0 构建与小版本更新
+
+### 用户授权与目标
+
+- 用户明确要求“编译一下 Mac 版本并更新小版本号”；本批次将版本从 `2.34.0` 更新为 `2.35.0`，并生成 macOS arm64 安装产物。
+- 变更类型：版本、文档、构建。工作区已有字体冷启动修复及其测试、记录均予以保留。
+- 未安装或升级依赖，未修改系统环境，未提交、推送或发布 Git 内容。
+
+### 修改文件与原因
+
+- `package.json`、`package-lock.json`：版本更新为 `2.35.0`。
+- `src/renderer/index.html`、`src/renderer/src/components/EngineStatus.vue`：同步窗口标题和关于页版本。
+- `README.md`、`README_en.md`、`README_ja.md`：同步三语项目版本说明。
+- `docs/user-manual/{zh,en,ja}.md`、`docs/engine-manual/{zh,en,ja}.md`：同步三语手册版本。
+- `docs/CHANGELOG.md`：追加 `v2.35.0`，记录字体冷启动修复和 macOS 构建。
+- `dist/latest-mac.yml`：签名后的 ZIP/DMG 重建后同步最终 SHA-512 和大小。
+- `change.md`：追加本批次完整记录。
+
+### 修改前后行为
+
+- 修改前：发布版本为 `2.34.0`。
+- 修改后：应用、Electron bundle、Python 引擎构建元数据及三语文档为 `2.35.0`；macOS 目标为 arm64。字体冷启动修复行为保持不变。
+
+### 配置、协议、依赖与兼容性
+
+- 无配置 schema、配置迁移、默认值、Electron IPC、Python CLI、stdout/TCP 协议或字幕数据结构变化。
+- 未新增或升级依赖，沿用现有锁文件、Python 3.14.7、PyInstaller 6.22.3 和 electron-builder 26.15.3。
+- 仅验证 macOS arm64；未据此声明 Windows、Linux 或 Intel macOS 已验证。回滚时成组恢复版本文件、文档和 `docs/CHANGELOG.md` 的 2.35.0 段落；`change.md` 只能追加更正。
+
+### 实际验证与构建结果
+
+- `npm run verify`：通过；Node 测试包含字体冷启动用例，Python `96/96` 全部通过，类型检查和 ESLint 通过。
+- `npm run build:mac`：Apple Speech helper、Electron main/preload/renderer 构建通过；renderer 转换 3297 个模块。
+- electron-builder 生成 arm64 APP、ZIP、DMG 和 blockmap；本机无 Developer ID，因此打包器跳过正式签名。
+- 对最终 APP 执行 `codesign --force --deep --sign -`；最终 `codesign --verify --deep --strict --verbose=2` 通过，签名为 ad-hoc，`TeamIdentifier=not set`。
+- 使用签名后的 APP 重建 ZIP，并重建 DMG；最终 ZIP `unzip -tq`、DMG `hdiutil verify` 和 `latest-mac.yml` SHA-512/大小核对均通过。
+- `dist/Auto Caption-2.35.0-arm64-mac.zip`：228,568,103 bytes；SHA-256 `bb400ed89d216676ff1a76cfc33f53f57949e43889ed0aac689a6cd2f64bd1b7`。
+- `dist/auto-caption-2.35.0.dmg`：248,648,817 bytes；SHA-256 `58e1bb8da154bcebae8501f9ea178eb51718c02329ee9f3ba5e9995bdf271cd4`。
+
+### 未执行验证、风险与后续事项
+
+- 未执行 Developer ID 正式签名、Apple 公证、Gatekeeper 外部下载验证、Electron GUI 人工回归、真实麦克风/系统音频、腾讯真实凭据或付费 API 测试。
+- 未执行 Windows、Linux 或 Intel macOS 构建。最终 APP 为 ad-hoc 签名，未公证。
+
+### 关键技术决策来源
+
+- 根目录 `AGENTS.md`：版本同步、三语文档、构建验证、依赖授权、脏工作区保护和 `change.md` 追加要求。
+- Apple `codesign`、`hdiutil`、`ditto` 本机工具输出，以及 PyInstaller/electron-builder 构建日志。

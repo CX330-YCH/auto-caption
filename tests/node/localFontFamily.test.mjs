@@ -4,6 +4,7 @@ import test from 'node:test'
 import {
   createFontFamilyOptions,
   findMatchingFontOption,
+  isLocalFontLookupCandidate,
   parseSingleFontFamily,
   serializeFontFamily
 } from '../../src/renderer/src/utils/fontFamily.ts'
@@ -91,6 +92,13 @@ test('matches raw and quoted legacy values while preserving custom stacks', () =
     findMatchingFontOption('"Microsoft YaHei", sans-serif', options),
     undefined
   )
+})
+
+test('identifies non-generic single families for startup lookup', () => {
+  assert.equal(isLocalFontLookupCandidate('"Yuppy SC"'), true)
+  assert.equal(isLocalFontLookupCandidate('Yuppy SC'), true)
+  assert.equal(isLocalFontLookupCandidate('sans-serif'), false)
+  assert.equal(isLocalFontLookupCandidate('"Yuppy SC", sans-serif'), false)
 })
 
 test('filters a system family whose serialized value exceeds the config limit', () => {
