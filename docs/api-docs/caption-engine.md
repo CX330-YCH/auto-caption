@@ -177,9 +177,11 @@ Fun-ASR 的预编译热词表 ID 和上下文术语是任务启动参数，不�
 }
 ```
 
-除 `version` 外的诊断字段均可缺省。内置 Gummy、Fun-ASR、GLM、Vosk 和 SOSV，以及音频采集、翻译服务、热词 SDK、Provider 启停和 Session 清理路径，都使用同一诊断序列化规则：普通异常保留类型、模块、消息、参数、自定义属性、完整 traceback、cause/context；SDK 回调对象保留可序列化公开字段和实例属性；二进制音频仅记录类型和长度。Debug Mode 不以性能为由缩减内容；为防止失控对象耗尽内存，Python 与 Electron 的单个字符串最多保留 32 MiB、单个集合最多 4096 项、嵌套最多 16 层，并明确写入截断标记。
+除 `version` 外的诊断字段均可缺省。内置 Gummy、Fun-ASR、Tencent Speech Translate、GLM、Vosk 和 SOSV，以及音频采集、翻译服务、热词 SDK、Provider 启停和 Session 清理路径，都使用同一诊断序列化规则：普通异常保留类型、模块、消息、参数、自定义属性、完整 traceback、cause/context；SDK 回调对象保留可序列化公开字段和实例属性；二进制音频仅记录类型和长度。Debug Mode 不以性能为由缩减内容；为防止失控对象耗尽内存，Python 与 Electron 的单个字符串最多保留 32 MiB、单个集合最多 4096 项、嵌套最多 16 层，并明确写入截断标记。
 
-`serviceMessage`、`sdkResult`、异常属性、stderr 和所有 `details` 在 Python 与 Electron 两层再次脱敏。实际命令行中的 API Key、环境变量 Key、Token、密码、Authorization、Cookie 和其他凭据不得写入协议或日志；因此这里的“完整”指凭据脱敏及有界保护后的完整诊断，而不是原样保存秘密或音频正文。
+`serviceMessage`、`sdkResult`、异常属性、stderr 和所有 `details` 在 Python 与 Electron 两层再次脱敏。实际命令行中的 API Key、环境变量 Key、Token、密码、Authorization、Cookie、WebSocket `secretid` 和 `signature` 不得写入协议或日志；因此这里的“完整”指凭据脱敏及有界保护后的完整诊断，而不是原样保存秘密或音频正文。
+
+Tencent Speech Translate 在 Debug Mode 下通过现有 `debug` 事件记录 Provider 启动参数中的非敏感部分、WebSocket worker/打开/握手等待/消息/错误/关闭/停止状态、关闭码与原因、服务端 JSON 响应、网络音频包字节计数以及 Provider 状态快照。无法解析的响应只记录载荷类型、字节数和 SHA-256，不记录任意原始正文；合法 JSON 响应会递归脱敏后记录。传输失败的 `error.diagnostic` 同时保留精确 `operation`、异常类型、消息、参数和 traceback，不再只保留异常类名。签名 URL、SecretID、SecretKey 和 PCM 正文始终不记录。
 
 ### Debug Mode 指标
 

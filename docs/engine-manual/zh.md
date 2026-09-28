@@ -1,6 +1,6 @@
 # 字幕引擎说明文档
 
-对应版本：v2.31.0
+对应版本：v2.32.0
 
 ![](../../assets/media/structure_zh.png)
 
@@ -226,6 +226,8 @@ python main.py -e tencent_speech_translate -s zh -t en -a 0 -c 10 \
 ```
 
 该 Provider 使用 16 kHz 单声道 PCM16，将约 100 ms 音频帧组合成约 200 ms 网络包。服务端 `sentence_id`、`sentence_end`、`source_text`、`target_text` 和毫秒偏移分别映射为稳定 ID、partial/final、原文、译文和字幕时间。`-tcvad` 表示静音多久后断句，范围 500–2000 ms；`-tcmax` 表示连续说话时强制断句的最长时长，范围 5000–90000 ms。两项仅对 `zh`、`en`、`zh_en` 发送。V9 设置页把三个凭据以普通文本写入 `config.json`，Electron 通过上述 CLI 参数启动 Python；命令日志和诊断会隐藏 SecretID/SecretKey，但配置文件和系统进程参数仍为明文。停止时等待最终结果最多5秒，Electron 总停止期限为8秒；旧引擎仍为4秒。当前不支持 TTS、自动重连或可用热词；热词编码和空配置仅作为后续接入边界。
+
+开启 Debug Mode 后，腾讯 Provider 会把非敏感请求参数、WebSocket worker 与传输打开、握手等待状态、完整脱敏 JSON 响应、异常与 traceback、关闭码/原因、停止冲刷过程和网络音频包字节计数写入隐藏 `debug` 事件，并在周期快照中记录 Ready/失败状态、待发送音频、收发计数和 partial/final 数量。无法解析的载荷只记录类型、长度和 SHA-256。签名 URL、`secretid`、`signature`、SecretID、SecretKey 和 PCM 正文不会写入日志。
 
 Fun-ASR 为每个连接 generation 维护幂等状态：同一次任务的 `on_error → on_close → stop` 最多触发一次重连或一次 fatal。永久服务错误立即终止，暂时错误才进行三次有界退避重连；task-failed 后不会再次调用 SDK `stop()`。生命周期细节通过隐藏的 `debug` 协议事件写入完整 Debug 日志，原有日志记录页不显示 DEBUG。fatal 会请求 Session 正常关闭资源；只有超时等异常路径才由 Electron 强杀整个打包进程树。
 

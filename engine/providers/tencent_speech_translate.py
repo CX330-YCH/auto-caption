@@ -15,11 +15,13 @@ from core import (
     AudioFrame,
     CaptionFinal,
     CaptionPartial,
+    ProviderDebug,
     ProviderError,
     ProviderReady,
     ProviderStopped,
     RecognitionProvider,
     exception_diagnostic,
+    safe_diagnostic_value,
 )
 
 
@@ -83,10 +85,17 @@ class TencentSpeechClient(Protocol):
 
 
 ResponseHandler = Callable[[dict[str, object]], None]
-FailureHandler = Callable[[str], None]
-CloseHandler = Callable[[], None]
+FailureHandler = Callable[[BaseException, str], None]
+CloseHandler = Callable[[int | None, str | None], None]
+DiagnosticHandler = Callable[[str, dict[str, object]], None]
 ClientFactory = Callable[
-    [TencentSpeechOptions, ResponseHandler, FailureHandler, CloseHandler],
+    [
+        TencentSpeechOptions,
+        ResponseHandler,
+        FailureHandler,
+        CloseHandler,
+        DiagnosticHandler,
+    ],
     TencentSpeechClient,
 ]
 
@@ -156,6 +165,7 @@ class _WebSocketClient:
         response_handler: ResponseHandler,
         failure_handler: FailureHandler,
         close_handler: CloseHandler,
+        diagnostic_handler: DiagnosticHandler = lambda message, details: None,
         start_timeout: float = 10.0,
         finish_timeout: float = 5.0,
     ) -> None:
@@ -163,6 +173,7 @@ class _WebSocketClient:
         self._response_handler = response_handler
         self._failure_handler = failure_handler
         self._close_handler = close_handler
+        self._diagnostic_handler = diagnostic_handler
         self._start_timeout = start_timeout
         self._finish_timeout = finish_timeout
         self._ready = threading.Event()
@@ -177,11 +188,33 @@ class _WebSocketClient:
         import websocket
 
         now = int(time.time())
+        voice_id = str(uuid.uuid4())
         url = build_signed_url(
             self._options,
             timestamp=now,
             nonce=now % 10_000_000_000,
-            voice_id=str(uuid.uuid4()),
+            voice_id=voice_id,
+        )
+        self._diagnostic_handler(
+            'Tencent WebSocket connection starting.',
+            {
+                'operation': 'tencent_speech.websocket.start',
+                'endpoint': 'asr.cloud.tencent.com',
+                'path': f'/asr/speech_translate/{self._options.app_id}',
+                'appId': self._options.app_id,
+                'voiceId': voice_id,
+                'sourceLanguage': self._options.source_language,
+                'targetLanguage': self._options.target_language,
+                'model': self._options.model,
+                'voiceFormat': 1,
+                'ttsEnabled': False,
+                'vadSilenceMs': self._options.vad_silence_ms,
+                'maxSpeakTimeMs': self._options.max_speak_time_ms,
+                'hotwordCount': len(self._options.hotwords),
+                'timestamp': now,
+                'expired': now + 24 * 60 * 60,
+                'startTimeoutSeconds': self._start_timeout,
+            },
         )
         self._websocket = websocket.WebSocketApp(
             url,
@@ -189,16 +222,31 @@ class _WebSocketClient:
             on_error=self._on_error,
             on_close=self._on_close,
         )
+        self._websocket.on_open = self._on_open
         self._thread = threading.Thread(
             target=self._websocket.run_forever,
             name='tencent-speech-websocket',
             daemon=True,
         )
         self._thread.start()
+        self._diagnostic_handler(
+            'Tencent WebSocket worker started.',
+            {
+                'operation': 'tencent_speech.websocket.start',
+                'threadName': self._thread.name,
+            },
+        )
         if not self._ready.wait(self._start_timeout):
             self._closing = True
             self._websocket.close()
             raise TimeoutError('Tencent WebSocket handshake timed out')
+        self._diagnostic_handler(
+            'Tencent WebSocket startup wait completed.',
+            {
+                'operation': 'tencent_speech.websocket.start',
+                **self._state_details(),
+            },
+        )
         if (
             self._failed.is_set() or
             not self._handshake_succeeded.is_set()
@@ -216,16 +264,49 @@ class _WebSocketClient:
         if self._websocket is None:
             return
         self._closing = True
+        self._diagnostic_handler(
+            'Tencent WebSocket stop requested.',
+            {
+                'operation': 'tencent_speech.websocket.stop',
+                **self._state_details(),
+                'finishTimeoutSeconds': self._finish_timeout,
+            },
+        )
         if self._ready.is_set() and not self._failed.is_set():
             self._websocket.send(json.dumps({'type': 'end'}))
+            self._diagnostic_handler(
+                'Tencent WebSocket end message sent.',
+                {'operation': 'tencent_speech.websocket.stop'},
+            )
             if not self._finished.wait(self._finish_timeout):
                 self._websocket.close()
                 raise TimeoutError('Tencent final result timed out')
         self._websocket.close()
         if self._thread is not None:
             self._thread.join(timeout=1.0)
+        self._diagnostic_handler(
+            'Tencent WebSocket stop completed.',
+            {
+                'operation': 'tencent_speech.websocket.stop',
+                **self._state_details(),
+                'workerAlive': bool(
+                    self._thread is not None and self._thread.is_alive()
+                ),
+            },
+        )
+
+    def _on_open(self, ws) -> None:
+        self._diagnostic_handler(
+            'Tencent WebSocket transport opened.',
+            {
+                'operation': 'tencent_speech.websocket.on_open',
+                **self._state_details(),
+            },
+        )
 
     def _on_message(self, ws, message: str) -> None:
+        message_details = self._message_details(message)
+        response: object | None = None
         try:
             response = json.loads(message)
             if not isinstance(response, dict):
@@ -233,6 +314,17 @@ class _WebSocketClient:
             code = response.get('code')
             if not isinstance(code, int):
                 raise ValueError('Tencent response code must be an integer')
+            self._diagnostic_handler(
+                'Tencent WebSocket message received.',
+                {
+                    'operation': 'tencent_speech.websocket.on_message',
+                    **message_details,
+                    'handshakeSucceededBefore': (
+                        self._handshake_succeeded.is_set()
+                    ),
+                    'response': response,
+                },
+            )
             if not self._handshake_succeeded.is_set():
                 if code != 0:
                     self._failed.set()
@@ -256,21 +348,85 @@ class _WebSocketClient:
                 self._finished.set()
         except Exception as error:
             self._failed.set()
+            details = exception_diagnostic(
+                error,
+                operation='tencent_speech.websocket.on_message',
+                secrets=(
+                    self._options.secret_id,
+                    self._options.secret_key,
+                ),
+            )
+            details.update(message_details)
+            details.update(self._state_details())
+            if response is not None:
+                details['response'] = safe_diagnostic_value(
+                    response,
+                    secrets=(
+                        self._options.secret_id,
+                        self._options.secret_key,
+                    ),
+                )
+            self._diagnostic_handler(
+                'Tencent WebSocket message handling failed.',
+                details,
+            )
             try:
-                self._failure_handler(type(error).__name__)
+                self._failure_handler(
+                    error,
+                    'tencent_speech.websocket.on_message',
+                )
             finally:
                 self._ready.set()
 
     def _on_error(self, ws, error: object) -> None:
         if self._closing:
+            self._diagnostic_handler(
+                'Ignored Tencent WebSocket error while closing.',
+                {
+                    'operation': 'tencent_speech.websocket.on_error',
+                    'error': error,
+                    **self._state_details(),
+                },
+            )
             return
+        exception = (
+            error if isinstance(error, BaseException)
+            else RuntimeError(str(error))
+        )
         self._failed.set()
+        details = exception_diagnostic(
+            exception,
+            operation='tencent_speech.websocket.on_error',
+            secrets=(
+                self._options.secret_id,
+                self._options.secret_key,
+            ),
+        )
+        details.update(self._state_details())
+        self._diagnostic_handler(
+            'Tencent WebSocket transport error.',
+            details,
+        )
         try:
-            self._failure_handler(type(error).__name__)
+            self._failure_handler(
+                exception,
+                'tencent_speech.websocket.on_error',
+            )
         finally:
             self._ready.set()
 
     def _on_close(self, ws, status_code=None, message=None) -> None:
+        normalized_status = status_code if isinstance(status_code, int) else None
+        normalized_message = message if isinstance(message, str) else None
+        self._diagnostic_handler(
+            'Tencent WebSocket transport closed.',
+            {
+                'operation': 'tencent_speech.websocket.on_close',
+                'statusCode': normalized_status,
+                'closeMessage': normalized_message,
+                **self._state_details(),
+            },
+        )
         if self._failed.is_set():
             return
         if self._closing:
@@ -280,9 +436,38 @@ class _WebSocketClient:
             return
         self._failed.set()
         try:
-            self._close_handler()
+            self._close_handler(normalized_status, normalized_message)
         finally:
             self._ready.set()
+
+    def _state_details(self) -> dict[str, object]:
+        return {
+            'readyEventSet': self._ready.is_set(),
+            'handshakeSucceeded': self._handshake_succeeded.is_set(),
+            'finished': self._finished.is_set(),
+            'failed': self._failed.is_set(),
+            'closing': self._closing,
+        }
+
+    @staticmethod
+    def _message_details(message: object) -> dict[str, object]:
+        if isinstance(message, str):
+            encoded = message.encode('utf-8', errors='replace')
+            return {
+                'payloadType': 'text',
+                'payloadBytes': len(encoded),
+                'payloadSha256': hashlib.sha256(encoded).hexdigest(),
+            }
+        if isinstance(message, bytes):
+            return {
+                'payloadType': 'bytes',
+                'payloadBytes': len(message),
+                'payloadSha256': hashlib.sha256(message).hexdigest(),
+            }
+        return {
+            'payloadType': type(message).__name__,
+            'payloadBytes': None,
+        }
 
 
 def _build_client(
@@ -290,12 +475,14 @@ def _build_client(
     response_handler: ResponseHandler,
     failure_handler: FailureHandler,
     close_handler: CloseHandler,
+    diagnostic_handler: DiagnosticHandler,
 ) -> TencentSpeechClient:
     return _WebSocketClient(
         options,
         response_handler,
         failure_handler,
         close_handler,
+        diagnostic_handler,
     )
 
 
@@ -319,6 +506,12 @@ class TencentSpeechTranslateProvider(RecognitionProvider):
         self._ready = False
         self._stopping = False
         self._failed = False
+        self._audio_frames_accepted = 0
+        self._network_packets_sent = 0
+        self._network_bytes_sent = 0
+        self._responses_received = 0
+        self._partial_results = 0
+        self._final_results = 0
 
     @property
     def name(self) -> str:
@@ -327,12 +520,26 @@ class TencentSpeechTranslateProvider(RecognitionProvider):
     def start(self) -> None:
         try:
             _validate_options(self._options)
+            self._debug(
+                'Tencent speech translation provider starting.',
+                {
+                    'operation': 'tencent_speech.start',
+                    'appId': self._options.app_id,
+                    'sourceLanguage': self._options.source_language,
+                    'targetLanguage': self._options.target_language,
+                    'model': self._options.model,
+                    'vadSilenceMs': self._options.vad_silence_ms,
+                    'maxSpeakTimeMs': self._options.max_speak_time_ms,
+                    'hotwordCount': len(self._options.hotwords),
+                },
+            )
             self._session_started_at = self._clock()
             self._client = self._client_factory(
                 self._options,
                 self.handle_response,
                 self.handle_transport_error,
                 self.handle_close,
+                self._debug,
             )
             self._client.start()
             if not self._ready:
@@ -364,12 +571,14 @@ class TencentSpeechTranslateProvider(RecognitionProvider):
             raise ValueError('Tencent speech translation requires 16 kHz PCM16')
         if frame.channels != 1 or frame.sample_width != 2:
             raise ValueError('Tencent speech translation requires mono PCM16')
+        self._audio_frames_accepted += 1
         self._pending_audio.extend(frame.data)
         try:
             while len(self._pending_audio) >= PCM_PACKET_BYTES:
                 packet = bytes(self._pending_audio[:PCM_PACKET_BYTES])
                 del self._pending_audio[:PCM_PACKET_BYTES]
                 self._client.send_audio(packet)
+                self._record_audio_packet(packet, tail=False)
         except Exception as error:
             self._failed = True
             self._emit(ProviderError(
@@ -397,7 +606,9 @@ class TencentSpeechTranslateProvider(RecognitionProvider):
                 not self._failed and
                 self._pending_audio
             ):
-                self._client.send_audio(bytes(self._pending_audio))
+                tail = bytes(self._pending_audio)
+                self._client.send_audio(tail)
+                self._record_audio_packet(tail, tail=True)
             self._pending_audio.clear()
             if self._client is not None:
                 self._client.stop()
@@ -423,12 +634,24 @@ class TencentSpeechTranslateProvider(RecognitionProvider):
             ))
 
     def handle_response(self, response: dict[str, object]) -> None:
+        self._responses_received += 1
         code = response.get('code')
         if not isinstance(code, int):
-            self.handle_transport_error('InvalidResponse')
+            self.handle_transport_error(
+                ValueError('Tencent response code must be an integer'),
+                'tencent_speech.response',
+            )
             return
         if code != 0:
             self._failed = True
+            safe_response = safe_diagnostic_value(
+                response,
+                secrets=self._secrets,
+            )
+            safe_mapping = (
+                safe_response if isinstance(safe_response, dict) else {}
+            )
+            service_message = safe_mapping.get('message')
             self._emit(ProviderError(
                 provider=self.name,
                 message=f'Tencent speech translation failed (code {code})',
@@ -437,6 +660,12 @@ class TencentSpeechTranslateProvider(RecognitionProvider):
                     'operation': 'tencent_speech.response',
                     'errorType': 'TencentServiceError',
                     'serviceCode': code,
+                    'serviceMessage': (
+                        service_message
+                        if isinstance(service_message, str)
+                        else ''
+                    ),
+                    'response': safe_mapping,
                 },
             ))
             return
@@ -450,27 +679,47 @@ class TencentSpeechTranslateProvider(RecognitionProvider):
                 ))
             return
         if not isinstance(result, dict):
-            self.handle_transport_error('InvalidResult')
+            self.handle_transport_error(
+                ValueError('Tencent result must be an object'),
+                'tencent_speech.response',
+            )
             return
         self._publish_caption(response, result)
 
-    def handle_transport_error(self, error_type: str) -> None:
+    def handle_transport_error(
+        self,
+        error: BaseException,
+        operation: str,
+    ) -> None:
         if self._stopping or self._failed:
             return
         self._failed = True
+        details = exception_diagnostic(
+            error,
+            operation=operation,
+            secrets=self._secrets,
+        )
         self._emit(ProviderError(
             provider=self.name,
             message='Tencent speech translation connection failed.',
             fatal=True,
-            details={
-                'operation': 'tencent_speech.websocket',
-                'errorType': error_type[:128],
-            },
+            details=details,
         ))
 
-    def handle_close(self) -> None:
+    def handle_close(
+        self,
+        status_code: int | None,
+        message: str | None,
+    ) -> None:
         if not self._stopping and not self._failed:
-            self.handle_transport_error('UnexpectedClose')
+            suffix = f' ({status_code})' if status_code is not None else ''
+            reason = f': {message}' if message else ''
+            self.handle_transport_error(
+                ConnectionError(
+                    f'Tencent WebSocket closed unexpectedly{suffix}{reason}'
+                ),
+                'tencent_speech.websocket.on_close',
+            )
 
     def _publish_caption(
         self,
@@ -492,7 +741,10 @@ class TencentSpeechTranslateProvider(RecognitionProvider):
             not isinstance(sentence_end, bool) or
             self._session_started_at is None
         ):
-            self.handle_transport_error('InvalidCaptionResult')
+            self.handle_transport_error(
+                ValueError('Tencent caption result has invalid fields'),
+                'tencent_speech.caption_result',
+            )
             return
         caption_id = self._caption_ids.get(sentence_id)
         if caption_id is None:
@@ -504,12 +756,57 @@ class TencentSpeechTranslateProvider(RecognitionProvider):
         event_type = CaptionFinal if sentence_end else CaptionPartial
         if sentence_end:
             self._final_sentence_ids.add(sentence_id)
+            self._final_results += 1
+        else:
+            self._partial_results += 1
         self._emit(event_type(
             caption_id=caption_id,
             started_at=self._format_time(start_ms),
             ended_at=self._format_time(end_ms),
             text=text,
             translation=translation,
+        ))
+
+    def diagnostic_snapshot(self) -> dict[str, object]:
+        return {
+            **super().diagnostic_snapshot(),
+            'ready': self._ready,
+            'stopping': self._stopping,
+            'failed': self._failed,
+            'pendingAudioBytes': len(self._pending_audio),
+            'audioFramesAccepted': self._audio_frames_accepted,
+            'networkPacketsSent': self._network_packets_sent,
+            'networkBytesSent': self._network_bytes_sent,
+            'responsesReceived': self._responses_received,
+            'partialResults': self._partial_results,
+            'finalResults': self._final_results,
+            'trackedSentences': len(self._caption_ids),
+        }
+
+    def _record_audio_packet(self, packet: bytes, *, tail: bool) -> None:
+        self._network_packets_sent += 1
+        self._network_bytes_sent += len(packet)
+        self._debug(
+            'Tencent WebSocket audio packet sent.',
+            {
+                'operation': 'tencent_speech.send_audio',
+                'packetBytes': len(packet),
+                'packetIndex': self._network_packets_sent,
+                'totalBytes': self._network_bytes_sent,
+                'tailPacket': tail,
+            },
+        )
+
+    def _debug(self, message: str, details: dict[str, object]) -> None:
+        if not self._debug_enabled():
+            return
+        safe_details = safe_diagnostic_value(details, secrets=self._secrets)
+        self._emit(ProviderDebug(
+            provider=self.name,
+            message=message,
+            details=(
+                safe_details if isinstance(safe_details, dict) else {}
+            ),
         ))
 
     def _format_time(self, offset_ms: int) -> str:

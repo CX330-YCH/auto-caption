@@ -2,7 +2,7 @@ function passwordMasking(pwd: string) {
   return pwd.replace(/./g, '*')
 }
 
-const SENSITIVE_KEY = /(?:api.?key|secret.?id|secret.?key|(?:access|refresh|auth|id)?token|password|secret|authorization|credentials?|cookie|set.?cookie)(?:$|[_-]?(?:value|header))$/i
+const SENSITIVE_KEY = /(?:api.?key|secret.?id|secret.?key|signature|(?:access|refresh|auth|id)?token|password|secret|authorization|credentials?|cookie|set.?cookie)(?:$|[_-]?(?:value|header))$/i
 const SENSITIVE_ARGUMENTS = new Set([
   '-k', '-okey', '-gkey', '-fkey', '-tcsecretid', '-tcsecretkey'
 ])
@@ -32,15 +32,15 @@ export function redactSensitiveText(
       '$1<redacted>'
     )
     .replace(
-      /([?&](?:api_?key|token|password|secret(?:_?(?:id|key))?)=)[^&\s]+/gi,
+      /([?&](?:api_?key|token|password|secret(?:_?(?:id|key))?|signature)=)[^&\s]+/gi,
       '$1<redacted>'
     )
     .replace(
-      /(\b(?:api.?key|token|password|secret.?id|secret.?key|secret|credential)\b["']?\s*[:=]\s*["']?)[^\s"',;}&]+/gi,
+      /(\b(?:api.?key|token|password|secret.?id|secret.?key|signature|secret|credential)\b["']?\s*[:=]\s*["']?)[^\s"',;}&]+/gi,
       '$1<redacted>'
     )
     .replace(
-      /(\b(?:api.?key|token|password|secret.?id|secret.?key|secret|credential)\b\s+)[A-Za-z0-9._-]{8,}/gi,
+      /(\b(?:api.?key|token|password|secret.?id|secret.?key|signature|secret|credential)\b\s+)[A-Za-z0-9._-]{8,}/gi,
       '$1<redacted>'
     )
 }

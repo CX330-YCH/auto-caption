@@ -14,6 +14,7 @@ from core import (  # noqa: E402
     AudioFrame,
     CaptionFinal,
     CaptionPartial,
+    ProviderDebug,
     ProviderError,
     ProviderReady,
     ProviderStopped,
@@ -73,7 +74,7 @@ class TencentSpeechProviderTests(unittest.TestCase):
     def test_maps_partial_final_translation_and_server_timestamps(self):
         clients = []
 
-        def factory(config, response, failure, close):
+        def factory(config, response, failure, close, diagnostic):
             client = FakeClient(response)
             clients.append(client)
             return client
@@ -131,7 +132,7 @@ class TencentSpeechProviderTests(unittest.TestCase):
     def test_packetizes_100ms_frames_and_flushes_tail_on_stop(self):
         clients = []
 
-        def factory(config, response, failure, close):
+        def factory(config, response, failure, close, diagnostic):
             client = FakeClient(response)
             clients.append(client)
             return client
@@ -151,11 +152,16 @@ class TencentSpeechProviderTests(unittest.TestCase):
         self.assertEqual(clients[0].sent[-1], b'c' * 1000)
         self.assertTrue(clients[0].stopped)
         self.assertIsInstance(provider.drain_events()[-1], ProviderStopped)
+        snapshot = provider.diagnostic_snapshot()
+        self.assertEqual(snapshot['audioFramesAccepted'], 3)
+        self.assertEqual(snapshot['networkPacketsSent'], 2)
+        self.assertEqual(snapshot['networkBytesSent'], 7400)
+        self.assertEqual(snapshot['pendingAudioBytes'], 0)
 
     def test_deduplicates_final_and_sanitizes_start_failure(self):
         client = None
 
-        def factory(config, response, failure, close):
+        def factory(config, response, failure, close, diagnostic):
             nonlocal client
             client = FakeClient(response)
             return client
@@ -182,7 +188,7 @@ class TencentSpeechProviderTests(unittest.TestCase):
 
         failed = TencentSpeechTranslateProvider(
             options(),
-            client_factory=lambda config, response, failure, close: (
+            client_factory=lambda config, response, failure, close, diagnostic: (
                 FakeClient(response, fail_start=True)
             ),
         )
@@ -198,7 +204,7 @@ class TencentSpeechProviderTests(unittest.TestCase):
 
         handshake_failure = TencentSpeechTranslateProvider(
             options(),
-            client_factory=lambda config, response, failure, close: (
+            client_factory=lambda config, response, failure, close, diagnostic: (
                 HandshakeFailureClient(response)
             ),
         )
@@ -222,7 +228,7 @@ class TencentSpeechProviderTests(unittest.TestCase):
 
         client = None
 
-        def handle_close():
+        def handle_close(status_code, message):
             close_states.append((
                 client._failed.is_set(),
                 client._ready.is_set(),
@@ -231,7 +237,7 @@ class TencentSpeechProviderTests(unittest.TestCase):
         client = _WebSocketClient(
             options(),
             response_handler=lambda response: None,
-            failure_handler=lambda error_type: None,
+            failure_handler=lambda error, operation: None,
             close_handler=handle_close,
             start_timeout=0.1,
         )
@@ -265,8 +271,10 @@ class TencentSpeechProviderTests(unittest.TestCase):
         client = _WebSocketClient(
             options(),
             response_handler=responses.append,
-            failure_handler=failures.append,
-            close_handler=lambda: None,
+            failure_handler=lambda error, operation: failures.append(
+                (error, operation)
+            ),
+            close_handler=lambda status_code, message: None,
             start_timeout=0.1,
         )
         websocket_module = SimpleNamespace(
@@ -281,12 +289,18 @@ class TencentSpeechProviderTests(unittest.TestCase):
                 client.start()
 
         self.assertEqual(responses, [])
-        self.assertEqual(failures, ['ValueError'])
+        self.assertEqual(len(failures), 1)
+        self.assertIsInstance(failures[0][0], ValueError)
+        self.assertEqual(
+            failures[0][1],
+            'tencent_speech.websocket.on_message',
+        )
 
     def test_handshake_then_final_closes_without_transport_failure(self):
         failures = []
         responses = []
         unexpected_closes = []
+        diagnostics = []
 
         class SuccessfulWebSocketApp:
             def __init__(self, url, on_message, on_error, on_close):
@@ -294,6 +308,7 @@ class TencentSpeechProviderTests(unittest.TestCase):
                 self.on_close = on_close
 
             def run_forever(self):
+                self.on_open(self)
                 self.on_message(self, '{"code": 0, "message": "success"}')
                 self.on_message(self, '{"code": 0, "final": 1}')
                 self.on_close(self, 1000, 'finished')
@@ -304,8 +319,15 @@ class TencentSpeechProviderTests(unittest.TestCase):
         client = _WebSocketClient(
             options(),
             response_handler=responses.append,
-            failure_handler=failures.append,
-            close_handler=lambda: unexpected_closes.append(True),
+            failure_handler=lambda error, operation: failures.append(
+                (error, operation)
+            ),
+            close_handler=lambda status_code, message: (
+                unexpected_closes.append((status_code, message))
+            ),
+            diagnostic_handler=lambda message, details: diagnostics.append(
+                (message, details)
+            ),
             start_timeout=0.1,
         )
         websocket_module = SimpleNamespace(WebSocketApp=SuccessfulWebSocketApp)
@@ -316,6 +338,21 @@ class TencentSpeechProviderTests(unittest.TestCase):
         self.assertEqual(len(responses), 2)
         self.assertEqual(failures, [])
         self.assertEqual(unexpected_closes, [])
+        diagnostic_messages = {message for message, details in diagnostics}
+        self.assertIn(
+            'Tencent WebSocket transport opened.',
+            diagnostic_messages,
+        )
+        self.assertIn(
+            'Tencent WebSocket message received.',
+            diagnostic_messages,
+        )
+        self.assertIn(
+            'Tencent WebSocket transport closed.',
+            diagnostic_messages,
+        )
+        self.assertNotIn('secret-id', str(diagnostics))
+        self.assertNotIn('secret-key', str(diagnostics))
 
     def test_provider_rejects_client_return_without_handshake(self):
         class SilentClient(FakeClient):
@@ -324,7 +361,7 @@ class TencentSpeechProviderTests(unittest.TestCase):
 
         provider = TencentSpeechTranslateProvider(
             options(),
-            client_factory=lambda config, response, failure, close: (
+            client_factory=lambda config, response, failure, close, diagnostic: (
                 SilentClient(response)
             ),
         )
@@ -339,6 +376,100 @@ class TencentSpeechProviderTests(unittest.TestCase):
             events[0].details['operation'],
             'tencent_speech.start',
         )
+
+    def test_debug_mode_records_transport_lifecycle_and_redacts_secrets(self):
+        diagnostics = []
+
+        class DiagnosticClient(FakeClient):
+            def __init__(self, response_handler, diagnostic_handler):
+                super().__init__(response_handler)
+                self.diagnostic_handler = diagnostic_handler
+
+            def start(self):
+                self.diagnostic_handler(
+                    'Synthetic Tencent transport diagnostic.',
+                    {
+                        'secretId': 'secret-id',
+                        'secretKey': 'secret-key',
+                        'signature': 'signed-value',
+                        'statusCode': 101,
+                    },
+                )
+                super().start()
+
+        def factory(config, response, failure, close, diagnostic):
+            diagnostics.append(diagnostic)
+            return DiagnosticClient(response, diagnostic)
+
+        provider = TencentSpeechTranslateProvider(
+            options(),
+            client_factory=factory,
+        )
+        provider.set_debug_enabled(lambda: True)
+        provider.start()
+
+        events = provider.drain_events()
+        debug_events = [
+            event for event in events if isinstance(event, ProviderDebug)
+        ]
+        self.assertEqual(len(diagnostics), 1)
+        self.assertEqual(len(debug_events), 2)
+        self.assertEqual(
+            debug_events[0].message,
+            'Tencent speech translation provider starting.',
+        )
+        diagnostic_text = str(debug_events[1].details)
+        self.assertNotIn('secret-id', diagnostic_text)
+        self.assertNotIn('secret-key', diagnostic_text)
+        self.assertNotIn('signed-value', diagnostic_text)
+        self.assertIn('101', diagnostic_text)
+        self.assertTrue(any(isinstance(event, ProviderReady) for event in events))
+
+    def test_message_failure_preserves_stage_and_exception_diagnostics(self):
+        failures = []
+        diagnostics = []
+
+        client = _WebSocketClient(
+            options(),
+            response_handler=lambda response: None,
+            failure_handler=lambda error, operation: failures.append(
+                (error, operation)
+            ),
+            close_handler=lambda status_code, message: None,
+            diagnostic_handler=lambda message, details: diagnostics.append(
+                (message, details)
+            ),
+        )
+
+        client._on_message(None, '{invalid json')
+
+        self.assertEqual(len(failures), 1)
+        self.assertEqual(
+            failures[0][1],
+            'tencent_speech.websocket.on_message',
+        )
+        self.assertEqual(type(failures[0][0]).__name__, 'JSONDecodeError')
+        failure_details = diagnostics[-1][1]
+        self.assertEqual(failure_details['errorType'], 'JSONDecodeError')
+        self.assertIn('Expecting property name', failure_details['errorMessage'])
+        self.assertEqual(failure_details['payloadType'], 'text')
+        self.assertEqual(failure_details['payloadBytes'], 13)
+        self.assertEqual(len(failure_details['payloadSha256']), 64)
+
+    def test_debug_disabled_does_not_enqueue_provider_debug_events(self):
+        provider = TencentSpeechTranslateProvider(
+            options(),
+            client_factory=lambda config, response, failure, close, diagnostic: (
+                FakeClient(response)
+            ),
+        )
+
+        provider.start()
+
+        self.assertFalse(any(
+            isinstance(event, ProviderDebug)
+            for event in provider.drain_events()
+        ))
 
     def test_validates_signing_language_pairs_and_reserved_hotwords(self):
         url = build_signed_url(

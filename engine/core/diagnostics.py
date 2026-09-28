@@ -11,7 +11,7 @@ from typing import Any
 
 
 _SENSITIVE_KEY = re.compile(
-    r'(api.?key|token|password|secret|authorization|credential|cookie)',
+    r'(api.?key|token|password|secret|signature|authorization|credential|cookie)',
     re.IGNORECASE,
 )
 _MAX_DEPTH = 16
@@ -58,13 +58,14 @@ def redact_diagnostic_text(
         flags=re.IGNORECASE,
     )
     text = re.sub(
-        r'([?&](?:api_?key|token|password|secret)=)[^&\s]+',
+        r'([?&](?:api_?key|token|password|secret(?:id|key)?|signature)=)'
+        r'[^&\s]+',
         r'\1<redacted>',
         text,
         flags=re.IGNORECASE,
     )
     text = re.sub(
-        r'\b(?:api.?key|token|password|secret|credential)'
+        r'\b(?:api.?key|token|password|secret(?:id|key)?|signature|credential)'
         r'[-_:=\s]+[A-Za-z0-9._-]{4,}',
         '<redacted>',
         text,

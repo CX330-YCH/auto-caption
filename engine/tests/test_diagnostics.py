@@ -34,6 +34,20 @@ class DiagnosticTests(unittest.TestCase):
             'Cookie: <redacted>',
         )
 
+    def test_redacts_signed_url_credentials(self):
+        value = (
+            'wss://asr.cloud.tencent.com/asr/speech_translate/123?'
+            'secretid=cloud-id&signature=encoded-signature&source=zh'
+        )
+
+        redacted = redact_diagnostic_text(value)
+
+        self.assertNotIn('cloud-id', redacted)
+        self.assertNotIn('encoded-signature', redacted)
+        self.assertIn('secretid=<redacted>', redacted)
+        self.assertIn('signature=<redacted>', redacted)
+        self.assertIn('source=zh', redacted)
+
     def test_preserves_exception_traceback_attributes_and_cause(self):
         try:
             try:

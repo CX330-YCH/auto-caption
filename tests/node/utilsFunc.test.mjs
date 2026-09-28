@@ -53,13 +53,15 @@ test('redacts Tencent credential names in structured and textual diagnostics', (
     tencentSpeech: {
       appId: '123456',
       secretId: 'tencent-secret-id',
-      secretKey: 'tencent-secret-key'
+      secretKey: 'tencent-secret-key',
+      signature: 'encoded-signature'
     }
   }), {
     tencentSpeech: {
       appId: '123456',
       secretId: '<redacted>',
-      secretKey: '<redacted>'
+      secretKey: '<redacted>',
+      signature: '<redacted>'
     }
   })
   assert.equal(
@@ -67,6 +69,12 @@ test('redacts Tencent credential names in structured and textual diagnostics', (
       'secretId=tencent-secret-id&secret_key=tencent-secret-key'
     ),
     'secretId=<redacted>&secret_key=<redacted>'
+  )
+  assert.equal(
+    redactSensitiveText(
+      'wss://example.test/path?secretid=tencent-id&signature=encoded-signature&source=zh'
+    ),
+    'wss://example.test/path?secretid=<redacted>&signature=<redacted>&source=zh'
   )
 })
 

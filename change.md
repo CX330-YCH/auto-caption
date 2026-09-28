@@ -6303,3 +6303,121 @@
 - 根目录 `AGENTS.md`：脏工作区保护、版本文档同步、构建测试、依赖授权、生成目录和 `change.md` 逐批追加要求。
 - Apple `codesign`、`hdiutil`、`ditto` 本机工具输出：用于最终签名状态、DMG 和 ZIP 完整性验证。
 - PyInstaller 6.22.3 与 electron-builder 26.15.3 构建日志：用于确认 Python 3.14 one-file 引擎、Electron 43.4.0 arm64 应用及产物构成。
+
+## 2026-09-28：补全腾讯实时语音翻译 Debug 诊断
+
+### 用户授权、目标与范围
+
+- 用户明确要求修改，使开启 Debug Mode 后记录可用于检测和定位腾讯实时语音翻译问题的相关内容。
+- 变更类型：修复、功能、测试、文档。本批次只扩展腾讯 Provider 的脱敏连接诊断、共用诊断脱敏规则及对应文档；不修改腾讯签名算法、连接成功判定、配置结构、界面、翻译/字幕行为或其他 Provider 生命周期。
+- 修改前已阅读根目录 `AGENTS.md`，仓库没有目标子目录的额外规则；`git status --short --branch` 为干净的 `main...origin/main`，没有需要合并或绕开的用户改动。
+
+### 修改文件与原因
+
+- `engine/providers/tencent_speech_translate.py`：为私有 WebSocket 客户端增加结构化诊断回调，记录非敏感请求参数、worker、transport open、握手等待、响应、错误、关闭和停止状态；把传输失败从异常类名升级为完整脱敏异常；记录网络音频包元数据和 Provider 状态计数。
+- `engine/core/diagnostics.py`：把 WebSocket `secretid`、`secretkey` 和 `signature` 纳入结构化键及自由文本 URL 的通用脱敏规则，防止完整传输异常间接泄露签名参数。
+- `src/main/utils/UtilsFunc.ts`：同步 Electron 侧结构化对象、自由文本和 URL 查询参数的 `signature` 二次脱敏，覆盖 Python stderr 与协议日志入口。
+- `engine/tests/test_tencent_speech_provider.py`：适配私有客户端诊断回调契约，增加 Debug 开关、生命周期、错误阶段、异常正文、载荷摘要、凭据脱敏和状态计数测试。
+- `engine/tests/test_diagnostics.py`：增加腾讯风格签名 URL 脱敏回归测试。
+- `tests/node/utilsFunc.test.mjs`：增加 Electron 对结构化 `signature` 和腾讯风格签名 URL 的脱敏断言。
+- `docs/api-docs/caption-engine.md`：说明腾讯 Debug 事件内容、无法解析载荷的摘要策略、完整错误诊断和新增签名字段脱敏范围。
+- `docs/engine-manual/zh.md`、`docs/engine-manual/en.md`、`docs/engine-manual/ja.md`：同步中英日腾讯 Provider Debug 行为、安全边界和状态快照说明。
+- `docs/CHANGELOG.md`：在未发布版本记录腾讯诊断增强。
+- `change.md`：追加本批次授权、实现、验证、兼容性和风险记录，不修改既有历史。
+
+### 修改前后行为
+
+- 修改前：腾讯 WebSocket 的消息解析与底层 `on_error` 只向 Provider 传递异常类名。日志中的 `ValueError` 无法区分 JSON 解析失败、响应结构错误、握手顺序错误或 websocket-client 自身异常；WebSocket 打开、关闭码、握手状态和停止阶段也没有专用诊断。
+- 修改后：Debug Mode 开启时，现有隐藏 `debug` 事件记录 Provider 非敏感启动参数、WebSocket worker 与 transport open、握手等待状态、递归脱敏后的合法 JSON 响应、关闭码/原因、停止冲刷及每个网络音频包的字节元数据。周期 Provider snapshot 额外记录 Ready/停止/失败状态、待发送字节、音频帧、网络包、响应及 partial/final 数量。
+- 消息处理或传输失败的 `error.diagnostic` 现在包含精确 `operation`、异常类型/模块/消息/参数/属性、traceback 和 cause/context。解析失败载荷只记录类型、字节数及 SHA-256；已成功解析但结构不合法的对象以脱敏结构记录，便于区分具体失败分支。
+- Debug Mode 关闭时不排队新增 `ProviderDebug` 事件。签名 URL、SecretID、SecretKey、`secretid`、`signature` 和 PCM 正文不进入日志；网络音频只记录包大小、序号、累计字节与是否为停止尾包。
+
+### 配置、协议、兼容性与回滚
+
+- 没有配置 schema、迁移、Electron IPC、Python CLI、公开 stdout/TCP envelope 或字幕数据结构变化。实现复用现有可选 `debug.details`、`error.diagnostic` 和 `ProviderMetric` 协议，因此旧自定义引擎无需适配。
+- 腾讯私有 `ClientFactory` 的内部回调签名增加 DiagnosticHandler，仓库内实现和测试已同步；它不是自定义字幕引擎公开扩展协议。
+- 连接成功仍严格要求腾讯独立 `code: 0` 握手确认；partial/final 映射、音频分包、停止期限、配置和其他 Provider 行为不变。
+- 诊断与脱敏逻辑没有平台分支，理论上适用于 Windows、macOS 和 Linux；本批次只在 macOS arm64 开发环境执行离线验证。
+- 回滚时应成组恢复上述 Provider、诊断器、测试和文档修改；`change.md` 只能追加更正记录，不能删除本条历史。
+
+### 实际验证与真实结果
+
+- `engine/.venv/bin/python3 -m py_compile engine/providers/tencent_speech_translate.py engine/core/diagnostics.py engine/tests/test_tencent_speech_provider.py engine/tests/test_diagnostics.py`：通过。
+- `engine/.venv/bin/python3 -m unittest engine.tests.test_tencent_speech_provider engine.tests.test_diagnostics -v`：通过，`15/15`；随后增加生命周期与快照断言后由全量 Python 测试再次覆盖。
+- `npm run test:python`：通过，`95/95`。
+- `npm run verify`：通过；TypeScript/Vue typecheck、ESLint、Node `119/119`、Python `95/95` 全部成功。输出只有项目既有 npm mirror 配置弃用警告和 Node module type 性能警告。
+- `npm run build`：通过；Electron main、preload、renderer 分别转换 37、1、3297 个模块并生成忽略目录 `out/`。
+- `git diff --check`：追加本记录前通过；交付前再次执行最终检查。
+
+### 未执行验证、风险与后续事项
+
+- 未调用真实腾讯付费 API，未使用真实麦克风或系统音频，未执行 Electron GUI、PyInstaller/安装包、Windows、Linux 或 Intel macOS 验证；因此本批次确认的是诊断链路与脱敏行为，尚未用线上响应确认上一份日志中的具体 `ValueError` 分支。
+- Debug Mode 会记录识别原文、译文、服务端非敏感消息和高频音频包元数据，日志量与隐私暴露面会明显增加；这与现有开启确认提示一致，关闭 Debug Mode 后新增腾讯生命周期事件不会进入队列。
+- 合法 JSON 响应会完整递归脱敏后记录；无法解析的任意正文不保存，只保存长度和哈希。这一安全边界意味着畸形服务端正文需要结合异常位置、长度和哈希定位，不能从日志原样恢复。
+- 本批次没有自动重连，也没有改变腾讯服务端、网络代理、账号开通或凭据错误的处理策略。
+
+### 关键外部文档与技术决策来源
+
+- 腾讯云《实时语音翻译（WebSocket）》：`https://cloud.tencent.com/document/product/1093/127565`，用于确认独立 `code: 0` 握手消息、JSON 响应字段、音频上传和 final/关闭流程。
+- Tencent Cloud Speech SDK for Python 的 `asr/speech_translator.py`：用于核对官方 WebSocket `on_open`、`on_message`、`on_error`、`on_close` 生命周期。
+- 根目录 `AGENTS.md`：Debug 协议、安全脱敏、Provider 生命周期、测试、三语文档和逐批追加 `change.md` 要求。
+
+## 2026-09-28：发布版本更新至 2.32.0 并生成 macOS arm64 安装包
+
+### 用户授权、目标与范围
+
+- 用户明确要求“编译一下 Mac 版本并更新小版本号”。本批次把应用版本从 `2.31.0` 更新为 `2.32.0`，使用项目内 Python 3.14 虚拟环境重建字幕引擎、Apple Speech 辅助程序、Electron 应用、ZIP 和 DMG。
+- 变更类型：构建、配置、文档、测试。
+- 修改前完整阅读根目录 `AGENTS.md`、确认没有子目录规则、执行 `git status --short --branch`，并阅读版本文件及工作区全部相关 diff。工作区已有腾讯实时语音翻译 Debug 诊断、Python/Electron 双层脱敏、测试和文档修改，本批次保留并将其包含在 2.32.0 包中。
+- 本批次不扩大 Debug 功能范围，不修改其他业务逻辑，不安装或升级依赖，不修改系统 Python、PATH 或全局环境，不提交、推送或发布远端 Release。
+
+### 修改文件与原因
+
+- `package.json`、`package-lock.json`：把应用和根锁包版本从 `2.31.0` 更新为 `2.32.0`，依赖树不变。
+- `src/renderer/index.html`、`src/renderer/src/components/EngineStatus.vue`：同步窗口标题与关于界面版本。
+- `README.md`、`README_en.md`、`README_ja.md`：同步中英日发布徽章、发布提示与平台版本说明。
+- `docs/user-manual/zh.md`、`docs/user-manual/en.md`、`docs/user-manual/ja.md`：同步三语用户手册版本。
+- `docs/engine-manual/zh.md`、`docs/engine-manual/en.md`、`docs/engine-manual/ja.md`：在保留腾讯 Debug 新说明的同时同步三语引擎手册版本。
+- `docs/CHANGELOG.md`：新增 `v2.32.0 - 2026-09-28`，归档腾讯 Debug 诊断增强并记录 macOS 发布包构建。
+- `change.md`：在腾讯诊断功能记录后追加本批次构建、失败、验证、兼容性和风险流水，不覆盖历史。
+- Git 忽略目录 `native/apple-speech-helper/.build`、`native/apple-speech-helper/dist`、`engine/build`、`engine/dist`、`out`、`dist`：生成 Swift、Python、Electron 中间产物和最终包，不加入版本控制。
+
+### 修改前后行为、接口与兼容性
+
+- 修改前：源码与界面为 `2.31.0`，该安装包不包含随后新增的腾讯 WebSocket 生命周期、响应、错误、包计数和 Provider 快照诊断。
+- 修改后：源码、锁文件、界面和三语文档统一为 `2.32.0`；macOS arm64 包包含完整腾讯 Debug 诊断和 `signature`/签名 URL 双层脱敏，应用 `Info.plist` 的短版本及构建版本均为 `2.32.0`。
+- 版本发布自身没有改变配置、schemaVersion、迁移、Electron IPC、Python stdout/TCP envelope、CLI 或字幕数据结构。所含诊断功能复用现有 `debug.details`、`error.diagnostic` 和 `ProviderMetric` 协议，其兼容性已在上一条记录说明。
+- 构建使用项目 `engine/.venv` 的 Python 3.14.7、PyInstaller 6.22.3 和当前锁文件中的 Node 依赖。没有执行 `npm install`、`pip install` 或 Homebrew 安装/升级，没有修改系统默认解释器或全局动态库搜索路径。
+- 产物目标为 Apple Silicon arm64；Windows、Linux 和 Intel macOS 未因版本同步改变，但本批次未实机构建验证。
+
+### 实际验证与真实结果
+
+- `npm run verify`：通过；TypeScript/Vue typecheck、ESLint、Node `119/119`、Python `95/95` 全部成功，覆盖腾讯 Debug 生命周期、完整异常、统计快照及 Python/Electron 签名 URL 脱敏。输出只有既有 npm mirror 配置弃用和 Node module type 性能警告。
+- `SDKROOT=/Library/Developer/CommandLineTools/SDKs/MacOSX26.5.sdk npm run build:apple-speech`：通过；Swift production build 完成。SwiftPM 用户缓存因沙箱不可写而禁用，不影响项目产物。
+- `PYINSTALLER_CONFIG_DIR=/private/tmp/auto-caption-pyinstaller-232 .venv/bin/pyinstaller --clean --noconfirm main.spec`（在 `engine/` 执行）：通过；Python 3.14.7/PyInstaller 6.22.3 生成 arm64 one-file 引擎。仅有既有可选 `pycparser.lextab`/`yacctab` 缺失警告，没有 libomp 未解析警告。
+- `engine/.venv/bin/pyi-archive_viewer -l engine/dist/main | rg 'libomp|omppool'`：通过；确认引擎包含 `libomp.dylib` 与 Python 3.14 numba `omppool`。
+- `engine/dist/main --help`：沙箱内首次因 `semctl: Operation not permitted` 失败；经批准在沙箱外只读重试后退出码 0，完整 CLI 帮助正常输出。
+- `npm run build`：通过；Electron main、preload、renderer 分别转换 37、1、3297 个模块。
+- `npx electron-builder --mac`：沙箱内首次因 `npmmirror.com` DNS 受限失败；经批准联网重试后通过，生成 arm64 APP、ZIP、DMG、blockmap 与更新元数据。因本机没有有效 Developer ID，打包器明确跳过正式签名。
+- `plutil`、`file`、应用内 PyInstaller 归档检查与 `apple-speech-helper probe`：版本为 `2.32.0`；主程序、Python 引擎和 helper 均为 arm64 Mach-O；应用内引擎含 libomp/omppool；helper 返回 protocolVersion 1 且 `isAvailable` 为 true。
+- `codesign --force --deep --sign -` 与 `codesign --verify --deep --strict --verbose=2`：通过；最终 APP 为 ad-hoc 签名，`TeamIdentifier=not set`。
+- `ditto` 从最终签名 APP 重建 ZIP；`unzip -tq` 通过，无压缩数据错误。
+- `hdiutil create` 在沙箱内首次因“设备未配置”失败；经批准在沙箱外成功重建 DMG。工具提示旧式 create 语法已弃用；`hdiutil verify` 确认最终映像校验和有效。
+- 重新生成 ZIP/DMG blockmap，并核对 `dist/latest-mac.yml` 的 SHA-512 和字节数均与最终产物一致。
+- 最终 ZIP `dist/Auto Caption-2.32.0-arm64-mac.zip`：228,561,044 bytes，SHA-256 `e3ab60cb8e18227c1dd64d26b5262ceee8694de86848d85c36ea52bca56d3293`。
+- 最终 DMG `dist/auto-caption-2.32.0.dmg`：248,636,810 bytes，SHA-256 `6e58900c993f8e139f8562452b433201a6e1f587b790f1a3a19d2931a95572bf`。
+- `git diff --check`、活动版本残留搜索与 `git status --short --branch`：在本记录追加后执行最终审计，结果见交付说明。
+
+### 回滚、未执行验证与风险
+
+- 回滚本批次时应成组恢复版本文件、三语文档及 `docs/CHANGELOG.md` 的 2.32.0 发布段落；腾讯诊断增强属于先前独立功能修改，仅回滚版本号时不能删除。`change.md` 只能通过追加更正记录处理。
+- 未执行 Developer ID 正式签名、Apple 公证、Gatekeeper 外部下载、Electron GUI 人工回归、真实麦克风/系统音频、腾讯真实凭据或付费 API 测试；ad-hoc 包不能视为已公证发行包。
+- 未执行 Windows、Linux 或 Intel macOS 构建，不能据此声明这些平台已验证。
+- Debug Mode 会增加日志量，并记录脱敏后的识别文本、译文和服务端消息；此限制已在现有提示和三语文档中说明。
+- 依赖检查以现有锁文件、项目虚拟环境和完整测试为依据；本次没有依赖升级授权，因此没有查询、安装或升级依赖，也没有修改系统环境。
+
+### 关键技术决策来源
+
+- 根目录 `AGENTS.md`：脏工作区保护、诊断脱敏、版本文档同步、构建测试、依赖授权和 `change.md` 逐批追加要求。
+- Apple `codesign`、`hdiutil`、`ditto` 本机工具输出：用于最终签名状态、DMG 和 ZIP 完整性验证。
+- PyInstaller 6.22.3 与 electron-builder 26.15.3 构建日志：用于确认 Python 3.14 one-file 引擎、Electron 43.4.0 arm64 应用及产物构成。
