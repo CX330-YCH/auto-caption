@@ -40,6 +40,12 @@ class CliOptions:
     tencent_speech_model: str = 'hunyuan-translation-lite'
     tencent_speech_vad_silence_ms: int = 1000
     tencent_speech_max_speak_time_ms: int = 10000
+    tencent_recognition_model: str = '16k_zh_en'
+    tencent_recognition_vad_silence_ms: int = 1000
+    tencent_recognition_max_speak_time_ms: int = 60000
+    tencent_recognition_v2_model: str = '16k_zh_en_2.0'
+    tencent_recognition_v2_vad_silence_ms: int = 1000
+    tencent_recognition_v2_sentence_strategy: int = 0
     debug_mode: bool = False
 
 
@@ -51,7 +57,8 @@ def build_parser() -> argparse.ArgumentParser:
         '-e', '--caption_engine', default='gummy',
         help=(
             'Caption engine: gummy, glm, vosk, sosv, fun_asr, '
-            'apple_speech or tencent_speech_translate'
+            'apple_speech, tencent_speech_translate, '
+            'tencent_speech_recognition or tencent_speech_recognition_v2'
         )
     )
     parser.add_argument(
@@ -199,6 +206,36 @@ def build_parser() -> argparse.ArgumentParser:
         help='Tencent forced sentence duration in milliseconds'
     )
     parser.add_argument(
+        '-tcrmodel', '--tencent_recognition_model', default='16k_zh_en',
+        help='Tencent realtime speech recognition model'
+    )
+    parser.add_argument(
+        '-tcrvad', '--tencent_recognition_vad_silence_ms',
+        type=int, default=1000,
+        help='Tencent recognition sentence-ending silence in milliseconds'
+    )
+    parser.add_argument(
+        '-tcrmax', '--tencent_recognition_max_speak_time_ms',
+        type=int, default=60000,
+        help='Tencent recognition forced sentence duration in milliseconds'
+    )
+    parser.add_argument(
+        '-tcv2model', '--tencent_recognition_v2_model',
+        choices=('16k_zh_en_2.0', '16k_zh_en_speaker_2.0'),
+        default='16k_zh_en_2.0',
+        help='Tencent realtime speech recognition V2 model'
+    )
+    parser.add_argument(
+        '-tcv2vad', '--tencent_recognition_v2_vad_silence_ms',
+        type=int, default=1000,
+        help='Tencent recognition V2 sentence-ending silence in milliseconds'
+    )
+    parser.add_argument(
+        '-tcv2sentence', '--tencent_recognition_v2_sentence_strategy',
+        type=int, choices=(0, 1), default=0,
+        help='Tencent recognition V2 sentence strategy'
+    )
+    parser.add_argument(
         '--debug-mode', type=int, choices=(0, 1), default=0,
         help='Enable complete diagnostic events and runtime metrics'
     )
@@ -249,6 +286,20 @@ def parse_args(arguments: list[str] | None = None) -> CliOptions:
         ),
         tencent_speech_max_speak_time_ms=(
             args.tencent_speech_max_speak_time_ms
+        ),
+        tencent_recognition_model=args.tencent_recognition_model,
+        tencent_recognition_vad_silence_ms=(
+            args.tencent_recognition_vad_silence_ms
+        ),
+        tencent_recognition_max_speak_time_ms=(
+            args.tencent_recognition_max_speak_time_ms
+        ),
+        tencent_recognition_v2_model=args.tencent_recognition_v2_model,
+        tencent_recognition_v2_vad_silence_ms=(
+            args.tencent_recognition_v2_vad_silence_ms
+        ),
+        tencent_recognition_v2_sentence_strategy=(
+            args.tencent_recognition_v2_sentence_strategy
         ),
         debug_mode=bool(args.debug_mode),
     )

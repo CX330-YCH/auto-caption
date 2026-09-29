@@ -40,7 +40,7 @@ export default {
     "tencentSpeechLanguagePairInvalid": "Tencent Cloud が対応していない言語ペアです",
     "tencentSpeechLanguagePairInvalidNote": "Tencent Cloud リアルタイム音声翻訳が対応するソース言語と翻訳言語の組み合わせを選択してください。",
     "tencentSpeechCredentialsMissing": "Tencent Cloud の認証情報が不完全です",
-    "tencentSpeechCredentialsMissingNote": "Tencent リアルタイム音声翻訳を開始する前に AppID、SecretID、SecretKey を入力してください。",
+    "tencentSpeechCredentialsMissingNote": "Tencent Cloud 音声サービスを開始する前に AppID、SecretID、SecretKey を入力してください。",
     "customExecutableMissing": "カスタムエンジンのパスが未入力です",
     "customExecutableMissingNote": "カスタム字幕エンジンを起動する前に実行ファイルのパスを入力してください。",
     "customEngineMissing": "カスタムエンジンが存在しません",
@@ -133,6 +133,9 @@ export default {
       "tencentSpeechSecretKey": "Tencent Cloud SecretKey",
       "tencentSpeechVadSilence": "文分割の無音時間",
       "tencentSpeechMaxSpeakTime": "連続発話の最大時間",
+      "tencentRecognitionModel": "リアルタイム音声認識モデル",
+      "tencentRecognitionV2Model": "リアルタイム音声認識 V2 モデル",
+      "tencentRecognitionSentenceStrategy": "文分割方式",
       "openProviderConsole": "プロバイダーコンソールを開く",
       "openProviderDocs": "プロバイダー文書を開く"
     },
@@ -144,7 +147,9 @@ export default {
         "glm": "クラウド / 智譜 AI / GLM-ASR",
         "funAsr": "クラウド / Alibaba Cloud / Fun-ASR Realtime",
         "appleSpeech": "ローカル / macOS システム音声認識",
-        "tencentSpeechTranslate": "クラウド / Tencent Cloud / リアルタイム音声翻訳"
+        "tencentSpeechTranslate": "クラウド / Tencent Cloud / リアルタイム音声翻訳",
+        "tencentSpeechRecognition": "クラウド / Tencent Cloud / リアルタイム音声認識",
+        "tencentSpeechRecognitionV2": "クラウド / Tencent Cloud / リアルタイム音声認識 V2"
       },
       languages: {
         "auto": "自動検出",
@@ -162,6 +167,13 @@ export default {
         "zh_en": "中国語・英語混在",
         "id": "インドネシア語",
         "th": "タイ語",
+        "vi": "ベトナム語",
+        "ms": "マレー語",
+        "fil": "フィリピン語",
+        "pt": "ポルトガル語",
+        "tr": "トルコ語",
+        "ar": "アラビア語",
+        "hi": "ヒンディー語",
         "zhCN": "簡体字中国語（中国本土）",
         "enUS": "英語（米国）",
         "jaJP": "日本語（日本）"
@@ -178,12 +190,24 @@ export default {
       tencentSpeechModels: {
         "lite": "Hunyuan 翻訳ライト版",
         "standard": "Hunyuan 翻訳標準版"
+      },
+      tencentSentenceStrategies: {
+        "vad": "VAD 無音分割",
+        "semantic": "意味による文分割"
+      },
+      tencentRecognitionModels: {
+        "model": "Tencent Cloud 音声認識モデル"
       }
     },
     tencentSpeech: {
       "credentialsInfo": "AppID、SecretID、SecretKey はローカルの config.json に平文で保存され、コマンドライン引数で Python エンジンへ渡されます。ソフトウェアログでは SecretID と SecretKey をマスクします。",
       "vadSilenceInfo": "指定時間の無音で現在の文を終了します。中国語、英語、中国語・英語混在のソースのみ対応し、範囲は 500～2000 ミリ秒です。",
-      "maxSpeakTimeInfo": "連続発話が指定時間に達すると強制的に文を終了します。中国語、英語、中国語・英語混在のソースのみ対応し、範囲は 5000～90000 ミリ秒です。"
+      "maxSpeakTimeInfo": "連続発話が指定時間に達すると強制的に文を終了します。中国語、英語、中国語・英語混在のソースのみ対応し、範囲は 5000～90000 ミリ秒です。",
+      "recognitionModelInfo": "モデルによってサンプルレート、言語、分野が決まります。本アプリは 8 kHz/16 kHz モデルに合わせてモノラル PCM を自動リサンプリングします。Hy-ASR-3.0-preview は 1 ストリーム 60 秒までです。",
+      "recognitionV2ModelInfo": "V2 は中英バイリンガル 2.0 モデルのみ対応します。speaker モデルは話者 ID も返します。",
+      "recognitionVadInfo": "この無音時間で現在の文を終了します。対応状況はモデルごとに異なるため Tencent Cloud の資料を確認してください。",
+      "recognitionMaxSpeakInfo": "連続発話がこの時間に達すると強制的に文を分割します。未対応モデルでは無視される場合があります。",
+      "sentenceStrategyInfo": "VAD は低遅延を、意味分割は文の完全性を優先します。"
     },
     funAsr: {
       "workspaceInfo": "Alibaba Cloud Model Studio のワークスペース ID です。API キー、ワークスペース、WebSocket リージョンは同じリソースに属している必要があります。",

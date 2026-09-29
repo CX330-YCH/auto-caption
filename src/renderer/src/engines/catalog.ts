@@ -20,6 +20,10 @@ import { voskEngine } from './providers/vosk.ts'
 import { appleSpeechEngine } from './providers/apple_speech.ts'
 import { tencentSpeechTranslateEngine } from './providers/tencent_speech_translate.ts'
 import {
+  tencentSpeechRecognitionEngine,
+  tencentSpeechRecognitionV2Engine
+} from './providers/tencent_speech_recognition.ts'
+import {
   applyTranslationLanguageDefault,
   getTranslationFields,
   normalizeTranslationConfig,
@@ -40,7 +44,9 @@ export const engineDefinitions = [
   glmEngine,
   funAsrEngine,
   appleSpeechEngine,
-  tencentSpeechTranslateEngine
+  tencentSpeechTranslateEngine,
+  tencentSpeechRecognitionEngine,
+  tencentSpeechRecognitionV2Engine
 ] as const satisfies readonly EngineDefinition[]
 
 const engineDefinitionsById = new Map<KnownProviderName, EngineDefinition>(

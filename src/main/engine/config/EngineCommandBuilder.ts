@@ -88,6 +88,34 @@ const providerArgumentBuilders: Record<
       '-tcvad', tencent.vadSilenceMs.toString(),
       '-tcmax', tencent.maxSpeakTimeMs.toString()
     ]
+  },
+  tencent_speech_recognition: (config) => {
+    const credentials = config.providers.tencentSpeech
+    const recognition = config.providers.tencentRecognition
+    return [
+      '-e', 'tencent_speech_recognition',
+      '-tcappid', credentials.appId,
+      '-tcsecretid', credentials.secretId,
+      '-tcsecretkey', credentials.secretKey,
+      '-tcrmodel', recognition.model,
+      '-tcrvad', recognition.vadSilenceMs.toString(),
+      '-tcrmax', recognition.maxSpeakTimeMs.toString(),
+      ...translationArguments(config)
+    ]
+  },
+  tencent_speech_recognition_v2: (config) => {
+    const credentials = config.providers.tencentSpeech
+    const recognition = config.providers.tencentRecognitionV2
+    return [
+      '-e', 'tencent_speech_recognition_v2',
+      '-tcappid', credentials.appId,
+      '-tcsecretid', credentials.secretId,
+      '-tcsecretkey', credentials.secretKey,
+      '-tcv2model', recognition.model,
+      '-tcv2vad', recognition.vadSilenceMs.toString(),
+      '-tcv2sentence', recognition.sentenceStrategy.toString(),
+      ...translationArguments(config)
+    ]
   }
 }
 

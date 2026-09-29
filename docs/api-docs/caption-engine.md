@@ -87,6 +87,8 @@ JSON object + "\n" + JSON object + "\n" + ...
 
 `event_version: 1` 与 `phase` 是一组版本化的生命周期字段，必须同时出现：`partial` 表示同一句仍可继续更新，`final` 表示该句已经固化。内置引擎始终发送这两个字段。服务端可以校正 `time_s`/`time_t`，时间字段不得用作字幕身份；延迟到达的 `partial` 也不得把已经 `final` 的句子重新打开或覆盖。Provider 自带的翻译（当前为 Gummy 和腾讯实时语音翻译）会直接写入 `translation`；包括 Fun-ASR 在内的其他 Provider 只在 final 后通过独立 `translation` 消息补充一次翻译。
 
+`speaker_id` 是可选的非负整数（当前范围 0-9）。腾讯实时语音识别 V2 的 speaker 模型会提供该字段；旧引擎和不支持说话人分离的模型省略它。该加法字段不改变 `event_version: 1` 的既有消费者兼容性。
+
 为兼容旧自定义引擎，`event_version` 和 `phase` 可以整组省略。Electron 会把这种事件标记为 `unknown`，仍按稳定 `index` 更新；当另一个新 `index` 首次出现时，上一条尚未固化的 `unknown` 字幕会被隐式转为 `final`。只提供其中一个字段、使用未知版本或未知 phase 的消息会被拒绝。兼容层的删除条件是公开协议未来发布带明确迁移期的新主版本。
 
 Electron 为每次引擎启动分配单调递增的运行 ID，并将 `运行 ID:index` 组合为应用内部 `captionId`。因此引擎重启后可以从原有 `index` 起点重新计数，而不会覆盖上一次运行保留的字幕。
@@ -114,6 +116,8 @@ Fun-ASR 的预编译热词表 ID 和上下文术语是任务启动参数，不�
 腾讯 WebSocket 建连后的成功握手以 `code: 0` 且尚未携带识别 `result` 为准；服务端实际响应可能省略 `final`，也可能返回 `final: 0`，两者都表示可以进入 Ready。握手前出现非空 `result` 或 `final: 1/2` 仍按协议异常处理，禁止提前开始采集音频。
 
 腾讯 Provider 收到停止请求后先发送 WebSocket `{"type":"end"}`，最多等待5秒接收最终结果并关闭连接；Electron 为该 Provider 提供8秒进程停止期限。其他内置及自定义引擎继续使用原有4秒期限，因此这个契约不改变旧引擎行为。当前腾讯基础版本不自动重连，意外断线会产生 fatal 并结束本次 Session。
+
+腾讯实时语音识别和 V2 共用 `/asr/v2/<appid>` 签名端点与既有腾讯音频分包、停止冲刷、错误脱敏生命周期。经典版把 `result.index` 映射为稳定 `index`，`slice_type` 0/1/2 映射为开始/更新/最终结果。V2 把服务端反复返回的 `sentences.sentence_list` 全量快照去重，`sentence_type` 0/1 映射为 partial/final；speaker 模型的有效 `speaker_id` 随 caption 输出。两个识别 Provider 不自带翻译，final 只进入统一翻译 Session 一次。
 
 ### `translation`
 

@@ -3,7 +3,7 @@
     <h1 align="center">auto-caption</h1>
     <p>Auto Caption はクロスプラットフォームのリアルタイム字幕表示ソフトウェアです。</p>
     <p>
-      <a href="https://github.com/HiMeditator/auto-caption/releases"><img src="https://img.shields.io/badge/release-2.35.0-blue"></a>
+      <a href="https://github.com/HiMeditator/auto-caption/releases"><img src="https://img.shields.io/badge/release-2.36.0-blue"></a>
       <a href="https://github.com/HiMeditator/auto-caption/issues"><img src="https://img.shields.io/github/issues/HiMeditator/auto-caption?color=orange"></a>
       <img src="https://img.shields.io/github/languages/top/HiMeditator/auto-caption?color=royalblue">
       <img src="https://img.shields.io/github/repo-size/HiMeditator/auto-caption?color=green">
@@ -14,7 +14,7 @@
         | <a href="./README_en.md">English</a>
         | <b>日本語</b> |
     </p>
-    <p><i>v2.35.0 がリリースされました。macOS arm64 ビルドを含みます...</i></p>
+    <p><i>v2.36.0 がリリースされました。macOS arm64 ビルドを含みます...</i></p>
 </div>
 
 ![](./assets/media/main_ja.png)
@@ -46,14 +46,14 @@ https://github.com/user-attachments/assets/9c188d78-9520-4397-bacf-4c8fdcc54874
 - クロスプラットフォーム（Windows、macOS、Linux）、多言語インターフェース（中国語、英語、日本語）対応
 - 豊富な字幕スタイル設定（検索可能なローカルフォントと CSS フォントスタックの手動入力、フォントサイズ、フォント太さ、フォント色、背景色など）
 - 従来の文単位表示を保持するか、左右対称の安全余白、完成した自動折り返し行だけの両端揃え、文境界または連続レイアウトを備えた正確な行単位スクロール字幕へ切り替え可能
-- 柔軟な字幕エンジン選択（Alibaba Cloud Gummy/Fun-ASR、Tencent リアルタイム音声翻訳、GLM-ASR、Apple Speech、Vosk、SOSV、カスタムモデル）
+- 柔軟な字幕エンジン選択（Alibaba Cloud Gummy/Fun-ASR、Tencent リアルタイム音声認識・認識 V2・音声翻訳、GLM-ASR、Apple Speech、Vosk、SOSV、カスタムモデル）
 - 多言語認識と翻訳（下記「⚙️ 字幕エンジン説明」参照）
 - 字幕記録表示とエクスポート（`.srt` および `.json` 形式のエクスポートに対応）
 - 即時切替可能な Debug Mode で Electron、Renderer、Python、SDK/native helper の完全なマスキング済みエラー、フレーム単位音声メタデータ、キュー遅延/滞留、Provider/翻訳状態、プロセスメトリクスを起動単位の `.jsonl` に保存・出力可能
 
 ## 📖 基本使い方
 
-> ⚠️ 注意：現在の v2.35.0 は Windows と macOS arm64 ビルドを提供しています。Linux はソースまたは既存のビルド手順での検証が必要です。
+> ⚠️ 注意：現在の v2.36.0 は Windows と macOS arm64 ビルドを提供しています。Linux はソースまたは既存のビルド手順での検証が必要です。
 
 このソフトウェアは Windows、macOS、Linux プラットフォームに対応しています。テスト済みのプラットフォーム情報は以下の通りです：
 
@@ -73,6 +73,8 @@ macOS および Linux プラットフォームでシステムオーディオ出�
 | ------------------------------------------------------------ | -------- | --------- | -------------- | -------- | ---- | ---- |
 | [Gummy](https://help.aliyun.com/zh/model-studio/gummy-speech-recognition-translation) | とても良い😊 | とても良い😊 | クラウド / アリババクラウド | 10言語 | 内蔵翻訳 | 有料、音声認識 0.54 CNY/時間、音声認識＋翻訳 1.08 CNY/時間 |
 | [Tencent リアルタイム音声翻訳](https://cloud.tencent.com/document/product/1093/127565) | オンライン検証待ち | とても良い😊 | クラウド / Tencent Cloud | 9種類のソース言語 | リアルタイム翻訳内蔵 | Tencent Cloud 音声認識サービスの有効化と現行料金が適用されます。TTS は含みません |
+| [Tencent リアルタイム音声認識](https://cloud.tencent.com/document/product/1093/48982) | オンライン検証待ち | とても良い😊 | クラウド / Tencent Cloud | 多言語・分野別モデル | 追加設定が必要 | 従来 WebSocket 結果形式。8/16 kHz モデルへ自動適応。Tencent Cloud の現行料金が適用されます |
+| [Tencent リアルタイム音声認識 V2](https://cloud.tencent.com/document/product/1093/131127) | オンライン検証待ち | とても良い😊 | クラウド / Tencent Cloud | 中国語・英語 | 追加設定が必要 | 文リスト全体のスナップショットに対応。speaker モデルは話者 ID を返します。現行料金が適用されます |
 | [SpeechAnalyzer / SpeechTranscriber](https://developer.apple.com/documentation/speech/speechanalyzer) | とても良い😊 | とても良い😊 | ローカル / macOS システム | macOS が動的に返す言語 | 追加設定が必要 | macOS 26 以降のみ。開始前にシステムモデルのインストールが必要 |
 | [glm-asr-2512](https://docs.bigmodel.cn/cn/guide/models/sound-and-video/glm-asr-2512) | とても良い😊 | 悪い😞 | クラウド / Zhipu AI | 4言語 | 追加設定が必要 | 有料、約0.72元/時間 |
 | [Vosk](https://alphacephei.com/vosk) | 悪い😞 | とても良い😊 | ローカル / CPU | 30言語以上 | 追加設定が必要 | 多くの言語に対応 |
@@ -134,6 +136,10 @@ API キーの取得についてはこちらをご覧ください：[クイック
 このエンジンは同じ WebSocket セッションで認識原文と翻訳文をストリーミングします。字幕エンジン設定で Tencent Cloud の `AppID`、`SecretID`、`SecretKey` を入力します。3項目はローカルの `config.json` に保存され、`-tcappid`、`-tcsecretid`、`-tcsecretkey` のコマンドライン引数で Python に渡されるため、Python エンジンを同じ引数で単独実行できます。入力欄は平文表示で、設定ファイルと OS のプロセス引数にも平文の資格情報が含まれるため、ローカルアカウントと設定ファイルへのアクセスを制限してください。ソフトウェアログでは SecretID と SecretKey をマスクします。UI では Hunyuan Translation Lite または Standard を選択でき、対象言語は選択したソース言語に応じて絞り込まれます。中国語、英語、中英混合では 500～2000 ms の無音区切りと 5000～90000 ms の強制区切りを設定でき、その他の言語ではサービス既定値を使用します。
 
 音声は 16 kHz、モノラル PCM16 に変換し、約 200 ms 単位で送信します。停止時は最終字幕を最大5秒待ち、Electron 側はこのエンジンに8秒の終了期限を設定します。TTS は未実装です。ホットワードは内部インターフェースだけを予約しており、このバージョンでは画面表示も送信も行いません。
+
+### Tencent リアルタイム音声認識と V2 の使用
+
+2つは独立した Provider で、上記の Tencent Cloud `AppID`、`SecretID`、`SecretKey` を共有します。従来版は公式モデル一覧を表示し、`-tcrmodel`、`-tcrvad`、`-tcrmax` で設定します。本アプリは 8/16 kHz モデルに合わせてモノラル PCM16 を自動リサンプリングします。`Hy-ASR-3.0-preview` は 1 接続 60 秒までです。V2 は `-tcv2model`、`-tcv2vad`、`-tcv2sentence` を使い、`16k_zh_en_2.0` と `16k_zh_en_speaker_2.0` のみ対応します。後者はサーバーの話者 ID を保持します。どちらも翻訳を内蔵せず、final 字幕だけが共通 Google/Ollama 翻訳へ一度送られます。Tencent の有料アカウントを使ったオンライン検証と自動再接続は未実施です。
 
 ### Voskモデルの使用
 

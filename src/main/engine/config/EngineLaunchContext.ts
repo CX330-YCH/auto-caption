@@ -13,6 +13,16 @@ const policies: Partial<Record<KnownProviderName, LaunchPolicy>> = {
     environment: { ...environment },
     secrets: [],
     stopTimeoutMs: 8000
+  }),
+  tencent_speech_recognition: (environment) => ({
+    environment: { ...environment },
+    secrets: [],
+    stopTimeoutMs: 8000
+  }),
+  tencent_speech_recognition_v2: (environment) => ({
+    environment: { ...environment },
+    secrets: [],
+    stopTimeoutMs: 8000
   })
 }
 

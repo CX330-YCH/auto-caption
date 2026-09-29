@@ -1,6 +1,6 @@
 # 配置文件 V9
 
-Auto Caption 的持久化配置位于 Electron `userData/config.json`。当前版本接受 `schemaVersion: 9`，磁盘、主进程、控制窗口 IPC 和 Renderer 共享 `ConfigDocumentV9`。
+Auto Caption 的持久化配置位于 Electron `userData/config.json`。V9 当时接受 `schemaVersion: 9`，磁盘、主进程、控制窗口 IPC 和 Renderer 共享 `ConfigDocumentV9`；当前版本会把它显式迁移到 V10。
 
 V9 在 V8 腾讯实时语音翻译 Provider 上增加 AppID、SecretID、SecretKey。以下片段只展示腾讯相关字段，其余 application、caption、识别 Provider 和翻译 Provider 字段仍是完整配置的必需部分：
 

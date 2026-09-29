@@ -63,6 +63,9 @@ test('validates caption event fields', () => {
   }), false)
   assert.equal(isCaptionEngineMessage({ ...valid, index: Number.NaN }), false)
   assert.equal(isCaptionEngineMessage({ ...valid, translation: null }), false)
+  assert.equal(isCaptionEngineMessage({ ...valid, speaker_id: 3 }), true)
+  assert.equal(isCaptionEngineMessage({ ...valid, speaker_id: -1 }), false)
+  assert.equal(isCaptionEngineMessage({ ...valid, speaker_id: 2.5 }), false)
 })
 
 test('validates translation and content event fields', () => {

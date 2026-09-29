@@ -39,6 +39,7 @@ export interface CaptionItem {
   text: string
   translation: string
   phase: CaptionPhase
+  speakerId?: number
 }
 
 export type CaptionPhase = 'partial' | 'final' | 'unknown'
@@ -52,7 +53,7 @@ export interface SoftwareLogItem {
 
 export interface FullConfig {
   platform: string
-  config: import('./config/schema').ConfigDocumentV9
+  config: import('./config/schema').ConfigDocumentV10
   engineEnabled: boolean
   captionLog: CaptionItem[]
   softwareLog: SoftwareLogItem[]

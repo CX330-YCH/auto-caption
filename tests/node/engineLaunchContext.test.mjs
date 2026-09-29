@@ -12,11 +12,16 @@ test('keeps legacy stop timeout unchanged', () => {
 
 test('keeps Tencent launch environment generic and extends flush timeout', () => {
   const environment = { PATH: '/bin' }
-  const context = buildEngineLaunchContext('tencent_speech_translate', environment)
-
-  assert.equal(context.stopTimeoutMs, 8000)
-  assert.deepEqual(context.environment, environment)
-  assert.deepEqual(context.secrets, [])
+  for (const provider of [
+    'tencent_speech_translate',
+    'tencent_speech_recognition',
+    'tencent_speech_recognition_v2'
+  ]) {
+    const context = buildEngineLaunchContext(provider, environment)
+    assert.equal(context.stopTimeoutMs, 8000)
+    assert.deepEqual(context.environment, environment)
+    assert.deepEqual(context.secrets, [])
+  }
   assert.equal(hasTencentSpeechCredentials({
     appId: '123456',
     secretId: 'secret-id',

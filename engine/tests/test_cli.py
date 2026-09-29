@@ -33,6 +33,8 @@ class CliTests(unittest.TestCase):
         self.assertEqual(options.tencent_speech_secret_key, '')
         self.assertEqual(options.tencent_speech_vad_silence_ms, 1000)
         self.assertEqual(options.tencent_speech_max_speak_time_ms, 10000)
+        self.assertEqual(options.tencent_recognition_model, '16k_zh_en')
+        self.assertEqual(options.tencent_recognition_v2_model, '16k_zh_en_2.0')
         self.assertFalse(options.debug_mode)
 
     def test_parses_debug_mode(self):
@@ -118,6 +120,24 @@ class CliTests(unittest.TestCase):
         self.assertEqual(options.tencent_speech_max_speak_time_ms, 30000)
         self.assertNotIn('dummy-tencent-secret-id', repr(options))
         self.assertNotIn('dummy-tencent-secret-key', repr(options))
+
+    def test_parses_both_tencent_recognition_argument_sets(self):
+        options = parse_args([
+            '-tcrmodel', '16k_ja',
+            '-tcrvad', '800',
+            '-tcrmax', '30000',
+            '-tcv2model', '16k_zh_en_speaker_2.0',
+            '-tcv2vad', '600',
+            '-tcv2sentence', '1',
+        ])
+        self.assertEqual(options.tencent_recognition_model, '16k_ja')
+        self.assertEqual(options.tencent_recognition_vad_silence_ms, 800)
+        self.assertEqual(options.tencent_recognition_max_speak_time_ms, 30000)
+        self.assertEqual(
+            options.tencent_recognition_v2_model,
+            '16k_zh_en_speaker_2.0',
+        )
+        self.assertEqual(options.tencent_recognition_v2_sentence_strategy, 1)
 
 
 if __name__ == '__main__':

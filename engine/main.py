@@ -170,6 +170,20 @@ def _provider_config(options: CliOptions) -> ProviderConfig:
         tencent_max_speak_time_ms=(
             options.tencent_speech_max_speak_time_ms
         ),
+        tencent_recognition_model=options.tencent_recognition_model,
+        tencent_recognition_vad_silence_ms=(
+            options.tencent_recognition_vad_silence_ms
+        ),
+        tencent_recognition_max_speak_time_ms=(
+            options.tencent_recognition_max_speak_time_ms
+        ),
+        tencent_recognition_v2_model=options.tencent_recognition_v2_model,
+        tencent_recognition_v2_vad_silence_ms=(
+            options.tencent_recognition_v2_vad_silence_ms
+        ),
+        tencent_recognition_v2_sentence_strategy=(
+            options.tencent_recognition_v2_sentence_strategy
+        ),
     )
 
 

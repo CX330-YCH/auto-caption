@@ -2,7 +2,7 @@
 
 ## 注意：このドキュメントはメンテナンスが行われていないため、記載されている情報は古くなっています。最新の情報については、[中国語版](./zh.md)または[英語版](./en.md)のドキュメントをご参照ください。
 
-対応バージョン：v2.35.0
+対応バージョン：v2.36.0
 
 この文書は大規模モデルを使用して翻訳されていますので、内容に正確でない部分があるかもしれません。
 
@@ -163,7 +163,7 @@ export interface CaptionItem {
 
 カスタム字幕エンジンの設定はコマンドラインパラメータで指定するため、字幕エンジンのパラメータを設定する必要があります。このプロジェクトで現在使用されているパラメータは以下のとおりです：
 
-> 完全な引数の正本は `engine/cli.py` と `python main.py --help` です。Fun-ASR は `-e fun_asr` と `-f*` 引数を使用します。Tencent リアルタイム音声翻訳は `-e tencent_speech_translate`、`-tcappid`、`-tcsecretid`、`-tcsecretkey`、`-tcmodel`、`-tcvad`、`-tcmax` を使用します。Python は Tencent の環境変数を読み取りません。`main.py` に Provider 組み立て分岐を複製しないでください。
+> 完全な引数の正本は `engine/cli.py` と `python main.py --help` です。Fun-ASR は `-e fun_asr` と `-f*`、Tencent 翻訳は `-e tencent_speech_translate` と `-tc*`、従来認識は `-e tencent_speech_recognition` と `-tcr*`、V2 は `-e tencent_speech_recognition_v2` と `-tcv2*` を使用します。Tencent の3 Provider は `-tcappid`、`-tcsecretid`、`-tcsecretkey` を共有します。Python は Tencent の環境変数を読み取りません。`main.py` に Provider 組み立て分岐を複製しないでください。
 
 ```python
 import argparse
@@ -208,7 +208,21 @@ python main.py -e tencent_speech_translate -s ja -t zh -a 0 -c 10 \
   -tcmodel hunyuan-translation-lite -tcvad 1000 -tcmax 10000
 ```
 
-この Provider は 16 kHz モノラル PCM16 を受け取り、約100 ms の入力フレームを約200 ms のネットワークパケットにまとめます。サーバーの `sentence_id`、`sentence_end`、`source_text`、`target_text`、ミリ秒オフセットを、安定 ID、partial/final、原文、翻訳文、字幕時刻へ変換します。`-tcvad` は 500～2000 ms の無音後に文を区切り、`-tcmax` は 5000～90000 ms の連続発話後に強制区切りします。両方とも `zh`、`en`、`zh_en` の場合だけ送信します。V9 は通常のテキスト欄から3つの資格情報を `config.json` に保存し、Electron は上記 CLI 引数で Python を起動します。コマンドログと診断では SecretID/SecretKey をマスクしますが、設定ファイルと OS のプロセス引数は平文です。停止時は最終結果を最大5秒待ち、Electron の期限は8秒です。既存エンジンは4秒のままです。TTS、自動再接続、利用可能なホットワードは未実装で、ホットワードのエンコードと空設定境界だけを将来用に予約しています。
+Tencent 音声認識の例：
+
+```bash
+python main.py -e tencent_speech_recognition -a 0 -c 10 \
+  -tcappid 123456 -tcsecretid SECRET_ID -tcsecretkey SECRET_KEY \
+  -tcrmodel 16k_zh_en -tcrvad 1000 -tcrmax 60000
+
+python main.py -e tencent_speech_recognition_v2 -a 0 -c 10 \
+  -tcappid 123456 -tcsecretid SECRET_ID -tcsecretkey SECRET_KEY \
+  -tcv2model 16k_zh_en_speaker_2.0 -tcv2vad 1000 -tcv2sentence 0
+```
+
+2つの認識 Provider は Tencent の共通トランスポートを再利用します。従来版のパイプラインはモデルに合わせて 8/16 kHz モノラル PCM16 を生成し、V2 は 16 kHz 固定です。従来版は `slice_type` を partial/final に変換し、V2 は完全な `sentence_list` スナップショットを重複排除して `speaker_id` を保持できます。各 final は共通翻訳サービスへ一度だけ送られます。自動再接続は未実装で、有料 API テストは明示的な資格情報を使って別途有効にする必要があります。
+
+この Provider は 16 kHz モノラル PCM16 を受け取り、約100 ms の入力フレームを約200 ms のネットワークパケットにまとめます。サーバーの `sentence_id`、`sentence_end`、`source_text`、`target_text`、ミリ秒オフセットを、安定 ID、partial/final、原文、翻訳文、字幕時刻へ変換します。`-tcvad` は 500～2000 ms の無音後に文を区切り、`-tcmax` は 5000～90000 ms の連続発話後に強制区切りします。両方とも `zh`、`en`、`zh_en` の場合だけ送信します。V10 は3つの資格情報を `config.json` に保存し、Electron は上記 CLI 引数で Python を起動します。コマンドログと診断では SecretID/SecretKey をマスクしますが、設定ファイルと OS のプロセス引数は平文です。停止時は最終結果を最大5秒待ち、Electron の期限は8秒です。既存エンジンは4秒のままです。TTS、自動再接続、利用可能なホットワードは未実装で、ホットワードのエンコードと空設定境界だけを将来用に予約しています。
 
 Tencent の成功ハンドシェイクは `code: 0` と `final: 0` を含む場合と、`final` を省略する場合があり、どちらも Ready へ移行します。ハンドシェイク前の非 null `result` または `final: 1/2` は引き続き拒否し、結果メッセージをハンドシェイク確認として誤認しません。
 
@@ -216,7 +230,7 @@ Debug Mode を有効にすると、Tencent Provider は機密情報を除いた�
 
 Fun-ASR は接続 generation ごとに冪等な状態を保持し、同一タスクの `on_error → on_close → stop` は最大1回の再接続または1回の fatal だけを発生させます。恒久的なサービスエラーは即時停止し、一時的なエラーだけを最大3回のバックオフ付きで再試行します。task-failed 後に SDK `stop()` は呼びません。ライフサイクル診断は非表示の `debug` プロトコルイベントとして完全 Debug ログだけに保存され、既存のログ記録画面には表示されません。fatal 時は Session が通常終了を試み、タイムアウトなどの異常経路だけで Electron がパッケージ済みプロセスツリー全体を強制終了します。
 
-すべての内蔵字幕エンジン（Gummy、Fun-ASR、Tencent Speech Translate、GLM、Vosk、SOSV、Apple Speech）と、音声、翻訳、ホットワード SDK のエラーは、サニタイズ済み SDK コールバック項目、例外型とメッセージ、独自属性、完全な traceback、cause/context を現在の Debug JSONL に保存します。Python/SDK の stderr も収集します。API Key、Token、Password、Authorization/Cookie、バイナリ音声本文は記録せず、過大なリモート診断には明示的な上限制御マーカーを付けます。
+すべての内蔵字幕エンジン（Gummy、Fun-ASR、3つの Tencent Speech Provider、GLM、Vosk、SOSV、Apple Speech）と、音声、翻訳、ホットワード SDK のエラーは、サニタイズ済み SDK コールバック項目、例外型とメッセージ、独自属性、完全な traceback、cause/context を現在の Debug JSONL に保存します。Python/SDK の stderr も収集します。API Key、Token、Password、Authorization/Cookie、バイナリ音声本文は記録せず、過大なリモート診断には明示的な上限制御マーカーを付けます。
 
 V6 Debug Mode は `--debug-mode 0|1` で起動し、TCP `debug_mode` command で実行中に切り替えられます。有効時は `ProviderMetric` が音声の読み取り/変換/投入時間、キュー深度とフレーム経過時間、Provider event キュー、Fun-ASR 再接続バッファ、GLM/翻訳 Worker、Apple Speech helper 状態を出力します。Provider 固有項目は `diagnostic_snapshot()` で拡張し、Session に Provider 分岐を追加しません。512 KiB を超える診断は長さと SHA-256 を検証する `diagnostic_chunk` に分割します。
 

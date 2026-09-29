@@ -55,6 +55,8 @@ class ProviderRegistryTests(unittest.TestCase):
             (
                 'gummy', 'vosk', 'sosv', 'glm', 'fun_asr',
                 'apple_speech', 'tencent_speech_translate',
+                'tencent_speech_recognition',
+                'tencent_speech_recognition_v2',
             ),
         )
 

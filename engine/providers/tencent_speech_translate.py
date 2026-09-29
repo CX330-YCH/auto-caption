@@ -8,7 +8,7 @@ import uuid
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
-from typing import Protocol
+from typing import Any, Protocol
 from urllib.parse import quote, urlencode
 
 from core import (
@@ -99,6 +99,9 @@ ClientFactory = Callable[
     TencentSpeechClient,
 ]
 
+UrlBuilder = Callable[[Any, int, int, str], str]
+ConnectionDetailsBuilder = Callable[[Any, int, str], dict[str, object]]
+
 
 def build_signed_url(
     options: TencentSpeechOptions,
@@ -162,6 +165,7 @@ def _is_handshake_confirmation(response: dict[str, object]) -> bool:
     return (
         response.get('code') == 0 and
         response.get('result') is None and
+        response.get('sentences') is None and
         response.get('final') in (None, 0)
     )
 
@@ -176,6 +180,9 @@ class _WebSocketClient:
         diagnostic_handler: DiagnosticHandler = lambda message, details: None,
         start_timeout: float = 10.0,
         finish_timeout: float = 5.0,
+        url_builder: UrlBuilder | None = None,
+        connection_details_builder: ConnectionDetailsBuilder | None = None,
+        worker_name: str = 'tencent-speech-websocket',
     ) -> None:
         self._options = options
         self._response_handler = response_handler
@@ -184,6 +191,9 @@ class _WebSocketClient:
         self._diagnostic_handler = diagnostic_handler
         self._start_timeout = start_timeout
         self._finish_timeout = finish_timeout
+        self._url_builder = url_builder
+        self._connection_details_builder = connection_details_builder
+        self._worker_name = worker_name
         self._ready = threading.Event()
         self._handshake_succeeded = threading.Event()
         self._finished = threading.Event()
@@ -197,16 +207,21 @@ class _WebSocketClient:
 
         now = int(time.time())
         voice_id = str(uuid.uuid4())
-        url = build_signed_url(
-            self._options,
-            timestamp=now,
-            nonce=now % 10_000_000_000,
-            voice_id=voice_id,
+        nonce = now % 10_000_000_000
+        url = (
+            self._url_builder(self._options, now, nonce, voice_id)
+            if self._url_builder is not None
+            else build_signed_url(
+                self._options,
+                timestamp=now,
+                nonce=nonce,
+                voice_id=voice_id,
+            )
         )
-        self._diagnostic_handler(
-            'Tencent WebSocket connection starting.',
-            {
-                'operation': 'tencent_speech.websocket.start',
+        connection_details = (
+            self._connection_details_builder(self._options, now, voice_id)
+            if self._connection_details_builder is not None
+            else {
                 'endpoint': 'asr.cloud.tencent.com',
                 'path': f'/asr/speech_translate/{self._options.app_id}',
                 'appId': self._options.app_id,
@@ -221,6 +236,13 @@ class _WebSocketClient:
                 'hotwordCount': len(self._options.hotwords),
                 'timestamp': now,
                 'expired': now + 24 * 60 * 60,
+            }
+        )
+        self._diagnostic_handler(
+            'Tencent WebSocket connection starting.',
+            {
+                'operation': 'tencent_speech.websocket.start',
+                **connection_details,
                 'startTimeoutSeconds': self._start_timeout,
             },
         )
@@ -233,7 +255,7 @@ class _WebSocketClient:
         self._websocket.on_open = self._on_open
         self._thread = threading.Thread(
             target=self._websocket.run_forever,
-            name='tencent-speech-websocket',
+            name=self._worker_name,
             daemon=True,
         )
         self._thread.start()
@@ -352,7 +374,7 @@ class _WebSocketClient:
             self._response_handler(response)
             if code != 0:
                 self._failed.set()
-            elif response.get('final') == 1:
+            elif response.get('final') in (1, 2):
                 self._finished.set()
         except Exception as error:
             self._failed.set()
@@ -495,6 +517,8 @@ def _build_client(
 
 
 class TencentSpeechTranslateProvider(RecognitionProvider):
+    service_label = 'Tencent speech translation'
+
     def __init__(
         self,
         options: TencentSpeechOptions,
@@ -527,19 +551,10 @@ class TencentSpeechTranslateProvider(RecognitionProvider):
 
     def start(self) -> None:
         try:
-            _validate_options(self._options)
+            self._validate_provider_options()
             self._debug(
-                'Tencent speech translation provider starting.',
-                {
-                    'operation': 'tencent_speech.start',
-                    'appId': self._options.app_id,
-                    'sourceLanguage': self._options.source_language,
-                    'targetLanguage': self._options.target_language,
-                    'model': self._options.model,
-                    'vadSilenceMs': self._options.vad_silence_ms,
-                    'maxSpeakTimeMs': self._options.max_speak_time_ms,
-                    'hotwordCount': len(self._options.hotwords),
-                },
+                f'{self.service_label} provider starting.',
+                self._starting_details(),
             )
             self._session_started_at = self._clock()
             self._client = self._client_factory(
@@ -561,7 +576,7 @@ class TencentSpeechTranslateProvider(RecognitionProvider):
             self._emit(ProviderError(
                 provider=self.name,
                 message=(
-                    'Tencent speech translation failed to start '
+                    f'{self.service_label} failed to start '
                     f'({type(error).__name__})'
                 ),
                 fatal=True,
@@ -574,17 +589,23 @@ class TencentSpeechTranslateProvider(RecognitionProvider):
 
     def accept_audio(self, frame: AudioFrame) -> None:
         if not self._ready or self._client is None:
-            raise RuntimeError('Tencent speech translation is not ready')
-        if frame.format != 'pcm_s16le' or frame.sample_rate != 16000:
-            raise ValueError('Tencent speech translation requires 16 kHz PCM16')
+            raise RuntimeError(f'{self.service_label} is not ready')
+        if (
+            frame.format != 'pcm_s16le' or
+            frame.sample_rate != self._required_sample_rate
+        ):
+            raise ValueError(
+                f'{self.service_label} requires '
+                f'{self._required_sample_rate // 1000} kHz PCM16'
+            )
         if frame.channels != 1 or frame.sample_width != 2:
-            raise ValueError('Tencent speech translation requires mono PCM16')
+            raise ValueError(f'{self.service_label} requires mono PCM16')
         self._audio_frames_accepted += 1
         self._pending_audio.extend(frame.data)
         try:
-            while len(self._pending_audio) >= PCM_PACKET_BYTES:
-                packet = bytes(self._pending_audio[:PCM_PACKET_BYTES])
-                del self._pending_audio[:PCM_PACKET_BYTES]
+            while len(self._pending_audio) >= self._packet_bytes:
+                packet = bytes(self._pending_audio[:self._packet_bytes])
+                del self._pending_audio[:self._packet_bytes]
                 self._client.send_audio(packet)
                 self._record_audio_packet(packet, tail=False)
         except Exception as error:
@@ -624,7 +645,7 @@ class TencentSpeechTranslateProvider(RecognitionProvider):
             self._emit(ProviderError(
                 provider=self.name,
                 message=(
-                    'Tencent speech translation failed to stop '
+                    f'{self.service_label} failed to stop '
                     f'({type(error).__name__})'
                 ),
                 fatal=False,
@@ -638,7 +659,7 @@ class TencentSpeechTranslateProvider(RecognitionProvider):
             self._ready = False
             self._emit(ProviderStopped(
                 provider=self.name,
-                message='Tencent speech translation stopped.',
+                message=f'{self.service_label} stopped.',
             ))
 
     def handle_response(self, response: dict[str, object]) -> None:
@@ -651,31 +672,7 @@ class TencentSpeechTranslateProvider(RecognitionProvider):
             )
             return
         if code != 0:
-            self._failed = True
-            safe_response = safe_diagnostic_value(
-                response,
-                secrets=self._secrets,
-            )
-            safe_mapping = (
-                safe_response if isinstance(safe_response, dict) else {}
-            )
-            service_message = safe_mapping.get('message')
-            self._emit(ProviderError(
-                provider=self.name,
-                message=f'Tencent speech translation failed (code {code})',
-                fatal=True,
-                details={
-                    'operation': 'tencent_speech.response',
-                    'errorType': 'TencentServiceError',
-                    'serviceCode': code,
-                    'serviceMessage': (
-                        service_message
-                        if isinstance(service_message, str)
-                        else ''
-                    ),
-                    'response': safe_mapping,
-                },
-            ))
+            self._handle_service_error(response, code)
             return
         result = response.get('result')
         if result is None:
@@ -683,7 +680,7 @@ class TencentSpeechTranslateProvider(RecognitionProvider):
                 self._ready = True
                 self._emit(ProviderReady(
                     provider=self.name,
-                    message='Tencent speech translation started.',
+                    message=f'{self.service_label} started.',
                 ))
             return
         if not isinstance(result, dict):
@@ -693,6 +690,33 @@ class TencentSpeechTranslateProvider(RecognitionProvider):
             )
             return
         self._publish_caption(response, result)
+
+    def _handle_service_error(
+        self,
+        response: dict[str, object],
+        code: int,
+    ) -> None:
+        self._failed = True
+        safe_response = safe_diagnostic_value(
+            response,
+            secrets=self._secrets,
+        )
+        safe_mapping = safe_response if isinstance(safe_response, dict) else {}
+        service_message = safe_mapping.get('message')
+        self._emit(ProviderError(
+            provider=self.name,
+            message=f'{self.service_label} failed (code {code})',
+            fatal=True,
+            details={
+                'operation': 'tencent_speech.response',
+                'errorType': 'TencentServiceError',
+                'serviceCode': code,
+                'serviceMessage': (
+                    service_message if isinstance(service_message, str) else ''
+                ),
+                'response': safe_mapping,
+            },
+        ))
 
     def handle_transport_error(
         self,
@@ -709,7 +733,7 @@ class TencentSpeechTranslateProvider(RecognitionProvider):
         )
         self._emit(ProviderError(
             provider=self.name,
-            message='Tencent speech translation connection failed.',
+            message=f'{self.service_label} connection failed.',
             fatal=True,
             details=details,
         ))
@@ -804,6 +828,29 @@ class TencentSpeechTranslateProvider(RecognitionProvider):
                 'tailPacket': tail,
             },
         )
+
+    def _validate_provider_options(self) -> None:
+        _validate_options(self._options)
+
+    @property
+    def _required_sample_rate(self) -> int:
+        return 16000
+
+    @property
+    def _packet_bytes(self) -> int:
+        return PCM_PACKET_BYTES
+
+    def _starting_details(self) -> dict[str, object]:
+        return {
+            'operation': 'tencent_speech.start',
+            'appId': self._options.app_id,
+            'sourceLanguage': self._options.source_language,
+            'targetLanguage': self._options.target_language,
+            'model': self._options.model,
+            'vadSilenceMs': self._options.vad_silence_ms,
+            'maxSpeakTimeMs': self._options.max_speak_time_ms,
+            'hotwordCount': len(self._options.hotwords),
+        }
 
     def _debug(self, message: str, details: dict[str, object]) -> None:
         if not self._debug_enabled():

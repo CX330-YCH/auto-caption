@@ -40,7 +40,7 @@ export default {
     "tencentSpeechLanguagePairInvalid": "腾讯云语言组合不受支持",
     "tencentSpeechLanguagePairInvalidNote": "请选择腾讯实时语音翻译支持的源语言和目标语言组合。",
     "tencentSpeechCredentialsMissing": "腾讯云凭据不完整",
-    "tencentSpeechCredentialsMissingNote": "启动腾讯实时语音翻译前必须填写 AppID、SecretID 和 SecretKey。",
+    "tencentSpeechCredentialsMissingNote": "启动腾讯云语音服务前必须填写 AppID、SecretID 和 SecretKey。",
     "customExecutableMissing": "自定义引擎路径为空",
     "customExecutableMissingNote": "启动自定义字幕引擎前必须填写可执行文件路径。",
     "customEngineMissing": "自定义引擎不存在",
@@ -133,6 +133,9 @@ export default {
       "tencentSpeechSecretKey": "腾讯云 SecretKey",
       "tencentSpeechVadSilence": "断句静音阈值",
       "tencentSpeechMaxSpeakTime": "最长连续说话时间",
+      "tencentRecognitionModel": "实时语音识别模型",
+      "tencentRecognitionV2Model": "实时语音识别 V2 模型",
+      "tencentRecognitionSentenceStrategy": "断句策略",
       "openProviderConsole": "打开服务商控制台",
       "openProviderDocs": "打开服务商文档"
     },
@@ -144,7 +147,9 @@ export default {
         "glm": "云端 / 智谱 AI / GLM-ASR",
         "funAsr": "云端 / 阿里云 / Fun-ASR 实时",
         "appleSpeech": "本地 / macOS 系统语音识别",
-        "tencentSpeechTranslate": "云端 / 腾讯云 / 实时语音翻译"
+        "tencentSpeechTranslate": "云端 / 腾讯云 / 实时语音翻译",
+        "tencentSpeechRecognition": "云端 / 腾讯云 / 实时语音识别",
+        "tencentSpeechRecognitionV2": "云端 / 腾讯云 / 实时语音识别 V2"
       },
       languages: {
         "auto": "自动检测",
@@ -162,6 +167,13 @@ export default {
         "zh_en": "中英混合",
         "id": "印尼语",
         "th": "泰语",
+        "vi": "越南语",
+        "ms": "马来语",
+        "fil": "菲律宾语",
+        "pt": "葡萄牙语",
+        "tr": "土耳其语",
+        "ar": "阿拉伯语",
+        "hi": "印地语",
         "zhCN": "简体中文（中国大陆）",
         "enUS": "英语（美国）",
         "jaJP": "日语（日本）"
@@ -178,12 +190,24 @@ export default {
       tencentSpeechModels: {
         "lite": "混元翻译轻量版",
         "standard": "混元翻译标准版"
+      },
+      tencentSentenceStrategies: {
+        "vad": "VAD 静音断句",
+        "semantic": "语义断句"
+      },
+      tencentRecognitionModels: {
+        "model": "腾讯云识别模型"
       }
     },
     tencentSpeech: {
       "credentialsInfo": "AppID、SecretID 和 SecretKey 会以明文保存到本机 config.json，并通过命令行传给 Python 引擎。软件日志会隐藏 SecretID 和 SecretKey。",
       "vadSilenceInfo": "静音达到该时长后结束当前句，仅对中文、英语和中英混合源语言生效。范围 500-2000 毫秒。",
-      "maxSpeakTimeInfo": "连续说话达到该时长后强制结束当前句，仅对中文、英语和中英混合源语言生效。范围 5000-90000 毫秒。"
+      "maxSpeakTimeInfo": "连续说话达到该时长后强制结束当前句，仅对中文、英语和中英混合源语言生效。范围 5000-90000 毫秒。",
+      "recognitionModelInfo": "模型决定采样率、语言和领域能力；本应用会按 8 kHz/16 kHz 模型自动重采样单声道 PCM。Hy-ASR-3.0-preview 单次最长 60 秒。",
+      "recognitionV2ModelInfo": "V2 仅支持中英双语 2.0 模型；speaker 模型会输出说话人编号。",
+      "recognitionVadInfo": "静音达到该时长后结束当前句。不同模型的参数支持范围以腾讯云文档为准。",
+      "recognitionMaxSpeakInfo": "连续说话达到该时长后强制断句。部分模型不支持该参数，服务端可能忽略。",
+      "sentenceStrategyInfo": "VAD 优先低延迟；语义断句优先句子完整性。"
     },
     funAsr: {
       "workspaceInfo": "阿里云百炼业务空间 ID。API Key、业务空间和 WebSocket 地域必须属于同一套资源。",

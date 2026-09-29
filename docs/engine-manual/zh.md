@@ -1,6 +1,6 @@
 # 字幕引擎说明文档
 
-对应版本：v2.35.0
+对应版本：v2.36.0
 
 ![](../../assets/media/structure_zh.png)
 
@@ -173,7 +173,7 @@ export interface CaptionItem {
 
 自定义字幕引擎的设置提供命令行参数指定，因此需要设置好字幕引擎的参数，本项目目前用到的参数如下：
 
-> `engine/cli.py` 和 `python main.py --help` 是完整参数的唯一权威来源。Fun-ASR 使用 `-e fun_asr` 和 `-f*` 参数；腾讯实时语音翻译使用 `-e tencent_speech_translate`、`-tcappid`、`-tcsecretid`、`-tcsecretkey`、`-tcmodel`、`-tcvad`、`-tcmax`。Python 不再读取腾讯环境变量；不得在 `main.py` 再复制 Provider 装配分支。
+> `engine/cli.py` 和 `python main.py --help` 是完整参数的唯一权威来源。Fun-ASR 使用 `-e fun_asr` 和 `-f*` 参数；腾讯实时语音翻译使用 `-e tencent_speech_translate` 和 `-tc*` 参数，经典识别使用 `-e tencent_speech_recognition` 与 `-tcr*`，V2 使用 `-e tencent_speech_recognition_v2` 与 `-tcv2*`；三者共用 `-tcappid`、`-tcsecretid`、`-tcsecretkey`。Python 不读取腾讯环境变量；不得在 `main.py` 复制 Provider 装配分支。
 
 ```python
 if __name__ == "__main__":
@@ -225,7 +225,21 @@ python main.py -e tencent_speech_translate -s zh -t en -a 0 -c 10 \
   -tcmodel hunyuan-translation-lite -tcvad 1000 -tcmax 10000
 ```
 
-该 Provider 使用 16 kHz 单声道 PCM16，将约 100 ms 音频帧组合成约 200 ms 网络包。服务端 `sentence_id`、`sentence_end`、`source_text`、`target_text` 和毫秒偏移分别映射为稳定 ID、partial/final、原文、译文和字幕时间。`-tcvad` 表示静音多久后断句，范围 500–2000 ms；`-tcmax` 表示连续说话时强制断句的最长时长，范围 5000–90000 ms。两项仅对 `zh`、`en`、`zh_en` 发送。V9 设置页把三个凭据以普通文本写入 `config.json`，Electron 通过上述 CLI 参数启动 Python；命令日志和诊断会隐藏 SecretID/SecretKey，但配置文件和系统进程参数仍为明文。停止时等待最终结果最多5秒，Electron 总停止期限为8秒；旧引擎仍为4秒。当前不支持 TTS、自动重连或可用热词；热词编码和空配置仅作为后续接入边界。
+腾讯实时语音识别两个入口示例：
+
+```bash
+python main.py -e tencent_speech_recognition -a 0 -c 10 \
+  -tcappid 123456 -tcsecretid SECRET_ID -tcsecretkey SECRET_KEY \
+  -tcrmodel 16k_zh_en -tcrvad 1000 -tcrmax 60000
+
+python main.py -e tencent_speech_recognition_v2 -a 0 -c 10 \
+  -tcappid 123456 -tcsecretid SECRET_ID -tcsecretkey SECRET_KEY \
+  -tcv2model 16k_zh_en_speaker_2.0 -tcv2vad 1000 -tcv2sentence 0
+```
+
+两个识别入口复用腾讯传输；经典版 Pipeline 按模型输出 8/16 kHz 单声道 PCM16，V2 固定 16 kHz。经典版按 `slice_type` 生成 partial/final；V2 对完整 `sentence_list` 快照去重并可携带 `speaker_id`。两者的 final 进入统一翻译服务一次。当前无自动重连，真实付费 API 测试必须显式配置凭据后单独执行。
+
+该 Provider 使用 16 kHz 单声道 PCM16，将约 100 ms 音频帧组合成约 200 ms 网络包。服务端 `sentence_id`、`sentence_end`、`source_text`、`target_text` 和毫秒偏移分别映射为稳定 ID、partial/final、原文、译文和字幕时间。`-tcvad` 表示静音多久后断句，范围 500–2000 ms；`-tcmax` 表示连续说话时强制断句的最长时长，范围 5000–90000 ms。两项仅对 `zh`、`en`、`zh_en` 发送。V10 设置页把三个凭据写入 `config.json`，Electron 通过上述 CLI 参数启动 Python；命令日志和诊断会隐藏 SecretID/SecretKey，但配置文件和系统进程参数仍为明文。停止时等待最终结果最多5秒，Electron 总停止期限为8秒；旧引擎仍为4秒。当前不支持 TTS、自动重连或可用热词；热词编码和空配置仅作为后续接入边界。
 
 腾讯服务端的成功握手可能返回 `code: 0`、`final: 0`，也可能省略 `final`；两种形式都会进入 Ready。握手前若已经携带非空 `result` 或 `final: 1/2`，Provider 会拒绝启动，避免把结果消息误当作握手。
 
@@ -233,7 +247,7 @@ python main.py -e tencent_speech_translate -s zh -t en -a 0 -c 10 \
 
 Fun-ASR 为每个连接 generation 维护幂等状态：同一次任务的 `on_error → on_close → stop` 最多触发一次重连或一次 fatal。永久服务错误立即终止，暂时错误才进行三次有界退避重连；task-failed 后不会再次调用 SDK `stop()`。生命周期细节通过隐藏的 `debug` 协议事件写入完整 Debug 日志，原有日志记录页不显示 DEBUG。fatal 会请求 Session 正常关闭资源；只有超时等异常路径才由 Electron 强杀整个打包进程树。
 
-所有内置字幕引擎（Gummy、Fun-ASR、Tencent Speech Translate、GLM、Vosk、SOSV、Apple Speech）及音频、翻译、热词 SDK 的错误都会把脱敏后的 SDK 回调字段、异常类型、消息、自定义属性、完整 traceback 和 cause/context 写入本次 Debug JSONL。Python/SDK stderr 同样完整收集。API Key、Token、密码、Authorization、Cookie 和二进制音频正文始终不记录；过大的远端响应采用明确的有界截断标记。
+所有内置字幕引擎（Gummy、Fun-ASR、三个 Tencent Speech Provider、GLM、Vosk、SOSV、Apple Speech）及音频、翻译、热词 SDK 的错误都会把脱敏后的 SDK 回调字段、异常类型、消息、自定义属性、完整 traceback 和 cause/context 写入本次 Debug JSONL。Python/SDK stderr 同样完整收集。API Key、Token、密码、Authorization、Cookie 和二进制音频正文始终不记录；过大的远端响应采用明确的有界截断标记。
 
 V6 Debug Mode 通过 `--debug-mode 0|1` 启动，并可由 TCP `debug_mode` command 即时切换。开启后 `ProviderMetric` 统一输出音频帧读取/转换/入队、队列深度与帧龄、Provider event 队列、Fun-ASR 重连缓冲、GLM/翻译 Worker 和 Apple Speech helper 状态。Provider 专属指标通过 `diagnostic_snapshot()` 扩展，Session 不增加 Provider 条件分支。超过 512 KiB 的错误诊断使用带长度和 SHA-256 的 `diagnostic_chunk` 分块，避免 Electron 的单行限制丢失根因。
 

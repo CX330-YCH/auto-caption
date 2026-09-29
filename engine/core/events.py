@@ -9,6 +9,7 @@ class CaptionPartial:
     ended_at: str
     text: str
     translation: str = ''
+    speaker_id: int | None = None
 
 
 @dataclass(frozen=True)
@@ -18,6 +19,7 @@ class CaptionFinal:
     ended_at: str
     text: str
     translation: str = ''
+    speaker_id: int | None = None
 
 
 @dataclass(frozen=True)

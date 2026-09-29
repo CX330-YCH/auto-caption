@@ -1,17 +1,24 @@
 import type { Styles, UILanguage, UITheme } from '../types'
-import type { TencentSpeechModel } from '../tencentSpeech.ts'
+import type {
+  TencentRecognitionModel,
+  TencentRecognitionV2Model,
+  TencentSpeechModel
+} from '../tencentSpeech.ts'
 
-export const CONFIG_SCHEMA_VERSION = 9 as const
+export const CONFIG_SCHEMA_VERSION = 10 as const
 
 export type KnownProviderName = 'gummy' | 'vosk' | 'sosv' | 'glm' | 'fun_asr' |
-  'apple_speech' | 'tencent_speech_translate'
+  'apple_speech' | 'tencent_speech_translate' |
+  'tencent_speech_recognition' | 'tencent_speech_recognition_v2'
 export type AudioSourceType = 0 | 1
 export type KnownTranslationProviderName = 'azure' | 'google' | 'ollama'
 
 export function isKnownProviderName(value: unknown): value is KnownProviderName {
   return value === 'gummy' || value === 'vosk' || value === 'sosv' ||
     value === 'glm' || value === 'fun_asr' || value === 'apple_speech' ||
-    value === 'tencent_speech_translate'
+    value === 'tencent_speech_translate' ||
+    value === 'tencent_speech_recognition' ||
+    value === 'tencent_speech_recognition_v2'
 }
 
 export function isKnownTranslationProviderName(
@@ -129,6 +136,20 @@ export interface TencentSpeechProviderConfig {
   hotwords: TencentSpeechHotwordConfig
 }
 
+export interface TencentRecognitionProviderConfig {
+  [key: string]: unknown
+  model: TencentRecognitionModel
+  vadSilenceMs: number
+  maxSpeakTimeMs: number
+}
+
+export interface TencentRecognitionV2ProviderConfig {
+  [key: string]: unknown
+  model: TencentRecognitionV2Model
+  vadSilenceMs: number
+  sentenceStrategy: 0 | 1
+}
+
 export interface ProviderConfigs {
   [key: string]: unknown
   gummy: GummyProviderConfig
@@ -137,6 +158,8 @@ export interface ProviderConfigs {
   glm: GlmProviderConfig
   funAsr: FunAsrProviderConfig
   tencentSpeech: TencentSpeechProviderConfig
+  tencentRecognition: TencentRecognitionProviderConfig
+  tencentRecognitionV2: TencentRecognitionV2ProviderConfig
 }
 
 export interface CustomEngineConfig {
@@ -189,7 +212,7 @@ export interface CaptionConfig {
   styles: Styles
 }
 
-export interface ConfigDocumentV9 {
+export interface ConfigDocumentV10 {
   [key: string]: unknown
   schemaVersion: typeof CONFIG_SCHEMA_VERSION
   application: ApplicationConfig
@@ -237,7 +260,7 @@ export function createDefaultStyles(): Styles {
   }
 }
 
-export function createDefaultConfig(recordingPath: string): ConfigDocumentV9 {
+export function createDefaultConfig(recordingPath: string): ConfigDocumentV10 {
   return {
     schemaVersion: CONFIG_SCHEMA_VERSION,
     application: {
@@ -296,6 +319,16 @@ export function createDefaultConfig(recordingPath: string): ConfigDocumentV9 {
           hotwords: {
             entries: []
           }
+        },
+        tencentRecognition: {
+          model: '16k_zh_en',
+          vadSilenceMs: 1000,
+          maxSpeakTimeMs: 60000
+        },
+        tencentRecognitionV2: {
+          model: '16k_zh_en_2.0',
+          vadSilenceMs: 1000,
+          sentenceStrategy: 0
         }
       },
       translation: {

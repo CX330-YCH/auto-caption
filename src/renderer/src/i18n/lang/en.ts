@@ -40,7 +40,7 @@ export default {
     "tencentSpeechLanguagePairInvalid": "Unsupported Tencent Cloud Language Pair",
     "tencentSpeechLanguagePairInvalidNote": "Select a source and target language pair supported by Tencent realtime speech translation.",
     "tencentSpeechCredentialsMissing": "Incomplete Tencent Cloud Credentials",
-    "tencentSpeechCredentialsMissingNote": "Enter AppID, SecretID, and SecretKey before starting Tencent realtime speech translation.",
+    "tencentSpeechCredentialsMissingNote": "Enter AppID, SecretID, and SecretKey before starting a Tencent Cloud speech service.",
     "customExecutableMissing": "Custom Engine Path Missing",
     "customExecutableMissingNote": "Enter an executable path before starting the custom caption engine.",
     "customEngineMissing": "Custom Engine Missing",
@@ -133,6 +133,9 @@ export default {
       "tencentSpeechSecretKey": "Tencent Cloud SecretKey",
       "tencentSpeechVadSilence": "Sentence Silence",
       "tencentSpeechMaxSpeakTime": "Maximum Continuous Speech",
+      "tencentRecognitionModel": "Realtime Recognition Model",
+      "tencentRecognitionV2Model": "Realtime Recognition V2 Model",
+      "tencentRecognitionSentenceStrategy": "Sentence Strategy",
       "openProviderConsole": "Open provider console",
       "openProviderDocs": "Open provider documentation"
     },
@@ -144,7 +147,9 @@ export default {
         "glm": "Cloud / Zhipu AI / GLM-ASR",
         "funAsr": "Cloud / Alibaba Cloud / Fun-ASR Realtime",
         "appleSpeech": "Local / macOS System Speech",
-        "tencentSpeechTranslate": "Cloud / Tencent Cloud / Realtime Speech Translation"
+        "tencentSpeechTranslate": "Cloud / Tencent Cloud / Realtime Speech Translation",
+        "tencentSpeechRecognition": "Cloud / Tencent Cloud / Realtime Speech Recognition",
+        "tencentSpeechRecognitionV2": "Cloud / Tencent Cloud / Realtime Speech Recognition V2"
       },
       languages: {
         "auto": "Auto Detect",
@@ -162,6 +167,13 @@ export default {
         "zh_en": "Chinese-English Mixed",
         "id": "Indonesian",
         "th": "Thai",
+        "vi": "Vietnamese",
+        "ms": "Malay",
+        "fil": "Filipino",
+        "pt": "Portuguese",
+        "tr": "Turkish",
+        "ar": "Arabic",
+        "hi": "Hindi",
         "zhCN": "Simplified Chinese (Mainland China)",
         "enUS": "English (United States)",
         "jaJP": "Japanese (Japan)"
@@ -178,12 +190,24 @@ export default {
       tencentSpeechModels: {
         "lite": "Hunyuan Translation Lite",
         "standard": "Hunyuan Translation Standard"
+      },
+      tencentSentenceStrategies: {
+        "vad": "VAD silence segmentation",
+        "semantic": "Semantic segmentation"
+      },
+      tencentRecognitionModels: {
+        "model": "Tencent Cloud recognition model"
       }
     },
     tencentSpeech: {
       "credentialsInfo": "AppID, SecretID, and SecretKey are stored as plain text in the local config.json and passed to the Python engine through command-line arguments. Software logs mask SecretID and SecretKey.",
       "vadSilenceInfo": "Ends the current sentence after this much silence. Available only for Chinese, English, and mixed Chinese-English sources. Range: 500-2000 ms.",
-      "maxSpeakTimeInfo": "Forces a sentence boundary after this much continuous speech. Available only for Chinese, English, and mixed Chinese-English sources. Range: 5000-90000 ms."
+      "maxSpeakTimeInfo": "Forces a sentence boundary after this much continuous speech. Available only for Chinese, English, and mixed Chinese-English sources. Range: 5000-90000 ms.",
+      "recognitionModelInfo": "The model defines sample rate, language, and domain support. This app automatically resamples mono PCM for 8 kHz or 16 kHz models. Hy-ASR-3.0-preview is limited to 60 seconds per stream.",
+      "recognitionV2ModelInfo": "V2 supports only the bilingual Chinese-English 2.0 models. The speaker model also returns speaker IDs.",
+      "recognitionVadInfo": "Ends the current sentence after this much silence. Parameter availability varies by model; consult Tencent Cloud documentation.",
+      "recognitionMaxSpeakInfo": "Forces a sentence boundary after continuous speech. Unsupported models may ignore this parameter.",
+      "sentenceStrategyInfo": "VAD favors lower latency; semantic segmentation favors sentence completeness."
     },
     funAsr: {
       "workspaceInfo": "Alibaba Cloud Model Studio Workspace ID. The API key, workspace, and WebSocket region must belong to the same resources.",

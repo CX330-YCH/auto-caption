@@ -3,7 +3,7 @@
     <h1 align="center">auto-caption</h1>
     <p>Auto Caption is a cross-platform real-time caption display software.</p>
     <p>
-      <a href="https://github.com/HiMeditator/auto-caption/releases"><img src="https://img.shields.io/badge/release-2.35.0-blue"></a>
+      <a href="https://github.com/HiMeditator/auto-caption/releases"><img src="https://img.shields.io/badge/release-2.36.0-blue"></a>
       <a href="https://github.com/HiMeditator/auto-caption/issues"><img src="https://img.shields.io/github/issues/HiMeditator/auto-caption?color=orange"></a>
       <img src="https://img.shields.io/github/languages/top/HiMeditator/auto-caption?color=royalblue">
       <img src="https://img.shields.io/github/repo-size/HiMeditator/auto-caption?color=green">
@@ -14,7 +14,7 @@
         | <b>English</b>
         | <a href="./README_ja.md">日本語</a> |
     </p>
-    <p><i>v2.35.0 has been released with a macOS arm64 build...</i></p>
+    <p><i>v2.36.0 has been released with a macOS arm64 build...</i></p>
 </div>
 
 ![](./assets/media/main_en.png)
@@ -46,14 +46,14 @@ https://github.com/user-attachments/assets/9c188d78-9520-4397-bacf-4c8fdcc54874
 - Cross-platform (Windows, macOS, Linux) and multi-language interface (Chinese, English, Japanese) support
 - Rich caption style settings (searchable local fonts with manual CSS font-stack fallback, font size, font weight, font color, background color, etc.)
 - Keep the existing sentence view or switch to exact line rolling with symmetric safe margins, selective justification of complete soft-wrapped rows, and sentence-boundary or continuous layout
-- Flexible engine selection (Alibaba Cloud Gummy/Fun-ASR, Tencent realtime speech translation, GLM-ASR, Apple Speech, Vosk, SOSV, or custom engines)
+- Flexible engine selection (Alibaba Cloud Gummy/Fun-ASR; Tencent realtime recognition, recognition V2, and speech translation; GLM-ASR, Apple Speech, Vosk, SOSV, or custom engines)
 - Multi-language recognition and translation (see below "⚙️ Built-in Subtitle Engines")
 - Subtitle record display and export (supports exporting `.srt` and `.json` formats)
 - Instant Debug Mode captures complete redacted Electron, Renderer, Python, SDK/native-helper failures plus per-frame audio metadata, queue latency/backlog, Provider/translation state, and process metrics in an exportable per-launch `.jsonl`
 
 ## 📖 Basic Usage
 
-> ⚠️ Note: v2.35.0 currently provides Windows and macOS arm64 builds; Linux still needs verification from source or the existing build pipeline.
+> ⚠️ Note: v2.36.0 currently provides Windows and macOS arm64 builds; Linux still needs verification from source or the existing build pipeline.
 
 The software has been adapted for Windows, macOS, and Linux platforms. The tested platform information is as follows:
 
@@ -72,6 +72,8 @@ After downloading the software, you need to select the corresponding model accor
 | ------------------------------------------------------------ | -------- | --------- | --------------- | ------------------- | ----------- | ----- |
 | [Gummy](https://help.aliyun.com/zh/model-studio/gummy-speech-recognition-translation) | Very good 😊 | Very good 😊 | Cloud / Alibaba Cloud | 10 languages | Built-in translation | Paid, recognition 0.54 CNY/hour, recognition + translation 1.08 CNY/hour |
 | [Tencent Realtime Speech Translation](https://cloud.tencent.com/document/product/1093/127565) | Online validation pending | Very good 😊 | Cloud / Tencent Cloud | 9 source languages | Built-in realtime translation | Requires an enabled Tencent Cloud ASR account and current service charges; TTS is not included |
+| [Tencent Realtime Speech Recognition](https://cloud.tencent.com/document/product/1093/48982) | Online validation pending | Very good 😊 | Cloud / Tencent Cloud | Multilingual/domain models | Requires additional configuration | Classic WebSocket result protocol; the current audio pipeline is suitable only for 16 kHz models; current Tencent Cloud charges apply |
+| [Tencent Realtime Speech Recognition V2](https://cloud.tencent.com/document/product/1093/131127) | Online validation pending | Very good 😊 | Cloud / Tencent Cloud | Chinese-English bilingual | Requires additional configuration | Full sentence snapshots; the speaker model returns speaker IDs; current Tencent Cloud charges apply |
 | [SpeechAnalyzer / SpeechTranscriber](https://developer.apple.com/documentation/speech/speechanalyzer) | Very good 😊 | Very good 😊 | Local / macOS system | Reported dynamically by macOS | Requires additional configuration | macOS 26+ only; the system model must be installed before start |
 | [glm-asr-2512](https://docs.bigmodel.cn/cn/guide/models/sound-and-video/glm-asr-2512) | Very good 😊 | Poor 😞 | Cloud / Zhipu AI | 4 languages | Requires additional configuration | Paid, approximately 0.72 CNY/hour |
 | [Vosk](https://alphacephei.com/vosk) | Poor 😞 | Very good 😊 | Local / CPU | Over 30 languages | Requires additional configuration | Supports many languages |
@@ -133,6 +135,10 @@ For API KEY acquisition, see: [Quick Start](https://docs.bigmodel.cn/en/guide/st
 This engine streams recognized source text and translated text in the same WebSocket session. Enter the Tencent Cloud `AppID`, `SecretID`, and `SecretKey` in Caption Engine Settings. All three values are saved in the local `config.json` and passed to Python as `-tcappid`, `-tcsecretid`, and `-tcsecretkey`, so the Python engine can also run independently with the same arguments. The fields display plain text, and both the configuration file and operating-system process arguments contain the credentials in plain text; restrict access to the local account and configuration file. Software logs mask SecretID and SecretKey. The UI offers Hunyuan Translation Lite and Standard and filters targets by the selected source language. Chinese, English, and mixed Chinese-English sources expose 500–2000 ms silence segmentation and 5000–90000 ms forced segmentation; other sources use service defaults.
 
 Audio is converted to 16 kHz mono PCM16 and sent in approximately 200 ms packets. Shutdown waits up to 5 seconds for final captions, within an 8-second Electron process deadline. TTS is not implemented. Hotwords have an internal reserved interface only and are neither shown nor sent in this version.
+
+### Using Tencent Realtime Speech Recognition and V2
+
+These are two independent providers that reuse the Tencent Cloud `AppID`, `SecretID`, and `SecretKey` above. Classic recognition exposes the official model list and uses `-tcrmodel`, `-tcrvad`, and `-tcrmax`. The app automatically resamples mono PCM16 for 8/16 kHz models; `Hy-ASR-3.0-preview` is limited to 60 seconds per connection. V2 uses `-tcv2model`, `-tcv2vad`, and `-tcv2sentence`, and supports only `16k_zh_en_2.0` and `16k_zh_en_speaker_2.0`; the latter preserves server speaker IDs. Neither provider includes translation, so each final caption enters the shared Google/Ollama translation service once. No paid online Tencent account test was run, and automatic reconnect is not implemented.
 
 ### Using Vosk Model
 

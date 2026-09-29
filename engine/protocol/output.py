@@ -42,7 +42,7 @@ class ProtocolEventSink:
 
     def publish(self, event: RecognitionEvent) -> None:
         if isinstance(event, (CaptionPartial, CaptionFinal)):
-            self._object_writer({
+            payload = {
                 'command': 'caption',
                 'event_version': 1,
                 'phase': (
@@ -53,7 +53,10 @@ class ProtocolEventSink:
                 'time_t': event.ended_at,
                 'text': event.text,
                 'translation': event.translation,
-            })
+            }
+            if event.speaker_id is not None:
+                payload['speaker_id'] = event.speaker_id
+            self._object_writer(payload)
         elif isinstance(event, CaptionRevoked):
             self._object_writer({
                 'command': 'caption_remove',

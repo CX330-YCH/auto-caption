@@ -32,6 +32,7 @@ export class CaptionLog {
       translation: message.translation,
       phase: message.phase ?? 'unknown'
     }
+    if (message.speaker_id !== undefined) item.speakerId = message.speaker_id
     return this.captions.upsert(item)
   }
 

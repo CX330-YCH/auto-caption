@@ -1,6 +1,6 @@
 # Caption Engine Documentation
 
-Corresponding version: v2.35.0
+Corresponding version: v2.36.0
 
 ![](../../assets/media/structure_en.png)
 
@@ -173,7 +173,7 @@ Partial and final results for the same sentence must reuse `index`. `partial` re
 
 Custom caption engine settings provide command line parameter specification, so the caption engine parameters need to be set properly. Currently used parameters in this project are as follows:
 
-> `engine/cli.py` and `python main.py --help` are the authoritative complete parameter reference. Fun-ASR selects `-e fun_asr` and uses `-f*` arguments. Tencent realtime speech translation selects `-e tencent_speech_translate` with `-tcappid`, `-tcsecretid`, `-tcsecretkey`, `-tcmodel`, `-tcvad`, and `-tcmax`. Python no longer reads Tencent environment variables. Do not duplicate Provider assembly in `main.py`.
+> `engine/cli.py` and `python main.py --help` are the authoritative complete parameter reference. Fun-ASR uses `-e fun_asr` and `-f*`; Tencent translation uses `-e tencent_speech_translate` and `-tc*`, classic recognition uses `-e tencent_speech_recognition` and `-tcr*`, and V2 uses `-e tencent_speech_recognition_v2` and `-tcv2*`. All Tencent providers share `-tcappid`, `-tcsecretid`, and `-tcsecretkey`. Python does not read Tencent environment variables. Do not duplicate Provider assembly in `main.py`.
 
 ```python
 if __name__ == "__main__":
@@ -225,7 +225,21 @@ python main.py -e tencent_speech_translate -s en -t zh -a 0 -c 10 \
   -tcmodel hunyuan-translation-lite -tcvad 1000 -tcmax 10000
 ```
 
-This Provider accepts 16 kHz mono PCM16 and combines approximately 100 ms input frames into approximately 200 ms network packets. Server `sentence_id`, `sentence_end`, `source_text`, `target_text`, and millisecond offsets map to stable IDs, partial/final state, source text, translated text, and caption times. `-tcvad` ends a sentence after 500–2000 ms of silence; `-tcmax` forces a sentence boundary after 5000–90000 ms of uninterrupted speech. Both are sent only for `zh`, `en`, and `zh_en`. V9 writes the three credentials from ordinary text fields to `config.json`, and Electron starts Python with the CLI arguments above. Command logs and diagnostics mask SecretID/SecretKey, but the configuration file and operating-system process arguments remain plain text. Stop waits up to 5 seconds for final results inside an 8-second Electron deadline; existing engines keep 4 seconds. TTS, automatic reconnect, and active hotwords are not implemented. Hotword encoding and an empty config boundary are reserved for later integration.
+Tencent recognition examples:
+
+```bash
+python main.py -e tencent_speech_recognition -a 0 -c 10 \
+  -tcappid 123456 -tcsecretid SECRET_ID -tcsecretkey SECRET_KEY \
+  -tcrmodel 16k_zh_en -tcrvad 1000 -tcrmax 60000
+
+python main.py -e tencent_speech_recognition_v2 -a 0 -c 10 \
+  -tcappid 123456 -tcsecretid SECRET_ID -tcsecretkey SECRET_KEY \
+  -tcv2model 16k_zh_en_speaker_2.0 -tcv2vad 1000 -tcv2sentence 0
+```
+
+Both recognition providers reuse the Tencent transport. The classic pipeline emits 8/16 kHz mono PCM16 to match its model, while V2 stays at 16 kHz. Classic recognition maps `slice_type` to partial/final; V2 deduplicates complete `sentence_list` snapshots and can carry `speaker_id`. Each final enters the shared translation service once. Automatic reconnect is not implemented, and paid API testing must be enabled separately with explicit credentials.
+
+This Provider accepts 16 kHz mono PCM16 and combines approximately 100 ms input frames into approximately 200 ms network packets. Server `sentence_id`, `sentence_end`, `source_text`, `target_text`, and millisecond offsets map to stable IDs, partial/final state, source text, translated text, and caption times. `-tcvad` ends a sentence after 500–2000 ms of silence; `-tcmax` forces a sentence boundary after 5000–90000 ms of uninterrupted speech. Both are sent only for `zh`, `en`, and `zh_en`. V10 writes the three credentials to `config.json`, and Electron starts Python with the CLI arguments above. Command logs and diagnostics mask SecretID/SecretKey, but the configuration file and operating-system process arguments remain plain text. Stop waits up to 5 seconds for final results inside an 8-second Electron deadline; existing engines keep 4 seconds. TTS, automatic reconnect, and active hotwords are not implemented. Hotword encoding and an empty config boundary are reserved for later integration.
 
 A successful Tencent handshake may contain `code: 0` with `final: 0`, or it may omit `final`; both forms enter Ready. A non-null `result` or `final: 1/2` before the handshake is still rejected so a result message cannot be mistaken for handshake confirmation.
 
@@ -233,7 +247,7 @@ With Debug Mode enabled, the Tencent Provider writes non-sensitive request param
 
 Fun-ASR keeps an idempotent state for every connection generation: one task's `on_error → on_close → stop` sequence can cause at most one reconnect or one fatal result. Permanent service errors stop immediately, while transient errors use up to three bounded backoff retries; the SDK `stop()` method is not called after task-failed. Lifecycle diagnostics use the hidden `debug` protocol event and are written only to the complete Debug log, not the existing Software Log view. A fatal event asks the Session to close normally; Electron force-kills the complete packaged process tree only on exceptional timeout paths.
 
-Errors from every built-in caption engine (Gummy, Fun-ASR, Tencent Speech Translate, GLM, Vosk, SOSV, and Apple Speech), audio capture, translation, and the hotword SDK preserve sanitized SDK callback fields, exception type and message, custom attributes, full traceback, and cause/context in the current Debug JSONL. Python and SDK stderr is collected as well. API keys, tokens, passwords, Authorization/Cookie values, and binary audio bodies are never logged; oversized remote diagnostics use explicit bounded-truncation markers.
+Errors from every built-in caption engine (Gummy, Fun-ASR, all three Tencent Speech providers, GLM, Vosk, SOSV, and Apple Speech), audio capture, translation, and the hotword SDK preserve sanitized SDK callback fields, exception type and message, custom attributes, full traceback, and cause/context in the current Debug JSONL. Python and SDK stderr is collected as well. API keys, tokens, passwords, Authorization/Cookie values, and binary audio bodies are never logged; oversized remote diagnostics use explicit bounded-truncation markers.
 
 V6 Debug Mode starts through `--debug-mode 0|1` and can be changed live by the TCP `debug_mode` command. When enabled, `ProviderMetric` reports audio read/conversion/enqueue timing, queue depth and frame age, Provider event queues, the Fun-ASR reconnect buffer, GLM/translation workers, and Apple Speech helper state. Provider-specific fields extend `diagnostic_snapshot()` without adding Provider branches to Session. Error diagnostics above 512 KiB use length- and SHA-256-verified `diagnostic_chunk` messages so Electron's line limit does not discard the root cause.
 

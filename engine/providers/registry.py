@@ -20,6 +20,12 @@ from .tencent_speech_translate import (
     TencentSpeechOptions,
     TencentSpeechTranslateProvider,
 )
+from .tencent_speech_recognition import (
+    TencentRecognitionOptions,
+    TencentRecognitionV2Options,
+    TencentSpeechRecognitionProvider,
+    TencentSpeechRecognitionV2Provider,
+)
 
 
 @dataclass(frozen=True)
@@ -50,6 +56,12 @@ class ProviderConfig:
     tencent_model: str = 'hunyuan-translation-lite'
     tencent_vad_silence_ms: int = 1000
     tencent_max_speak_time_ms: int = 10000
+    tencent_recognition_model: str = '16k_zh_en'
+    tencent_recognition_vad_silence_ms: int = 1000
+    tencent_recognition_max_speak_time_ms: int = 60000
+    tencent_recognition_v2_model: str = '16k_zh_en_2.0'
+    tencent_recognition_v2_vad_silence_ms: int = 1000
+    tencent_recognition_v2_sentence_strategy: int = 0
 
 
 @dataclass(frozen=True)
@@ -113,6 +125,14 @@ def build_provider_registry() -> ProviderRegistry:
     registry.register('fun_asr', _build_fun_asr)
     registry.register('apple_speech', _build_apple_speech)
     registry.register('tencent_speech_translate', _build_tencent_speech)
+    registry.register(
+        'tencent_speech_recognition',
+        _build_tencent_speech_recognition,
+    )
+    registry.register(
+        'tencent_speech_recognition_v2',
+        _build_tencent_speech_recognition_v2,
+    )
     return registry
 
 
@@ -274,12 +294,81 @@ def _build_tencent_speech(
     )
 
 
+def _build_tencent_speech_recognition(
+    config: ProviderConfig,
+    audio_source: AudioSource,
+    warning_handler: Callable[[str], None],
+    diagnostic_handler: Callable[[str, dict[str, object]], None],
+) -> ProviderRuntime:
+    output_sample_rate = (
+        8000 if config.tencent_recognition_model.startswith('8k_') else 16000
+    )
+    return _build_mono_runtime(
+        TencentSpeechRecognitionProvider(TencentRecognitionOptions(
+            app_id=config.tencent_app_id,
+            secret_id=config.tencent_secret_id,
+            secret_key=config.tencent_secret_key,
+            model=config.tencent_recognition_model,
+            vad_silence_ms=config.tencent_recognition_vad_silence_ms,
+            max_speak_time_ms=config.tencent_recognition_max_speak_time_ms,
+        )),
+        config,
+        audio_source,
+        warning_handler,
+        diagnostic_handler,
+        output_sample_rate=output_sample_rate,
+    )
+
+
+def _build_tencent_speech_recognition_v2(
+    config: ProviderConfig,
+    audio_source: AudioSource,
+    warning_handler: Callable[[str], None],
+    diagnostic_handler: Callable[[str, dict[str, object]], None],
+) -> ProviderRuntime:
+    return _build_mono_16k_runtime(
+        TencentSpeechRecognitionV2Provider(TencentRecognitionV2Options(
+            app_id=config.tencent_app_id,
+            secret_id=config.tencent_secret_id,
+            secret_key=config.tencent_secret_key,
+            model=config.tencent_recognition_v2_model,
+            vad_silence_ms=config.tencent_recognition_v2_vad_silence_ms,
+            sentence_strategy=config.tencent_recognition_v2_sentence_strategy,
+        )),
+        config,
+        audio_source,
+        warning_handler,
+        diagnostic_handler,
+    )
+
+
 def _build_mono_16k_runtime(
     provider: RecognitionProvider,
     config: ProviderConfig,
     audio_source: AudioSource,
     warning_handler: Callable[[str], None],
     diagnostic_handler: Callable[[str, dict[str, object]], None],
+    external_translation: bool = True,
+) -> ProviderRuntime:
+    return _build_mono_runtime(
+        provider,
+        config,
+        audio_source,
+        warning_handler,
+        diagnostic_handler,
+        output_sample_rate=16000,
+        external_translation=external_translation,
+    )
+
+
+def _build_mono_runtime(
+    provider: RecognitionProvider,
+    config: ProviderConfig,
+    audio_source: AudioSource,
+    warning_handler: Callable[[str], None],
+    diagnostic_handler: Callable[[str, dict[str, object]], None],
+    *,
+    output_sample_rate: int,
     external_translation: bool = True,
 ) -> ProviderRuntime:
     from utils.audioprcs import resample_chunk_mono
@@ -291,9 +380,9 @@ def _build_mono_16k_runtime(
                 chunk,
                 audio_source.CHANNELS,
                 audio_source.RATE,
-                16000,
+                output_sample_rate,
             ),
-            output_sample_rate=16000,
+            output_sample_rate=output_sample_rate,
         ),
         external_translation=external_translation,
     )

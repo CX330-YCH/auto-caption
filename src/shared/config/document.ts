@@ -10,7 +10,7 @@ import {
   isKnownProviderName,
   isKnownTranslationProviderName,
   type ApplicationConfig,
-  type ConfigDocumentV9,
+  type ConfigDocumentV10,
   type EngineConfig,
   type ProviderConfigs,
   type TranslationConfig
@@ -33,34 +33,39 @@ import {
   validateFunAsrEndpoint
 } from './validation.ts'
 import {
+  TENCENT_RECOGNITION_MODELS,
+  TENCENT_RECOGNITION_V2_MODELS,
   TENCENT_SPEECH_MODELS,
   isTencentSpeechLanguagePair
 } from '../tencentSpeech.ts'
 
-export function parseConfigDocumentV9(value: unknown): ConfigDocumentV9 {
+export function parseConfigDocumentV10(value: unknown): ConfigDocumentV10 {
   if (!isRecord(value)) {
     throw new InvalidConfigError('Config root must be an object')
   }
   if (value.schemaVersion === 2) {
-    return parseConfigDocumentV9(migrateConfigDocumentV2ToV3(value))
+    return parseConfigDocumentV10(migrateConfigDocumentV2ToV3(value))
   }
   if (value.schemaVersion === 3) {
-    return parseConfigDocumentV9(migrateConfigDocumentV3ToV4(value))
+    return parseConfigDocumentV10(migrateConfigDocumentV3ToV4(value))
   }
   if (value.schemaVersion === 4) {
-    return parseConfigDocumentV9(migrateConfigDocumentV4ToV5(value))
+    return parseConfigDocumentV10(migrateConfigDocumentV4ToV5(value))
   }
   if (value.schemaVersion === 5) {
-    return parseConfigDocumentV9(migrateConfigDocumentV5ToV6(value))
+    return parseConfigDocumentV10(migrateConfigDocumentV5ToV6(value))
   }
   if (value.schemaVersion === 6) {
-    return parseConfigDocumentV9(migrateConfigDocumentV6ToV7(value))
+    return parseConfigDocumentV10(migrateConfigDocumentV6ToV7(value))
   }
   if (value.schemaVersion === 7) {
-    return parseConfigDocumentV9(migrateConfigDocumentV7ToV8(value))
+    return parseConfigDocumentV10(migrateConfigDocumentV7ToV8(value))
   }
   if (value.schemaVersion === 8) {
-    return parseConfigDocumentV9(migrateConfigDocumentV8ToV9(value))
+    return parseConfigDocumentV10(migrateConfigDocumentV8ToV9(value))
+  }
+  if (value.schemaVersion === 9) {
+    return parseConfigDocumentV10(migrateConfigDocumentV9ToV10(value))
   }
   if (value.schemaVersion !== CONFIG_SCHEMA_VERSION) {
     if (
@@ -79,6 +84,33 @@ export function parseConfigDocumentV9(value: unknown): ConfigDocumentV9 {
     application: parseApplicationConfig(value.application),
     engine: parseEngineConfig(value.engine),
     caption: parseCaptionConfig(value.caption)
+  }
+}
+
+function migrateConfigDocumentV9ToV10(
+  value: Record<string, unknown>
+): Record<string, unknown> {
+  const engine = requireRecord(value.engine, 'engine')
+  const providers = requireRecord(engine.providers, 'engine.providers')
+  return {
+    ...value,
+    schemaVersion: 10,
+    engine: {
+      ...engine,
+      providers: {
+        ...providers,
+        tencentRecognition: {
+          model: '16k_zh_en',
+          vadSilenceMs: 1000,
+          maxSpeakTimeMs: 60000
+        },
+        tencentRecognitionV2: {
+          model: '16k_zh_en_2.0',
+          vadSilenceMs: 1000,
+          sentenceStrategy: 0
+        }
+      }
+    }
   }
 }
 
@@ -567,6 +599,14 @@ function parseProviderConfigs(value: Record<string, unknown>): ProviderConfigs {
     value.tencentSpeech,
     'providers.tencentSpeech'
   )
+  const tencentRecognition = requireRecord(
+    value.tencentRecognition,
+    'providers.tencentRecognition'
+  )
+  const tencentRecognitionV2 = requireRecord(
+    value.tencentRecognitionV2,
+    'providers.tencentRecognitionV2'
+  )
   const tencentHotwords = requireRecord(
     tencentSpeech.hotwords,
     'providers.tencentSpeech.hotwords'
@@ -595,6 +635,24 @@ function parseProviderConfigs(value: Record<string, unknown>): ProviderConfigs {
   )
   if (!TENCENT_SPEECH_MODELS.includes(tencentModel as never)) {
     throw new InvalidConfigError('Invalid tencentSpeech.model')
+  }
+  const tencentRecognitionModel = requireString(
+    tencentRecognition.model,
+    'tencentRecognition.model',
+    64,
+    false
+  )
+  if (!TENCENT_RECOGNITION_MODELS.includes(tencentRecognitionModel as never)) {
+    throw new InvalidConfigError('Invalid tencentRecognition.model')
+  }
+  const tencentRecognitionV2Model = requireString(
+    tencentRecognitionV2.model,
+    'tencentRecognitionV2.model',
+    64,
+    false
+  )
+  if (!TENCENT_RECOGNITION_V2_MODELS.includes(tencentRecognitionV2Model as never)) {
+    throw new InvalidConfigError('Invalid tencentRecognitionV2.model')
   }
   const tencentAppId = requireString(
     tencentSpeech.appId,
@@ -687,13 +745,45 @@ function parseProviderConfigs(value: Record<string, unknown>): ProviderConfigs {
         ...tencentHotwords,
         entries: tencentHotwordEntries
       }
+    },
+    tencentRecognition: {
+      ...tencentRecognition,
+      model: tencentRecognitionModel as (typeof TENCENT_RECOGNITION_MODELS)[number],
+      vadSilenceMs: requireNumber(
+        tencentRecognition.vadSilenceMs,
+        'tencentRecognition.vadSilenceMs',
+        240,
+        2000
+      ),
+      maxSpeakTimeMs: requireNumber(
+        tencentRecognition.maxSpeakTimeMs,
+        'tencentRecognition.maxSpeakTimeMs',
+        5000,
+        90000
+      )
+    },
+    tencentRecognitionV2: {
+      ...tencentRecognitionV2,
+      model: tencentRecognitionV2Model as (typeof TENCENT_RECOGNITION_V2_MODELS)[number],
+      vadSilenceMs: requireNumber(
+        tencentRecognitionV2.vadSilenceMs,
+        'tencentRecognitionV2.vadSilenceMs',
+        240,
+        2000
+      ),
+      sentenceStrategy: requireNumber(
+        tencentRecognitionV2.sentenceStrategy,
+        'tencentRecognitionV2.sentenceStrategy',
+        0,
+        1
+      ) as 0 | 1
     }
   }
 }
 
 export function parseCaptionConfig(
   value: unknown
-): ConfigDocumentV9['caption'] {
+): ConfigDocumentV10['caption'] {
   if (!isRecord(value)) {
     throw new InvalidConfigError('Caption config must be an object')
   }

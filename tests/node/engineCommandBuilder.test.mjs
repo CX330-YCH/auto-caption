@@ -13,7 +13,7 @@ function valueAfter(args, flag) {
   return args[index + 1]
 }
 
-test('builds common and Provider-specific arguments from V9 config', () => {
+test('builds common and Provider-specific arguments from V10 config', () => {
   const engine = createDefaultConfig('/recordings').engine
   engine.common.audioSource = 1
   engine.common.recording.enabled = true
@@ -33,7 +33,8 @@ test('builds common and Provider-specific arguments from V9 config', () => {
 
   for (const provider of [
     'gummy', 'vosk', 'sosv', 'glm', 'fun_asr',
-    'tencent_speech_translate'
+    'tencent_speech_translate', 'tencent_speech_recognition',
+    'tencent_speech_recognition_v2'
   ]) {
     const args = buildBundledEngineArguments(engine, provider, 2345)
 
@@ -104,6 +105,26 @@ test('builds common and Provider-specific arguments from V9 config', () => {
   assert.equal(valueAfter(tencentArgs, '-tcvad'), '1000')
   assert.equal(valueAfter(tencentArgs, '-tcmax'), '10000')
   assert.equal(tencentArgs.includes('-tm'), false)
+
+  engine.translation.enabled = true
+  const recognitionArgs = buildBundledEngineArguments(
+    engine,
+    'tencent_speech_recognition',
+    2345
+  )
+  assert.equal(valueAfter(recognitionArgs, '-tcrmodel'), '16k_zh_en')
+  assert.equal(valueAfter(recognitionArgs, '-tcrvad'), '1000')
+  assert.equal(valueAfter(recognitionArgs, '-tcrmax'), '60000')
+  assert.equal(valueAfter(recognitionArgs, '-tm'), 'ollama')
+
+  const recognitionV2Args = buildBundledEngineArguments(
+    engine,
+    'tencent_speech_recognition_v2',
+    2345
+  )
+  assert.equal(valueAfter(recognitionV2Args, '-tcv2model'), '16k_zh_en_2.0')
+  assert.equal(valueAfter(recognitionV2Args, '-tcv2vad'), '1000')
+  assert.equal(valueAfter(recognitionV2Args, '-tcv2sentence'), '0')
 })
 
 test('requires the native helper path for Apple Speech', () => {

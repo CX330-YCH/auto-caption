@@ -6635,6 +6635,73 @@
 - 根目录 `AGENTS.md`：版本同步、三语文档、构建验证、依赖授权、脏工作区保护和 `change.md` 追加要求。
 - Apple `codesign`、`hdiutil`、`ditto` 本机工具输出，以及 PyInstaller/electron-builder 构建日志。
 
+## 2026-09-29 - 接入腾讯实时语音识别与实时语音识别 V2
+
+### 用户授权与变更目标
+
+- 用户在比较腾讯云三个 WebSocket 接口后明确要求“分别接入”前两个识别方式，并作为两个新方法；本批次新增 `tencent_speech_recognition` 与 `tencent_speech_recognition_v2`，保留既有 `tencent_speech_translate`。
+- 变更类型：功能、重构、配置、协议、测试、文档。
+- 非目标：未调用真实或付费腾讯云 API，未创建远端资源，未安装/升级依赖，未改版本号，未打包发布，未提交、推送或创建 PR。
+
+### 修改文件与原因
+
+- `engine/providers/tencent_speech_recognition.py`：新增经典识别/V2 选项、签名 URL、模型校验、经典 `slice_type` 结果映射、V2 全量句子快照去重、说话人编号和两种 Provider。
+- `engine/providers/tencent_speech_translate.py`：把既有腾讯 WebSocket 建连、握手、停止、诊断和音频分包开放为共用钩子；翻译行为与旧公开测试入口保持不变；握手额外拒绝提前到达的 V2 sentences，结束帧兼容 `final: 1/2`。
+- `engine/providers/registry.py`、`engine/main.py`、`engine/cli.py`：注册两个 Provider；经典模型自动选择 8/16 kHz 单声道 PCM16 Pipeline；新增 `-tcr*`、`-tcv2*` 参数并继续复用 `-tcappid/-tcsecretid/-tcsecretkey`。
+- `engine/core/events.py`、`engine/protocol/output.py`：caption 事件增加可选 `speaker_id`，未提供时不输出该字段。
+- `engine/tests/test_tencent_speech_recognition_provider.py`、`engine/tests/test_tencent_speech_provider.py`、`engine/tests/test_cli.py`、`engine/tests/test_protocol_output.py`、`engine/tests/test_provider_registry.py`：覆盖签名、模型、8 kHz 分包、partial/final、V2 快照去重、speaker ID、握手、CLI、协议与注册表。
+- `src/shared/tencentSpeech.ts`：集中维护经典识别和 V2 官方模型常量与类型。
+- `src/shared/config/schema.ts`、`src/shared/config/document.ts`、`src/main/utils/AllConfig.ts`、`src/shared/types.ts`：配置升级为 V10，新增两组 Provider 配置，显式迁移 V9 并保留未知字段；共享文档类型改名为 `ConfigDocumentV10`。
+- `src/main/engine/config/EngineCommandBuilder.ts`、`src/main/engine/config/EngineLaunchContext.ts`、`src/main/utils/CaptionEngine.ts`：生成两个新引擎的参数，统一校验腾讯凭据并使用8秒停止期限。
+- `src/main/engine/protocol/messages.ts`、`src/main/engine/captions/CaptionLog.ts`：校验并保存可选 0-9 `speaker_id`，旧 caption 消息继续有效。
+- `src/renderer/src/engines/providers/tencent_speech_recognition.ts`、`catalog.ts`、`types.ts`：用 Provider 元数据增加两个设置入口、模型/断句字段、共享凭据门禁和外部翻译能力。
+- `src/main/i18n/lang/{zh,en,ja}.ts`、`src/renderer/src/i18n/lang/{zh,en,ja}.ts`：补齐新引擎、字段、帮助文本和凭据错误的中英日三语文案。
+- `tests/node/configDocument.test.mjs`、`engineCatalog.test.mjs`、`engineCommandBuilder.test.mjs`、`engineLaunchContext.test.mjs`、`engineProtocol.test.mjs`：覆盖 V10 迁移、目录注册、参数生成、停止期限和 speaker 协议校验。
+- `README.md`、`README_en.md`、`README_ja.md`、`docs/user-manual/{zh,en,ja}.md`、`docs/engine-manual/{zh,en,ja}.md`、`docs/engine-manual/architecture.md`：说明两个新入口、模型范围、8/16 kHz、V2 说话人分离、翻译语义、费用与未在线验证限制。
+- `docs/api-docs/config-v10.md`、`config-v9.md`、`caption-engine.md`、`electron-ipc.md`：记录 V10 结构/迁移、Provider 结果映射、可选 `speaker_id` 和完整配置类型；V9 文档改为历史版本表述。
+- `docs/testing.md`、`docs/CHANGELOG.md`：同步测试覆盖与未发布变更。
+- `change.md`：按项目约束追加本批次完整流水。
+
+### 修改前后行为
+
+- 修改前：项目只提供腾讯实时语音翻译，无法选择腾讯普通实时识别或 V2。
+- 修改后：设置页可独立选择经典识别或 V2；经典版支持文档列出的 8/16 kHz、多语种和领域模型并按模型自动重采样，V2 支持 `16k_zh_en_2.0` 与 `16k_zh_en_speaker_2.0`、VAD/语义断句和可选说话人编号。
+- 两个新 Provider 只产生识别字幕，partial 不翻译，final 只进入统一 Google/Ollama 翻译一次；V2 重复返回的历史句子快照不会重复固化或翻译。
+- 三个腾讯入口共用 WebSocket 生命周期、约 200 ms 音频分包、尾帧冲刷、错误脱敏和凭据，既有腾讯翻译参数与行为保持兼容。
+
+### 配置、协议、命令行、数据结构与兼容性
+
+- `schemaVersion` 从9升级到10。V9→V10 只增加 `tencentRecognition` 和 `tencentRecognitionV2` 默认配置，保留旧腾讯翻译、凭据和未知扩展字段；旧 V2-V8 继续逐级迁移。
+- 新增 CLI：`-tcrmodel/-tcrvad/-tcrmax` 与 `-tcv2model/-tcv2vad/-tcv2sentence`；共享凭据 CLI 和所有旧参数不变。
+- caption `event_version: 1` 增加可选 `speaker_id`；不支持说话人分离的 Provider 完全省略该字段，因此旧自定义引擎和旧消息仍兼容。
+- Electron IPC 只因完整配置类型升级为 V10 而变化，没有新增 IPC channel；Python stdout 仍为一行一条 NDJSON。
+- 无依赖、锁文件和打包配置变化。回滚时应成组恢复本条列出的实现、测试和文档；`change.md` 只能追加更正记录，不能删除本条。
+
+### 实际验证与真实结果
+
+- 修改前检查 `git status --short --branch`：`## main...origin/main`，工作区干净。
+- `npm run verify`：通过；TypeScript/Vue 类型检查和 ESLint 通过，Node `120/120`、Python `102/102` 测试通过。
+- `npm run build`：通过；main 37 modules、preload 1 module、renderer 3298 modules 完成构建。
+- `engine/.venv/bin/python -m compileall -q engine`：通过。
+- `git diff --check`：通过。
+- 初次使用系统 `python3 -m unittest ...` 失败：本机 Python 3.14 环境缺少 `audioop`；改用项目 `engine/.venv` 后相关测试与完整 Python 测试通过。
+- `engine/.venv/bin/python -m ruff check ...` 未执行成功：项目虚拟环境未安装 `ruff`，没有把“命令不存在”记为通过。
+
+### 未执行验证、已知风险与后续事项
+
+- 未使用真实 Tencent Cloud AppID/SecretID/SecretKey，未产生付费请求；服务端握手、账户权限、计费、地域和所有模型的真实可用性仍需显式在线回归。
+- 未使用真实麦克风/系统音频进行长时间识别，未执行 Electron GUI 人工回归、安装包构建、Windows/Linux 实机测试。
+- 腾讯三个 Provider 当前都不自动重连；网络意外关闭会产生 fatal 并结束本次 Session。`Hy-ASR-3.0-preview` 的单连接60秒限制由服务端执行，应用当前不会自动轮换连接。
+- V2 speaker 模型保留首次 final 携带的说话人编号；为保证 final 和翻译只触发一次，后续全量快照若只修订已 final 句子的 speaker ID，不会再次发布 final。
+
+### 关键外部文档与技术决策来源
+
+- 腾讯云实时语音识别 WebSocket：<https://cloud.tencent.com/document/product/1093/48982>。
+- 腾讯云实时语音识别 V2 WebSocket：<https://cloud.tencent.com/document/product/1093/131127>。
+- 腾讯云实时语音翻译 WebSocket：<https://cloud.tencent.com/document/product/1093/127565>。
+- Tencent Cloud Python Speech SDK speaker 示例：<https://github.com/TencentCloud/tencentcloud-speech-sdk-python/blob/master/examples/asr/speakerexample.py>。
+- 根目录 `AGENTS.md`：Provider 生命周期、final-only 翻译、配置迁移、三语文档、安全、验证和 `change.md` 要求。
+
 ## 2026-09-28 - 修复冷启动字体被误标为自定义
 
 ### 用户授权与目标
@@ -6731,3 +6798,54 @@
 
 - 根目录 `AGENTS.md`：版本同步、三语文档、构建验证、依赖授权、脏工作区保护和 `change.md` 追加要求。
 - Apple `codesign`、`hdiutil`、`ditto` 本机工具输出，以及 PyInstaller/electron-builder 构建日志。
+
+## 2026-09-29 - macOS arm64 2.36.0 构建与小版本更新
+
+### 用户授权与目标
+
+- 用户明确要求“编译一下 Mac 版本并更新小版本号”；本批次将版本从 `2.35.0` 更新为 `2.36.0`，重新构建 Python 引擎并生成 macOS arm64 安装产物。
+- 变更类型：版本、文档、构建。工作区已有腾讯实时语音识别/V2 Provider、配置 V10、协议、测试及三语文档修改均予以保留并纳入本次构建。
+- 未安装或升级依赖，未修改系统环境，未提交、推送或发布 Git 内容。
+
+### 修改文件与原因
+
+- `package.json`、`package-lock.json`：版本更新为 `2.36.0`。
+- `src/renderer/index.html`、`src/renderer/src/components/EngineStatus.vue`：同步窗口标题和关于页版本。
+- `README.md`、`README_en.md`、`README_ja.md`：同步三语项目版本说明。
+- `docs/user-manual/{zh,en,ja}.md`、`docs/engine-manual/{zh,en,ja}.md`：同步三语手册版本。
+- `docs/CHANGELOG.md`：追加 `v2.36.0`，记录腾讯实时语音识别/V2、配置 V10 与 macOS 构建。
+- `dist/latest-mac.yml`：签名后的 ZIP/DMG 重建后同步最终 SHA-512 和大小；该文件位于忽略的构建产物目录。
+- `change.md`：追加本批次授权、构建、验证和风险记录。
+
+### 修改前后行为
+
+- 修改前：发布版本为 `2.35.0`，已有构建产物不包含当前工作区新实现的腾讯实时语音识别/V2 Provider。
+- 修改后：应用、Electron bundle、Python 引擎构建元数据及三语文档为 `2.36.0`；重新打包的 Python 3.14 引擎包含当前 Provider 代码，并随 macOS arm64 应用交付。
+
+### 配置、协议、依赖与兼容性
+
+- 本次版本批次自身没有新增配置或协议字段；所包含的既有功能变更将配置从 V9 显式迁移到 V10，新增腾讯识别/V2 Provider 参数，并为字幕事件增加可选 `speakerId`，详细兼容性与迁移规则见其前一条独立 `change.md` 记录和 `docs/api-docs/config-v10.md`。
+- 未新增、安装或升级依赖；沿用现有锁文件、Python 3.14.7、PyInstaller 6.22.3 和 electron-builder 26.15.3。
+- 仅验证 macOS arm64；未据此声明 Windows、Linux 或 Intel macOS 已验证。回滚时成组恢复版本文件、文档和 `docs/CHANGELOG.md` 的 2.36.0 段落；功能代码应按其独立记录回滚，`change.md` 只能追加更正。
+
+### 实际验证与构建结果
+
+- `npm run verify`：通过；TypeScript/Vue typecheck、ESLint、Node `120/120`、Python `102/102` 全部通过。
+- `PYINSTALLER_CONFIG_DIR=/private/tmp/auto-caption-pyinstaller-236 ./.venv/bin/pyinstaller --clean --noconfirm main.spec`（`engine/`）：通过；Python 3.14.7/PyInstaller 6.22.3 生成 arm64 one-file 引擎。仅有既有可选 `pycparser.lextab`/`yacctab` 缺失警告。
+- `pyi-archive_viewer` 与 `file`：确认引擎为 arm64 Mach-O，包含 `libomp.dylib` 和 Python 3.14 numba `omppool`。
+- 最终 APP 内 `Resources/engine/main --help`：退出码 0，并列出 `tencent_speech_recognition`、`tencent_speech_recognition_v2` 及 `-tcr*`、`-tcv2*` 参数，确认新 Provider 已进入安装包。
+- `npm run build:mac`：Apple Speech helper、Electron main/preload/renderer 构建通过；renderer 转换 3298 个模块，electron-builder 生成 arm64 APP、ZIP、DMG 和 blockmap。
+- electron-builder 发现的本机证书不受信任，未执行 Developer ID 正式签名；随后对最终 APP 执行 `codesign --force --deep --sign -`，使用签名后的 APP 重建 ZIP 和 DMG。
+- 最终 `codesign --verify --deep --strict --verbose=2`、ZIP `unzip -tq`、DMG `hdiutil verify` 和 `latest-mac.yml` SHA-512/大小核对均通过。
+- `dist/Auto Caption-2.36.0-arm64-mac.zip`：228,586,188 bytes；SHA-256 `f40f940b6fa0bab5df565661a8d74fa2b23e0468ff4ce402751068e58d179aed`。
+- `dist/auto-caption-2.36.0.dmg`：248,665,841 bytes；SHA-256 `cf90a4ba37377fbede783136fe92ad1db0381942972147c1cd4f760cb9036ca6`。
+
+### 未执行验证、风险与后续事项
+
+- 未执行 Developer ID 正式签名、Apple 公证、Gatekeeper 外部下载验证、Electron GUI 人工回归、真实麦克风/系统音频或腾讯付费账号在线测试。
+- 未执行 Windows、Linux 或 Intel macOS 构建。最终 APP 为 ad-hoc 签名，未公证；腾讯识别/V2 的联网行为仍以离线伪传输测试为依据。
+
+### 关键技术决策来源
+
+- 根目录 `AGENTS.md`：版本同步、三语文档、配置迁移、协议测试、构建验证、依赖授权、脏工作区保护和 `change.md` 追加要求。
+- Apple `codesign`、`hdiutil`、`ditto` 本机工具输出，以及 Python 3.14.7、PyInstaller 6.22.3、electron-builder 26.15.3 构建日志。

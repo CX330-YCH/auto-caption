@@ -36,7 +36,8 @@ test('registers each recognition provider once with capability metadata', () => 
 
   assert.deepEqual(providerIds, [
     'gummy', 'vosk', 'sosv', 'glm', 'fun_asr', 'apple_speech',
-    'tencent_speech_translate'
+    'tencent_speech_translate', 'tencent_speech_recognition',
+    'tencent_speech_recognition_v2'
   ])
   assert.equal(new Set(providerIds).size, providerIds.length)
 

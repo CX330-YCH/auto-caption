@@ -4,7 +4,7 @@
 
 ## 当前结构
 
-现有 Gummy、Vosk、SOSV、GLM、Fun-ASR、Tencent Speech Translate 和 Apple Speech 均通过统一识别架构运行，Google 与 Ollama 通过独立翻译架构运行：
+现有 Gummy、Vosk、SOSV、GLM、Fun-ASR、Tencent Speech Translate、Tencent Speech Recognition、Tencent Speech Recognition V2 和 Apple Speech 均通过统一识别架构运行，Google 与 Ollama 通过独立翻译架构运行：
 
 ```text
 engine/
@@ -185,6 +185,13 @@ API Key 字段在 `CliOptions` 和 `ProviderConfig` 的 `repr` 中隐藏。未�
 - 支持 `hunyuan-translation-lite` 与 `hunyuan-translation` 两种模型。源语言和目标语言由共享动态矩阵校验；Renderer 负责过滤选项，主进程和 Python Provider 分别执行防御性复验。
 - `vad_silence_time` 和 `max_speak_time` 仅对 `zh`、`en`、`zh_en` 发送，范围分别为 500–2000 ms 与 5000–90000 ms。热词编码器和不可激活的 V8 空配置已预留，当前不展示或发送热词。
 - `stop()` 发送 `{"type":"end"}` 并最多等待5秒接收最终结果；Electron 为该 Provider 使用8秒停止期限，其他内置和自定义引擎继续使用4秒。
+
+### Tencent Speech Recognition / V2
+
+- 两个 Provider 使用腾讯云 `/asr/v2/<appid>` WebSocket 签名协议，与翻译 Provider 共用传输状态、16 kHz 单声道 PCM16 校验、6400 字节分包、停止冲刷和脱敏诊断，不复制音频循环。
+- `tencent_speech_recognition` 解析 `result.slice_type`、`index`、`voice_text_str` 和服务端毫秒时间戳。模型来自官方实时语音识别列表；当前共享 Pipeline 固定为 16 kHz，因此 8 kHz 模型不适用。
+- `tencent_speech_recognition_v2` 仅支持 `16k_zh_en_2.0` 与 `16k_zh_en_speaker_2.0`，按完整 `sentence_list` 快照去重。speaker 模型把 0-9 的 `speaker_id` 写入可选 caption 字段。
+- 两者只负责识别，final 结果由统一 `TranslationSession` 翻译一次。当前实现不自动重连，也没有进行真实腾讯云账号的在线回归。
 - 当前基础版本不提供 TTS 和自动重连。非主动断线形成 fatal 并结束本次 Session；用户需重新启动字幕。在线重试策略必须作为后续独立变更加入，不能变成无限重连。
 
 ## 独立热词服务
@@ -209,12 +216,12 @@ Vosk、SOSV、GLM、Fun-ASR 和 Apple Speech 的 final 通过独立 `Translation
 
 `TranslationProviderRegistry` 拒绝未知和重复名称，翻译配置与凭据不再进入识别 `ProviderConfig`。网络级取消和停止时有限结果冲刷仍是后续独立改造事项。
 
-## Electron 配置 V8
+## Electron 配置 V10
 
-Electron 持久化、主进程、IPC 和渲染进程共享 `src/shared/config/` 中的 V8 分层模型：
+Electron 持久化、主进程、IPC 和渲染进程共享 `src/shared/config/` 中的 V10 分层模型：
 
 ```text
-ConfigDocumentV9
+ConfigDocumentV10
 ├── application          # 语言、主题、颜色、窗口布局、Debug Mode
 ├── engine
 │   ├── activeEngineId   # 当前内置 Provider 或自定义引擎 ID
@@ -225,11 +232,11 @@ ConfigDocumentV9
 └── caption              # 字幕样式
 ```
 
-`AllConfig` 是主进程中的配置所有者，只接受 `schemaVersion: 9`。Renderer 通过 application、engine、caption 三个完整层级交换配置，主进程重新校验后才更新内存；运行态 `engineEnabled` 与 PID、端口、日志不进入磁盘配置。按用户明确要求，腾讯 AppID、SecretID、SecretKey 属于完整 engine 配置并以明文落盘和进入控制窗口 Renderer。
+`AllConfig` 是主进程中的配置所有者，只接受 `schemaVersion: 10`。Renderer 通过 application、engine、caption 三个完整层级交换配置，主进程重新校验后才更新内存；运行态 `engineEnabled` 与 PID、端口、日志不进入磁盘配置。按用户明确要求，腾讯 AppID、SecretID、SecretKey 属于完整 engine 配置并以明文落盘和进入控制窗口 Renderer。
 
 引擎启动参数由纯函数 `EngineCommandBuilder` 从 `EngineConfig` 构建，`CaptionEngine` 不再读取扁平 controls 或拼装各 Provider 字段。Builder 内部使用 Provider 参数注册表，共用音频、录音、端口和目标语言参数只生成一次。
 
-完整 V2 会依次显式迁移到 V3、V4、V5、V6、V7、V8、V9；V7 把旧 `engine.common.translation` 和目标语言迁移到独立翻译层，V8 增加腾讯 Provider 默认配置，V9 增加空的腾讯 AppID、SecretID、SecretKey。无版本和其他不支持的版本仍被拒绝并使用默认 V9。完整字段、范围和凭据限制见 [`config-v9.md`](../api-docs/config-v9.md)。
+完整 V2 会依次显式迁移到 V3、V4、V5、V6、V7、V8、V9、V10；V7 把旧 `engine.common.translation` 和目标语言迁移到独立翻译层，V8 增加腾讯 Provider 默认配置，V9 增加空的腾讯 AppID、SecretID、SecretKey，V10 增加两组腾讯识别配置。无版本和其他不支持的版本仍被拒绝并使用默认 V10。完整字段、范围和凭据限制见 [`config-v10.md`](../api-docs/config-v10.md)。
 
 ## Renderer 字幕文本轨道
 
@@ -288,7 +295,7 @@ Provider 的启动前要求同样由目录字段校验提供，`EngineStatus.vue
 - Vosk、SOSV、GLM 和 Fun-ASR 的 final 使用统一客户端翻译；Gummy 和 Tencent Speech Translate 使用服务端翻译。
 - `-d 1` 现在按参数声明正确启用终端字幕显示；迁移前入口把整数错误地与字符串比较，导致该参数不生效。
 - 直接导入旧 `audio2text.*Recognizer` 的未文档化内部路径不再支持。应用公开扩展点仍是命令行和进程协议。
-- Electron 内部配置 IPC 使用 V9 application/engine/caption 分层对象；该 IPC 不作为第三方公开扩展点。
+- Electron 内部配置 IPC 使用 V10 application/engine/caption 分层对象；该 IPC 不作为第三方公开扩展点。
 
 ## 新 Provider 接入顺序
 
@@ -299,4 +306,4 @@ Provider 的启动前要求同样由目录字段校验提供，`EngineStatus.vue
 5. 验证外部 command 协议和错误脱敏。
 6. 对需要网络的 Provider 增加有界重试、停止冲刷和显式启用的在线测试。
 
-Fun-ASR 与两级热词、Tencent Speech Translate 基础链路已按上述顺序完成离线可验证纵向接入；真实账号、地域、设备、计费和远端 CRUD 链路仍需在有凭据时由用户显式执行在线验收。腾讯热词当前只有请求级编码和 V9 空配置边界，启用前必须增加能力校验、UI 和真实接口验收。后续 Provider 的热词能力应继续复用独立服务边界，不能通过复制识别循环、在 `main.py` 增加 Provider 条件分支或向通用表单塞入临时资源状态接入。
+Fun-ASR 与两级热词、三个 Tencent Speech Provider 已按上述顺序完成离线可验证纵向接入；真实账号、地域、设备、计费和远端 CRUD 链路仍需在有凭据时由用户显式执行在线验收。腾讯热词当前只有请求级编码和 V10 空配置边界，启用前必须增加能力校验、UI 和真实接口验收。后续 Provider 的热词能力应继续复用独立服务边界，不能通过复制识别循环、在 `main.py` 增加 Provider 条件分支或向通用表单塞入临时资源状态接入。

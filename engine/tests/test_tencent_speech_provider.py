@@ -95,6 +95,10 @@ class TencentSpeechProviderTests(unittest.TestCase):
             'code': 0,
             'result': {'source_text': 'premature'},
         }))
+        self.assertFalse(_is_handshake_confirmation({
+            'code': 0,
+            'sentences': {'sentence_list': []},
+        }))
 
     def test_maps_partial_final_translation_and_server_timestamps(self):
         clients = []

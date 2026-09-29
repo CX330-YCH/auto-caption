@@ -114,6 +114,23 @@ class ProtocolEventSinkTests(unittest.TestCase):
 
         self.assertEqual(objects[0]['translation'], '你好')
 
+    def test_preserves_optional_speaker_id_on_caption(self):
+        objects = []
+        sink = ProtocolEventSink(
+            command_writer=lambda command, content: None,
+            object_writer=objects.append,
+        )
+
+        sink.publish(CaptionFinal(
+            5,
+            'start',
+            'end',
+            'speaker text',
+            speaker_id=2,
+        ))
+
+        self.assertEqual(objects[0]['speaker_id'], 2)
+
     def test_maps_translation_result_to_the_existing_protocol(self):
         objects = []
         sink = ProtocolEventSink(

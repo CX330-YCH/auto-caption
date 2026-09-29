@@ -12,6 +12,7 @@ export interface CaptionEngineMessage extends EngineMessage {
   time_t: string
   text: string
   translation: string
+  speaker_id?: number
 }
 
 export interface TranslationEngineMessage extends EngineMessage {
@@ -56,7 +57,12 @@ export function isCaptionEngineMessage(
     typeof value.time_s === 'string' &&
     typeof value.time_t === 'string' &&
     typeof value.text === 'string' &&
-    typeof value.translation === 'string'
+    typeof value.translation === 'string' &&
+    (value.speaker_id === undefined || (
+      typeof value.speaker_id === 'number' &&
+      Number.isInteger(value.speaker_id) &&
+      value.speaker_id >= 0 && value.speaker_id <= 9
+    ))
 }
 
 export function isTranslationEngineMessage(

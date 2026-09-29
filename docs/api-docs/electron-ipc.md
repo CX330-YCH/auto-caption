@@ -31,7 +31,7 @@
 - 发送：无数据
 - 接收：`FullConfig`
 
-`FullConfig.config` 是完整 `ConfigDocumentV9`，`FullConfig.engineEnabled` 是不持久化的运行状态。配置结构见 [配置文件 V9](config-v9.md)。腾讯 AppID、SecretID、SecretKey 随完整配置进入控制窗口 Renderer；字幕窗口不会接收完整引擎配置。
+`FullConfig.config` 是完整 `ConfigDocumentV10`，`FullConfig.engineEnabled` 是不持久化的运行状态。配置结构见 [配置文件 V10](config-v10.md)。腾讯 AppID、SecretID、SecretKey 随完整配置进入控制窗口 Renderer；字幕窗口不会接收完整引擎配置。
 
 ### `control.nativeTheme.get`
 
