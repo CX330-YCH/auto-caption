@@ -195,8 +195,30 @@ export default {
         "vad": "VAD silence segmentation",
         "semantic": "Semantic segmentation"
       },
+      tencentRecognitionModelGroups: {
+        "large20": "Large Model 2.0",
+        "large10": "Large Model 1.0",
+        "telephony": "Telephony (8 kHz)",
+        "chinese": "Chinese and Dialects",
+        "industry": "Domain Models",
+        "monolingual": "General Monolingual"
+      },
       tencentRecognitionModels: {
-        "model": "Tencent Cloud recognition model"
+        "model": "Tencent Cloud recognition model",
+        "hyAsr30Preview": "Chinese, English, and 20 dialects",
+        "chineseTelephoneLarge": "Chinese telephony large model",
+        "chineseEnglishLarge": "Chinese-English and dialect large model",
+        "multilingualLarge": "Automatic multilingual large model",
+        "englishLarge": "English large model",
+        "chineseTelephone": "General Chinese telephony",
+        "englishTelephone": "General English telephony",
+        "chineseGeneral": "General Chinese",
+        "traditionalChinese": "Traditional Chinese",
+        "chineseEducation": "Chinese education",
+        "chineseMedical": "Chinese medical",
+        "chineseCourt": "Chinese court",
+        "englishGame": "English gaming",
+        "englishEducation": "English education"
       }
     },
     tencentSpeech: {
@@ -205,6 +227,7 @@ export default {
       "maxSpeakTimeInfo": "Forces a sentence boundary after this much continuous speech. Available only for Chinese, English, and mixed Chinese-English sources. Range: 5000-90000 ms.",
       "recognitionModelInfo": "The model defines sample rate, language, and domain support. This app automatically resamples mono PCM for 8 kHz or 16 kHz models. Hy-ASR-3.0-preview is limited to 60 seconds per stream.",
       "recognitionV2ModelInfo": "V2 supports only the bilingual Chinese-English 2.0 models. The speaker model also returns speaker IDs.",
+      "modelDefinedSourceLanguage": "This recognition API does not accept a separate source language. The selected model determines recognition languages; choose a model that supports the language you need.",
       "recognitionVadInfo": "Ends the current sentence after this much silence. Parameter availability varies by model; consult Tencent Cloud documentation.",
       "recognitionMaxSpeakInfo": "Forces a sentence boundary after continuous speech. Unsupported models may ignore this parameter.",
       "sentenceStrategyInfo": "VAD favors lower latency; semantic segmentation favors sentence completeness."

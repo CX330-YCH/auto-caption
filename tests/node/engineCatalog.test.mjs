@@ -3,6 +3,7 @@ import test from 'node:test'
 import { reactive } from 'vue'
 
 import { createDefaultConfig } from '../../src/shared/config/schema.ts'
+import { TENCENT_RECOGNITION_MODELS } from '../../src/shared/tencentSpeech.ts'
 import {
   applyEngineLanguageDefaults,
   engineDefinitions,
@@ -173,6 +174,59 @@ test('chooses provider-supported language defaults from the UI language', () => 
   assert.equal(config.translation.common.targetLanguage, 'en')
 })
 
+test('groups classic Tencent models and explains model-defined source languages', () => {
+  const tencentProviders = [
+    'tencent_speech_recognition',
+    'tencent_speech_recognition_v2'
+  ]
+
+  for (const provider of tencentProviders) {
+    const sourceField = getEngineFields(provider)
+      .find((field) => field.id === 'source-language')
+    assert.equal(sourceField.disabled, true)
+    assert.equal(
+      sourceField.descriptionKey,
+      'engine.tencentSpeech.modelDefinedSourceLanguage'
+    )
+    assert.deepEqual(sourceField.options, [{
+      value: 'auto',
+      labelKey: 'engine.options.languages.modelDefined'
+    }])
+  }
+
+  assert.equal(
+    getEngineFields('tencent_speech_translate')
+      .find((field) => field.id === 'source-language').descriptionKey,
+    undefined
+  )
+  assert.equal(
+    getEngineFields('vosk')
+      .find((field) => field.id === 'source-language').descriptionKey,
+    undefined
+  )
+
+  const modelField = getEngineFields('tencent_speech_recognition')
+    .find((field) => field.id === 'tencent-recognition-model')
+  assert.equal(modelField.searchable, true)
+  assert.deepEqual(
+    modelField.options.map((option) => option.value),
+    [...TENCENT_RECOGNITION_MODELS]
+  )
+  assert.ok(modelField.options.every((option) => option.groupKey))
+  assert.ok(modelField.options.every((option) => option.labelSuffix === option.value))
+  assert.deepEqual(
+    [...new Set(modelField.options.map((option) => option.groupKey))],
+    [
+      'engine.options.tencentRecognitionModelGroups.large20',
+      'engine.options.tencentRecognitionModelGroups.large10',
+      'engine.options.tencentRecognitionModelGroups.telephony',
+      'engine.options.tencentRecognitionModelGroups.chinese',
+      'engine.options.tencentRecognitionModelGroups.industry',
+      'engine.options.tencentRecognitionModelGroups.monolingual'
+    ]
+  )
+})
+
 test('describes Fun-ASR connection and segmentation fields through capabilities', () => {
   const fields = getEngineFields('fun_asr')
   const definition = getEngineDefinition('fun_asr')
@@ -267,9 +321,13 @@ test('resolves every catalog label and help key in all supported UI languages', 
     for (const language of definition.languages) messageKeys.add(language.labelKey)
     for (const field of getEngineFields(definition.id)) {
       messageKeys.add(field.labelKey)
+      if (field.descriptionKey) messageKeys.add(field.descriptionKey)
       if (field.helpKey) messageKeys.add(field.helpKey)
       if (field.helpLinkLabelKey) messageKeys.add(field.helpLinkLabelKey)
-      for (const option of field.options ?? []) messageKeys.add(option.labelKey)
+      for (const option of field.options ?? []) {
+        messageKeys.add(option.labelKey)
+        if (option.groupKey) messageKeys.add(option.groupKey)
+      }
     }
   }
   for (const definition of translationDefinitions) {
@@ -280,6 +338,7 @@ test('resolves every catalog label and help key in all supported UI languages', 
     for (const language of definition.languages) messageKeys.add(language.labelKey)
     for (const field of definition.providerFields) {
       messageKeys.add(field.labelKey)
+      if (field.descriptionKey) messageKeys.add(field.descriptionKey)
       if (field.helpKey) messageKeys.add(field.helpKey)
     }
   }

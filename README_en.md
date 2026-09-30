@@ -3,7 +3,7 @@
     <h1 align="center">auto-caption</h1>
     <p>Auto Caption is a cross-platform real-time caption display software.</p>
     <p>
-      <a href="https://github.com/HiMeditator/auto-caption/releases"><img src="https://img.shields.io/badge/release-2.36.0-blue"></a>
+      <a href="https://github.com/HiMeditator/auto-caption/releases"><img src="https://img.shields.io/badge/release-2.37.0-blue"></a>
       <a href="https://github.com/HiMeditator/auto-caption/issues"><img src="https://img.shields.io/github/issues/HiMeditator/auto-caption?color=orange"></a>
       <img src="https://img.shields.io/github/languages/top/HiMeditator/auto-caption?color=royalblue">
       <img src="https://img.shields.io/github/repo-size/HiMeditator/auto-caption?color=green">
@@ -14,7 +14,7 @@
         | <b>English</b>
         | <a href="./README_ja.md">日本語</a> |
     </p>
-    <p><i>v2.36.0 has been released with a macOS arm64 build...</i></p>
+    <p><i>v2.37.0 has been released with a macOS arm64 build...</i></p>
 </div>
 
 ![](./assets/media/main_en.png)
@@ -53,7 +53,7 @@ https://github.com/user-attachments/assets/9c188d78-9520-4397-bacf-4c8fdcc54874
 
 ## 📖 Basic Usage
 
-> ⚠️ Note: v2.36.0 currently provides Windows and macOS arm64 builds; Linux still needs verification from source or the existing build pipeline.
+> ⚠️ Note: v2.37.0 currently provides Windows and macOS arm64 builds; Linux still needs verification from source or the existing build pipeline.
 
 The software has been adapted for Windows, macOS, and Linux platforms. The tested platform information is as follows:
 
@@ -138,7 +138,7 @@ Audio is converted to 16 kHz mono PCM16 and sent in approximately 200 ms packets
 
 ### Using Tencent Realtime Speech Recognition and V2
 
-These are two independent providers that reuse the Tencent Cloud `AppID`, `SecretID`, and `SecretKey` above. Classic recognition exposes the official model list and uses `-tcrmodel`, `-tcrvad`, and `-tcrmax`. The app automatically resamples mono PCM16 for 8/16 kHz models; `Hy-ASR-3.0-preview` is limited to 60 seconds per connection. V2 uses `-tcv2model`, `-tcv2vad`, and `-tcv2sentence`, and supports only `16k_zh_en_2.0` and `16k_zh_en_speaker_2.0`; the latter preserves server speaker IDs. Neither provider includes translation, so each final caption enters the shared Google/Ollama translation service once. No paid online Tencent account test was run, and automatic reconnect is not implemented.
+These are two independent providers that reuse the Tencent Cloud `AppID`, `SecretID`, and `SecretKey` above. Classic recognition exposes the official model list in searchable groups for large-model versions, telephony, Chinese/dialects, domains, and general monolingual models. It uses `-tcrmodel`, `-tcrvad`, and `-tcrmax`. The app automatically resamples mono PCM16 for 8/16 kHz models; `Hy-ASR-3.0-preview` is limited to 60 seconds per connection. V2 uses `-tcv2model`, `-tcv2vad`, and `-tcv2sentence`, and supports only `16k_zh_en_2.0` and `16k_zh_en_speaker_2.0`; the latter preserves server speaker IDs. Neither recognition API accepts a separate source language, so the settings UI explains that the selected model determines language support. Neither provider includes translation, so each final caption enters the shared Google/Ollama translation service once. No paid online Tencent account test was run, and automatic reconnect is not implemented.
 
 ### Using Vosk Model
 

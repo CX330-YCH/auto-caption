@@ -6849,3 +6849,107 @@
 
 - 根目录 `AGENTS.md`：版本同步、三语文档、配置迁移、协议测试、构建验证、依赖授权、脏工作区保护和 `change.md` 追加要求。
 - Apple `codesign`、`hdiutil`、`ditto` 本机工具输出，以及 Python 3.14.7、PyInstaller 6.22.3、electron-builder 26.15.3 构建日志。
+
+## 2026-09-30 - 腾讯实时识别模型分类与源语言提示
+
+### 用户授权与变更目标
+
+- 用户明确要求执行两项修改：将腾讯“实时语音识别”的模型选择改为带分类的界面，并为“实时语音识别”和“实时语音识别 V2”的源语言增加模型决定语言的提示。
+- 变更类型：功能、文档、测试。
+- 授权范围仅限渲染进程的通用表单元数据、腾讯识别 Provider 展示、中英日文案及相关测试和文档；未修改 Python Provider、云端请求或凭据处理。
+
+### 修改文件与原因
+
+- `src/renderer/src/engines/types.ts`：为通用字段选项增加分组和显示后缀元数据，为字段增加常驻描述与搜索能力，并允许 Provider 声明源语言说明。
+- `src/renderer/src/components/engine/EngineFieldRenderer.vue`：把平面元数据转换为 Ant Design Vue 单层分组选项，支持按本地化名称和原始模型 ID 搜索，并使用现有 `SettingsField` 描述区域显示提示。
+- `src/renderer/src/engines/catalog.ts`：将 Provider 的源语言说明元数据注入通用“源语言”字段，避免在 `EngineControl.vue` 增加腾讯专属条件分支。
+- `src/renderer/src/engines/providers/tencent_speech_recognition.ts`：为经典腾讯识别模型建立穷尽分类和可读名称映射；只对腾讯实时识别与 V2 声明源语言提示，并将禁用下拉的展示从“自动”改为“由识别模型决定”。
+- `src/renderer/src/i18n/lang/zh.ts`、`en.ts`、`ja.ts`：补齐六个模型分类、模型可读名称和源语言说明的中英日文本。
+- `tests/node/engineCatalog.test.mjs`：验证经典模型没有增删或重复、六个分类顺序稳定、模型 ID 保留、搜索开启、提示只应用于两个腾讯识别 Provider，并扩展三语元数据键完整性检查。
+- `README.md`、`README_en.md`、`README_ja.md`：同步说明模型分类、搜索和模型决定源语言的行为。
+- `docs/user-manual/zh.md`、`en.md`、`ja.md`：同步设置页的实际展示、分类和源语言参数限制。
+- `change.md`：追加本批次授权、文件、行为、验证、兼容性和风险记录。
+
+### 修改前后行为
+
+- 修改前：经典实时识别的 29 个模型以原始 ID 平铺显示，无法按用途分组或搜索；两个腾讯识别方法的源语言控件禁用但显示“自动”，没有解释接口实际由模型决定语言。
+- 修改后：经典模型按“大模型 2.0、大模型 1.0、电话场景 8 kHz、中文及方言、行业模型、通用单语”分组；每项显示本地化名称和原始模型 ID，并支持搜索。两个腾讯识别方法的源语言显示“由识别模型决定”，下方常驻提示说明应选择具有所需语言能力的模型。
+- 腾讯实时语音翻译、Vosk 及其他 Provider 不显示本批次新增的腾讯提示；V2 只有两个模型，因此保持原有平面模型列表。
+
+### 配置、协议、依赖与兼容性
+
+- 无配置 schema、默认值、迁移函数、持久化字段、Electron IPC、Python CLI、stdout/TCP 协议、子进程生命周期或字幕数据结构变化。
+- 每个模型保存和传递的值仍是原始 `engine_model_type` ID；已有 `schemaVersion: 10` 配置无需迁移，旧选择继续有效。
+- 未新增、删除、安装或升级依赖；沿用 Ant Design Vue 4.2.6 已支持的分组选项结构。
+- 通用字段新增属性均为可选，未声明的 Provider 保持原行为。回滚时成组恢复本批次代码、三语文本、测试及文档；`change.md` 历史只能通过追加更正记录处理。
+
+### 实际执行的验证
+
+- `npm run typecheck`：通过，Node TypeScript 与 Vue TypeScript 检查均无错误。
+- `npm run test:node`：通过，Node `121/121`；新增腾讯模型分类和源语言提示测试通过。命令仍输出项目既有 npm 配置及 `MODULE_TYPELESS_PACKAGE_JSON` 警告，不影响结果。
+- `npm run lint`：通过。
+- `npm run build`：通过；Electron main、preload、renderer 分别完成 37、1、3298 个模块构建。
+- `npm run verify`：通过；包含类型检查、ESLint、Node `121/121` 和 Python `102/102`。
+- `git diff --check`：通过。
+
+### 未执行验证、已知风险与后续事项
+
+- 未启动 Electron GUI 做鼠标选择、搜索和窄窗口人工回归；分组选项由类型检查、生产构建和元数据测试覆盖，但最终视觉密度仍需实际界面确认。
+- 未执行 Windows、Linux 或 Intel macOS 实机测试；本次仅改变跨平台 Vue 渲染逻辑，没有平台专属代码。
+- 未调用真实腾讯云账号、麦克风、付费 API，也未进行安装包构建，因为云端请求、音频和打包链路均未修改。
+- V2 只有两个模型，当前不增加无实际收益的单项分类；后续模型数量增加时可复用同一分组元数据。
+
+### 关键外部文档与技术决策来源
+
+- 腾讯云实时语音识别（WebSocket）：`https://cloud.tencent.com/document/product/1093/48982`，用于确认大模型 2.0、大模型 1.0、通用/电话/行业模型及 `engine_model_type` 语义。
+- 腾讯云实时语音识别 V2（WebSocket）：`https://cloud.tencent.com/document/product/1093/131127`，用于确认 V2 由模型决定语言能力及说话人模型差异。
+- Ant Design Vue 4.2.6 项目现有 `Select` 依赖和 `SettingsField` 描述插槽，作为不新增专用组件的通用渲染基础。
+
+## 2026-09-30 - macOS arm64 2.37.0 构建与小版本更新
+
+### 用户授权与目标
+
+- 用户明确要求“编译一下 Mac 版本并更新小版本号”；本批次将版本从 `2.36.0` 更新为 `2.37.0`，并生成 macOS arm64 安装产物。
+- 变更类型：版本、文档、构建。工作区已有腾讯识别模型分类、搜索和源语言提示修改及其测试、三语文档均予以保留并纳入本次构建。
+- 未安装或升级依赖，未修改系统环境，未提交、推送或发布 Git 内容。
+
+### 修改文件与原因
+
+- `package.json`、`package-lock.json`：版本更新为 `2.37.0`。
+- `src/renderer/index.html`、`src/renderer/src/components/EngineStatus.vue`：同步窗口标题和关于页版本。
+- `README.md`、`README_en.md`、`README_ja.md`：同步三语项目版本说明。
+- `docs/user-manual/{zh,en,ja}.md`、`docs/engine-manual/{zh,en,ja}.md`：同步三语手册版本。
+- `docs/CHANGELOG.md`：追加 `v2.37.0`，记录腾讯识别模型选择体验优化和本次 macOS 构建。
+- `dist/latest-mac.yml`：签名后的 ZIP/DMG 重建后同步最终 SHA-512 和大小；该文件位于忽略的构建产物目录。
+- `change.md`：追加本批次授权、构建、验证和风险记录。
+
+### 修改前后行为
+
+- 修改前：发布版本为 `2.36.0`，已有安装包不包含当前工作区的腾讯模型分类、搜索及源语言说明界面。
+- 修改后：应用、Electron bundle 及三语文档版本为 `2.37.0`；macOS arm64 安装包包含上述渲染进程改进，并继续携带已验证的 Python 3.14 arm64 引擎。
+
+### 配置、协议、依赖与兼容性
+
+- 本次版本批次及纳入的界面优化没有配置 schema、迁移、默认值、Electron IPC、Python CLI、stdout/TCP 协议或字幕数据结构变化。
+- 未新增、安装或升级依赖；沿用现有锁文件、Python 3.14.7/PyInstaller 6.22.3 引擎和 electron-builder 26.15.3。
+- 仅验证 macOS arm64；未据此声明 Windows、Linux 或 Intel macOS 已验证。回滚时成组恢复版本文件、三语文档和 `docs/CHANGELOG.md` 的 2.37.0 段落；界面功能按其独立记录回滚，`change.md` 只能追加更正。
+
+### 实际验证与构建结果
+
+- `npm run verify`：通过；TypeScript/Vue typecheck、ESLint、Node `121/121`、Python `102/102` 全部通过。
+- `file engine/dist/main`：确认既有最新 Python 引擎为 arm64 Mach-O；本次没有 Python 源码变化，因此未重复执行 PyInstaller。
+- `npm run build:mac`：Apple Speech helper、Electron main/preload/renderer 构建通过；renderer 转换 3298 个模块，electron-builder 生成 arm64 APP、ZIP、DMG 和 blockmap。
+- electron-builder 检测到的本机证书不受信任，未执行 Developer ID 正式签名；随后对最终 APP 执行 `codesign --force --deep --sign -`，使用签名后的 APP 重建 ZIP 和 DMG。
+- 最终 `codesign --verify --deep --strict --verbose=2`、ZIP `unzip -tq`、DMG `hdiutil verify` 和 `latest-mac.yml` SHA-512/大小核对均通过。
+- `dist/Auto Caption-2.37.0-arm64-mac.zip`：228,591,389 bytes；SHA-256 `7d8653cddf677e51c03cdc1183c5a6fba7013dbd8cb4c6b661487b258b12c628`。
+- `dist/auto-caption-2.37.0.dmg`：248,671,184 bytes；SHA-256 `46ada622a532cc427683860d1562dc05648f12624b3e591ed37f84750de45224`。
+
+### 未执行验证、风险与后续事项
+
+- 未执行 Developer ID 正式签名、Apple 公证、Gatekeeper 外部下载验证、Electron GUI 人工回归、真实麦克风/系统音频或腾讯付费账号在线测试。
+- 未执行 Windows、Linux 或 Intel macOS 构建。最终 APP 为 ad-hoc 签名，未公证；分组模型下拉的最终视觉密度仍需实机 GUI 人工确认。
+
+### 关键技术决策来源
+
+- 根目录 `AGENTS.md`：版本同步、三语文档、构建验证、依赖授权、脏工作区保护和 `change.md` 追加要求。
+- Apple `codesign`、`hdiutil`、`ditto` 本机工具输出，以及 electron-builder 26.15.3 构建日志。

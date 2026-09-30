@@ -3,7 +3,7 @@
     <h1 align="center">auto-caption</h1>
     <p>Auto Caption 是一个跨平台的实时字幕显示软件。</p>
     <p>
-      <a href="https://github.com/HiMeditator/auto-caption/releases"><img src="https://img.shields.io/badge/release-2.36.0-blue"></a>
+      <a href="https://github.com/HiMeditator/auto-caption/releases"><img src="https://img.shields.io/badge/release-2.37.0-blue"></a>
       <a href="https://github.com/HiMeditator/auto-caption/issues"><img src="https://img.shields.io/github/issues/HiMeditator/auto-caption?color=orange"></a>
       <img src="https://img.shields.io/github/languages/top/HiMeditator/auto-caption?color=royalblue">
       <img src="https://img.shields.io/github/repo-size/HiMeditator/auto-caption?color=green">
@@ -14,7 +14,7 @@
         | <a href="./README_en.md">English</a>
         | <a href="./README_ja.md">日本語</a> |
     </p>
-    <p><i>v2.36.0 版本已经发布，包含 macOS arm64 构建...</i></p>
+    <p><i>v2.37.0 版本已经发布，包含 macOS arm64 构建...</i></p>
 </div>
 
 ![](./assets/media/main_zh.png)
@@ -53,7 +53,7 @@ https://github.com/user-attachments/assets/9c188d78-9520-4397-bacf-4c8fdcc54874
 
 ## 📖 基本使用
 
-> ⚠️ 注意：当前 v2.36.0 已提供 Windows 和 macOS arm64 构建；Linux 仍需从源码或现有构建链路验证。
+> ⚠️ 注意：当前 v2.37.0 已提供 Windows 和 macOS arm64 构建；Linux 仍需从源码或现有构建链路验证。
 
 软件已经适配了 Windows、macOS 和 Linux 平台。测试过的主流平台信息如下：
 
@@ -138,7 +138,7 @@ API KEY 获取相关链接：[快速开始](https://docs.bigmodel.cn/cn/guide/st
 
 ### 使用腾讯实时语音识别与 V2
 
-设置页中的两个选项是独立 Provider，并复用上面的腾讯云 `AppID`、`SecretID`、`SecretKey`。经典“实时语音识别”支持官方模型列表，通过 `-tcrmodel`、`-tcrvad`、`-tcrmax` 配置；应用会按 8/16 kHz 模型自动重采样单声道 PCM16，`Hy-ASR-3.0-preview` 受单连接 60 秒限制。V2 通过 `-tcv2model`、`-tcv2vad`、`-tcv2sentence` 配置，只支持 `16k_zh_en_2.0` 和 `16k_zh_en_speaker_2.0`；后者会保留服务端的说话人编号。两者不自带翻译，只有 final 字幕会进入统一 Google/Ollama 翻译一次。当前未使用真实腾讯账号做付费在线验证，也不自动重连。
+设置页中的两个选项是独立 Provider，并复用上面的腾讯云 `AppID`、`SecretID`、`SecretKey`。经典“实时语音识别”支持官方模型列表；模型选择器按大模型版本、电话、中文/方言、行业和通用单语分类，可按可读名称或原始模型 ID 搜索。它通过 `-tcrmodel`、`-tcrvad`、`-tcrmax` 配置；应用会按 8/16 kHz 模型自动重采样单声道 PCM16，`Hy-ASR-3.0-preview` 受单连接 60 秒限制。V2 通过 `-tcv2model`、`-tcv2vad`、`-tcv2sentence` 配置，只支持 `16k_zh_en_2.0` 和 `16k_zh_en_speaker_2.0`；后者会保留服务端的说话人编号。这两个识别接口不单独接收源语言，设置页会提示识别语言由所选模型决定。两者不自带翻译，只有 final 字幕会进入统一 Google/Ollama 翻译一次。当前未使用真实腾讯账号做付费在线验证，也不自动重连。
 
 ### 使用 Fun-ASR Realtime 模型
 

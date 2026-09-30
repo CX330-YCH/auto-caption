@@ -195,8 +195,30 @@ export default {
         "vad": "VAD 静音断句",
         "semantic": "语义断句"
       },
+      tencentRecognitionModelGroups: {
+        "large20": "大模型 2.0",
+        "large10": "大模型 1.0",
+        "telephony": "电话场景（8 kHz）",
+        "chinese": "中文及方言",
+        "industry": "行业模型",
+        "monolingual": "通用单语"
+      },
       tencentRecognitionModels: {
-        "model": "腾讯云识别模型"
+        "model": "腾讯云识别模型",
+        "hyAsr30Preview": "中英及 20 种方言",
+        "chineseTelephoneLarge": "中文电话大模型",
+        "chineseEnglishLarge": "中英及多方言大模型",
+        "multilingualLarge": "多语种自动识别大模型",
+        "englishLarge": "英文大模型",
+        "chineseTelephone": "中文电话通用",
+        "englishTelephone": "英文电话通用",
+        "chineseGeneral": "中文通用",
+        "traditionalChinese": "繁体中文",
+        "chineseEducation": "中文教育",
+        "chineseMedical": "中文医疗",
+        "chineseCourt": "中文法庭",
+        "englishGame": "英文游戏",
+        "englishEducation": "英文教育"
       }
     },
     tencentSpeech: {
@@ -205,6 +227,7 @@ export default {
       "maxSpeakTimeInfo": "连续说话达到该时长后强制结束当前句，仅对中文、英语和中英混合源语言生效。范围 5000-90000 毫秒。",
       "recognitionModelInfo": "模型决定采样率、语言和领域能力；本应用会按 8 kHz/16 kHz 模型自动重采样单声道 PCM。Hy-ASR-3.0-preview 单次最长 60 秒。",
       "recognitionV2ModelInfo": "V2 仅支持中英双语 2.0 模型；speaker 模型会输出说话人编号。",
+      "modelDefinedSourceLanguage": "当前识别接口不单独接收源语言，识别语言由所选模型决定。请在“识别模型”中选择支持所需语言的模型。",
       "recognitionVadInfo": "静音达到该时长后结束当前句。不同模型的参数支持范围以腾讯云文档为准。",
       "recognitionMaxSpeakInfo": "连续说话达到该时长后强制断句。部分模型不支持该参数，服务端可能忽略。",
       "sentenceStrategyInfo": "VAD 优先低延迟；语义断句优先句子完整性。"

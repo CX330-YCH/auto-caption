@@ -21,6 +21,9 @@
       </a-popover>
       <span v-else>{{ $t(field.labelKey) }}</span>
     </template>
+    <template v-if="field.descriptionKey" #description>
+      {{ $t(field.descriptionKey) }}
+    </template>
 
     <div v-if="field.control === 'directory'" class="input-with-addon">
       <span class="input-folder" :style="{ color: accentColor }" @click="$emit('browse')"
@@ -39,6 +42,8 @@
       :value="modelValue"
       :disabled="field.disabled"
       :options="localizedOptions"
+      :show-search="field.searchable"
+      option-filter-prop="label"
       @update:value="$emit('update:modelValue', $event)"
     />
     <a-input
@@ -91,15 +96,49 @@ defineEmits<{
 }>()
 
 const { t } = useI18n()
-const localizedOptions = computed(
-  () =>
-    props.field.options?.map((option) => ({
+interface LocalizedOption {
+  value: string | number
+  label: string
+  disabled?: boolean
+  title?: string
+}
+
+interface LocalizedOptionGroup {
+  label: string
+  options: LocalizedOption[]
+}
+
+const localizedOptions = computed(() => {
+  const result: Array<LocalizedOption | LocalizedOptionGroup> = []
+  const groups = new Map<string, LocalizedOptionGroup>()
+
+  for (const option of props.field.options ?? []) {
+    const translatedLabel = option.label ?? t(option.labelKey)
+    const localizedOption: LocalizedOption = {
       value: option.value,
-      label: option.label ?? t(option.labelKey),
+      label: option.labelSuffix
+        ? `${translatedLabel} (${option.labelSuffix})`
+        : translatedLabel,
       disabled: option.disabled,
       title: option.disabledReasonKey ? t(option.disabledReasonKey) : undefined
-    })) ?? []
-)
+    }
+
+    if (!option.groupKey) {
+      result.push(localizedOption)
+      continue
+    }
+
+    let group = groups.get(option.groupKey)
+    if (!group) {
+      group = { label: t(option.groupKey), options: [] }
+      groups.set(option.groupKey, group)
+      result.push(group)
+    }
+    group.options.push(localizedOption)
+  }
+
+  return result
+})
 </script>
 
 <style scoped>

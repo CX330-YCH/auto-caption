@@ -1,6 +1,7 @@
 import {
   TENCENT_RECOGNITION_MODELS,
-  TENCENT_RECOGNITION_V2_MODELS
+  TENCENT_RECOGNITION_V2_MODELS,
+  type TencentRecognitionModel
 } from '../../../../shared/tencentSpeech.ts'
 import type {
   EngineDefinition,
@@ -45,6 +46,141 @@ const credentialFields: readonly EngineFieldDescriptor[] = [
   }
 ]
 
+interface ModelPresentation {
+  groupKey: string
+  labelKey: string
+}
+
+const classicModelPresentation = {
+  'Hy-ASR-3.0-preview': {
+    groupKey: 'engine.options.tencentRecognitionModelGroups.large20',
+    labelKey: 'engine.options.tencentRecognitionModels.hyAsr30Preview'
+  },
+  '8k_zh_large': {
+    groupKey: 'engine.options.tencentRecognitionModelGroups.large10',
+    labelKey: 'engine.options.tencentRecognitionModels.chineseTelephoneLarge'
+  },
+  '16k_zh_en': {
+    groupKey: 'engine.options.tencentRecognitionModelGroups.large10',
+    labelKey: 'engine.options.tencentRecognitionModels.chineseEnglishLarge'
+  },
+  '16k_multi_lang': {
+    groupKey: 'engine.options.tencentRecognitionModelGroups.large10',
+    labelKey: 'engine.options.tencentRecognitionModels.multilingualLarge'
+  },
+  '16k_en_large': {
+    groupKey: 'engine.options.tencentRecognitionModelGroups.large10',
+    labelKey: 'engine.options.tencentRecognitionModels.englishLarge'
+  },
+  '8k_zh': {
+    groupKey: 'engine.options.tencentRecognitionModelGroups.telephony',
+    labelKey: 'engine.options.tencentRecognitionModels.chineseTelephone'
+  },
+  '8k_en': {
+    groupKey: 'engine.options.tencentRecognitionModelGroups.telephony',
+    labelKey: 'engine.options.tencentRecognitionModels.englishTelephone'
+  },
+  '16k_zh': {
+    groupKey: 'engine.options.tencentRecognitionModelGroups.chinese',
+    labelKey: 'engine.options.tencentRecognitionModels.chineseGeneral'
+  },
+  '16k_zh-TW': {
+    groupKey: 'engine.options.tencentRecognitionModelGroups.chinese',
+    labelKey: 'engine.options.tencentRecognitionModels.traditionalChinese'
+  },
+  '16k_yue': {
+    groupKey: 'engine.options.tencentRecognitionModelGroups.chinese',
+    labelKey: 'engine.options.languages.yue'
+  },
+  '16k_zh_edu': {
+    groupKey: 'engine.options.tencentRecognitionModelGroups.industry',
+    labelKey: 'engine.options.tencentRecognitionModels.chineseEducation'
+  },
+  '16k_zh_medical': {
+    groupKey: 'engine.options.tencentRecognitionModelGroups.industry',
+    labelKey: 'engine.options.tencentRecognitionModels.chineseMedical'
+  },
+  '16k_zh_court': {
+    groupKey: 'engine.options.tencentRecognitionModelGroups.industry',
+    labelKey: 'engine.options.tencentRecognitionModels.chineseCourt'
+  },
+  '16k_en_game': {
+    groupKey: 'engine.options.tencentRecognitionModelGroups.industry',
+    labelKey: 'engine.options.tencentRecognitionModels.englishGame'
+  },
+  '16k_en_edu': {
+    groupKey: 'engine.options.tencentRecognitionModelGroups.industry',
+    labelKey: 'engine.options.tencentRecognitionModels.englishEducation'
+  },
+  '16k_en': {
+    groupKey: 'engine.options.tencentRecognitionModelGroups.monolingual',
+    labelKey: 'engine.options.languages.en'
+  },
+  '16k_ko': {
+    groupKey: 'engine.options.tencentRecognitionModelGroups.monolingual',
+    labelKey: 'engine.options.languages.ko'
+  },
+  '16k_ja': {
+    groupKey: 'engine.options.tencentRecognitionModelGroups.monolingual',
+    labelKey: 'engine.options.languages.ja'
+  },
+  '16k_th': {
+    groupKey: 'engine.options.tencentRecognitionModelGroups.monolingual',
+    labelKey: 'engine.options.languages.th'
+  },
+  '16k_id': {
+    groupKey: 'engine.options.tencentRecognitionModelGroups.monolingual',
+    labelKey: 'engine.options.languages.id'
+  },
+  '16k_vi': {
+    groupKey: 'engine.options.tencentRecognitionModelGroups.monolingual',
+    labelKey: 'engine.options.languages.vi'
+  },
+  '16k_ms': {
+    groupKey: 'engine.options.tencentRecognitionModelGroups.monolingual',
+    labelKey: 'engine.options.languages.ms'
+  },
+  '16k_fil': {
+    groupKey: 'engine.options.tencentRecognitionModelGroups.monolingual',
+    labelKey: 'engine.options.languages.fil'
+  },
+  '16k_pt': {
+    groupKey: 'engine.options.tencentRecognitionModelGroups.monolingual',
+    labelKey: 'engine.options.languages.pt'
+  },
+  '16k_tr': {
+    groupKey: 'engine.options.tencentRecognitionModelGroups.monolingual',
+    labelKey: 'engine.options.languages.tr'
+  },
+  '16k_ar': {
+    groupKey: 'engine.options.tencentRecognitionModelGroups.monolingual',
+    labelKey: 'engine.options.languages.ar'
+  },
+  '16k_es': {
+    groupKey: 'engine.options.tencentRecognitionModelGroups.monolingual',
+    labelKey: 'engine.options.languages.es'
+  },
+  '16k_hi': {
+    groupKey: 'engine.options.tencentRecognitionModelGroups.monolingual',
+    labelKey: 'engine.options.languages.hi'
+  },
+  '16k_fr': {
+    groupKey: 'engine.options.tencentRecognitionModelGroups.monolingual',
+    labelKey: 'engine.options.languages.fr'
+  },
+  '16k_de': {
+    groupKey: 'engine.options.tencentRecognitionModelGroups.monolingual',
+    labelKey: 'engine.options.languages.de'
+  }
+} satisfies Record<TencentRecognitionModel, ModelPresentation>
+
+const classicModelOptions = (): EngineFieldOption[] =>
+  TENCENT_RECOGNITION_MODELS.map((value) => ({
+    value,
+    ...classicModelPresentation[value],
+    labelSuffix: value
+  }))
+
 const modelOptions = (values: readonly string[]): EngineFieldOption[] =>
   values.map((value) => ({
     value,
@@ -67,7 +203,11 @@ export const tencentSpeechRecognitionEngine: EngineDefinition = {
     hotwords: 'unsupported'
   },
   defaultSourceLanguage: 'auto',
-  languages: [language('auto', ['source']), ...targetLanguages],
+  sourceLanguageDescriptionKey: 'engine.tencentSpeech.modelDefinedSourceLanguage',
+  languages: [
+    language('auto', ['source'], 'engine.options.languages.modelDefined'),
+    ...targetLanguages
+  ],
   providerFields: [
     {
       id: 'tencent-recognition-model',
@@ -78,7 +218,8 @@ export const tencentSpeechRecognitionEngine: EngineDefinition = {
       helpKey: 'engine.tencentSpeech.recognitionModelInfo',
       helpLink: 'https://cloud.tencent.com/document/product/1093/48982',
       helpLinkLabelKey: 'engine.fields.openProviderDocs',
-      options: modelOptions(TENCENT_RECOGNITION_MODELS)
+      options: classicModelOptions(),
+      searchable: true
     },
     ...credentialFields,
     {
@@ -118,7 +259,11 @@ export const tencentSpeechRecognitionV2Engine: EngineDefinition = {
     hotwords: 'unsupported'
   },
   defaultSourceLanguage: 'auto',
-  languages: [language('auto', ['source']), ...targetLanguages],
+  sourceLanguageDescriptionKey: 'engine.tencentSpeech.modelDefinedSourceLanguage',
+  languages: [
+    language('auto', ['source'], 'engine.options.languages.modelDefined'),
+    ...targetLanguages
+  ],
   providerFields: [
     {
       id: 'tencent-recognition-v2-model',

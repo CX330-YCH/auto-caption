@@ -195,8 +195,30 @@ export default {
         "vad": "VAD 無音分割",
         "semantic": "意味による文分割"
       },
+      tencentRecognitionModelGroups: {
+        "large20": "大規模モデル 2.0",
+        "large10": "大規模モデル 1.0",
+        "telephony": "電話音声（8 kHz）",
+        "chinese": "中国語・方言",
+        "industry": "業界特化モデル",
+        "monolingual": "汎用単一言語"
+      },
       tencentRecognitionModels: {
-        "model": "Tencent Cloud 音声認識モデル"
+        "model": "Tencent Cloud 音声認識モデル",
+        "hyAsr30Preview": "中国語・英語・20 方言",
+        "chineseTelephoneLarge": "中国語電話向け大規模モデル",
+        "chineseEnglishLarge": "中英・方言大規模モデル",
+        "multilingualLarge": "多言語自動認識大規模モデル",
+        "englishLarge": "英語大規模モデル",
+        "chineseTelephone": "中国語電話向け汎用",
+        "englishTelephone": "英語電話向け汎用",
+        "chineseGeneral": "中国語汎用",
+        "traditionalChinese": "繁体字中国語",
+        "chineseEducation": "中国語教育",
+        "chineseMedical": "中国語医療",
+        "chineseCourt": "中国語法廷",
+        "englishGame": "英語ゲーム",
+        "englishEducation": "英語教育"
       }
     },
     tencentSpeech: {
@@ -205,6 +227,7 @@ export default {
       "maxSpeakTimeInfo": "連続発話が指定時間に達すると強制的に文を終了します。中国語、英語、中国語・英語混在のソースのみ対応し、範囲は 5000～90000 ミリ秒です。",
       "recognitionModelInfo": "モデルによってサンプルレート、言語、分野が決まります。本アプリは 8 kHz/16 kHz モデルに合わせてモノラル PCM を自動リサンプリングします。Hy-ASR-3.0-preview は 1 ストリーム 60 秒までです。",
       "recognitionV2ModelInfo": "V2 は中英バイリンガル 2.0 モデルのみ対応します。speaker モデルは話者 ID も返します。",
+      "modelDefinedSourceLanguage": "この認識 API はソース言語を個別に受け取りません。認識言語は選択したモデルで決まるため、必要な言語に対応する認識モデルを選択してください。",
       "recognitionVadInfo": "この無音時間で現在の文を終了します。対応状況はモデルごとに異なるため Tencent Cloud の資料を確認してください。",
       "recognitionMaxSpeakInfo": "連続発話がこの時間に達すると強制的に文を分割します。未対応モデルでは無視される場合があります。",
       "sentenceStrategyInfo": "VAD は低遅延を、意味分割は文の完全性を優先します。"

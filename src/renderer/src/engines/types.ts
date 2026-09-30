@@ -57,6 +57,8 @@ export interface EngineFieldOption {
   value: string | number
   labelKey: string
   label?: string
+  labelSuffix?: string
+  groupKey?: string
   disabled?: boolean
   disabledReasonKey?: string
 }
@@ -79,10 +81,12 @@ export interface EngineFieldDescriptor {
   control: EngineFieldControl
   section: EngineFieldSection
   labelKey: string
+  descriptionKey?: string
   helpKey?: string
   helpLink?: string
   helpLinkLabelKey?: string
   options?: readonly EngineFieldOption[]
+  searchable?: boolean
   disabled?: boolean
   placeholder?: string
   min?: number
@@ -118,6 +122,7 @@ export interface EngineDefinition {
   languages: readonly EngineLanguage[]
   providerFields: readonly EngineFieldDescriptor[]
   defaultSourceLanguage: string
+  sourceLanguageDescriptionKey?: string
   targetLanguagesBySource?: Readonly<Record<string, readonly string[]>>
   validate?: (
     config: EngineConfig,

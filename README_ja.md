@@ -3,7 +3,7 @@
     <h1 align="center">auto-caption</h1>
     <p>Auto Caption はクロスプラットフォームのリアルタイム字幕表示ソフトウェアです。</p>
     <p>
-      <a href="https://github.com/HiMeditator/auto-caption/releases"><img src="https://img.shields.io/badge/release-2.36.0-blue"></a>
+      <a href="https://github.com/HiMeditator/auto-caption/releases"><img src="https://img.shields.io/badge/release-2.37.0-blue"></a>
       <a href="https://github.com/HiMeditator/auto-caption/issues"><img src="https://img.shields.io/github/issues/HiMeditator/auto-caption?color=orange"></a>
       <img src="https://img.shields.io/github/languages/top/HiMeditator/auto-caption?color=royalblue">
       <img src="https://img.shields.io/github/repo-size/HiMeditator/auto-caption?color=green">
@@ -14,7 +14,7 @@
         | <a href="./README_en.md">English</a>
         | <b>日本語</b> |
     </p>
-    <p><i>v2.36.0 がリリースされました。macOS arm64 ビルドを含みます...</i></p>
+    <p><i>v2.37.0 がリリースされました。macOS arm64 ビルドを含みます...</i></p>
 </div>
 
 ![](./assets/media/main_ja.png)
@@ -53,7 +53,7 @@ https://github.com/user-attachments/assets/9c188d78-9520-4397-bacf-4c8fdcc54874
 
 ## 📖 基本使い方
 
-> ⚠️ 注意：現在の v2.36.0 は Windows と macOS arm64 ビルドを提供しています。Linux はソースまたは既存のビルド手順での検証が必要です。
+> ⚠️ 注意：現在の v2.37.0 は Windows と macOS arm64 ビルドを提供しています。Linux はソースまたは既存のビルド手順での検証が必要です。
 
 このソフトウェアは Windows、macOS、Linux プラットフォームに対応しています。テスト済みのプラットフォーム情報は以下の通りです：
 
@@ -139,7 +139,7 @@ API キーの取得についてはこちらをご覧ください：[クイック
 
 ### Tencent リアルタイム音声認識と V2 の使用
 
-2つは独立した Provider で、上記の Tencent Cloud `AppID`、`SecretID`、`SecretKey` を共有します。従来版は公式モデル一覧を表示し、`-tcrmodel`、`-tcrvad`、`-tcrmax` で設定します。本アプリは 8/16 kHz モデルに合わせてモノラル PCM16 を自動リサンプリングします。`Hy-ASR-3.0-preview` は 1 接続 60 秒までです。V2 は `-tcv2model`、`-tcv2vad`、`-tcv2sentence` を使い、`16k_zh_en_2.0` と `16k_zh_en_speaker_2.0` のみ対応します。後者はサーバーの話者 ID を保持します。どちらも翻訳を内蔵せず、final 字幕だけが共通 Google/Ollama 翻訳へ一度送られます。Tencent の有料アカウントを使ったオンライン検証と自動再接続は未実施です。
+2つは独立した Provider で、上記の Tencent Cloud `AppID`、`SecretID`、`SecretKey` を共有します。従来版の公式モデル一覧は、大規模モデルの世代、電話音声、中国語・方言、業界、汎用単一言語に分類され、表示名または元のモデル ID で検索できます。`-tcrmodel`、`-tcrvad`、`-tcrmax` で設定し、本アプリは 8/16 kHz モデルに合わせてモノラル PCM16 を自動リサンプリングします。`Hy-ASR-3.0-preview` は 1 接続 60 秒までです。V2 は `-tcv2model`、`-tcv2vad`、`-tcv2sentence` を使い、`16k_zh_en_2.0` と `16k_zh_en_speaker_2.0` のみ対応します。後者はサーバーの話者 ID を保持します。どちらの認識 API もソース言語を個別に受け取らないため、設定画面には選択モデルが言語対応を決める旨を表示します。どちらも翻訳を内蔵せず、final 字幕だけが共通 Google/Ollama 翻訳へ一度送られます。Tencent の有料アカウントを使ったオンライン検証と自動再接続は未実施です。
 
 ### Voskモデルの使用
 

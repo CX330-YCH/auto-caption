@@ -108,6 +108,7 @@ function commonPrimaryFields(definition: EngineDefinition): EngineFieldDescripto
       control: 'select',
       section: 'primary',
       labelKey: 'engine.sourceLang',
+      descriptionKey: definition.sourceLanguageDescriptionKey,
       options: languageOptions(definition, 'source'),
       disabled: definition.capabilities.sourceLanguage === 'model-defined'
     },
